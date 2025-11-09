@@ -1,15 +1,16 @@
-# Tennis Score App (Vercel) — GLOBAL players + results
+# Tennis Score App (GLOBAL)
 
-This build syncs BOTH **Results** and **Players** across devices via Vercel KV.
+Now uses **@upstash/redis** for serverless key-value storage.
 
-## Environment variables (Project → Settings → Environment Variables)
-- KV_REST_API_URL
-- KV_REST_API_TOKEN
+## Set these Environment Variables in Vercel (Project → Settings → Environment Variables)
+Use **either** set; both work:
+- `KV_REST_API_URL` and `KV_REST_API_TOKEN` (Vercel KV)
+- or `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (Upstash Redis)
 
-> If these are not set, the app gracefully falls back to device-local storage (no global sync).
+No source edits are needed beyond this.
 
-## Deploy
-1. Import the project into Vercel (or push to GitHub and import).
-2. Add the two env vars above.
-3. Deploy. Frontend builds with Vite → `dist/`. API routes: `/api/matches` and `/api/players`.
+## API Routes
+- `/api/players` → GET/POST entire list `{ singles:[], doubles:[] }`
+- `/api/matches` → GET (list), POST {action:'add'| 'clear'}
 
+Both send `Cache-Control: no-store` to avoid caching in browsers/edges.
