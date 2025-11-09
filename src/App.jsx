@@ -107,7 +107,7 @@ const Landing = ({ onStart, onResults, onSettings }) => {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <Trophy className="w-6 h-6 text-green-600"/>
-          <h1 className="text-2xl font-bold">Lawn Tennis Scoring</h1>
+          <h1 className="text-2xl font-bold">Nature Walk Tennis Tourenament 2025</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={onSettings}><SettingsIcon className="w-5 h-5"/> Settings</Button>
@@ -121,21 +121,21 @@ const Landing = ({ onStart, onResults, onSettings }) => {
           subtitle: "Singles or Doubles • Quick setup",
           icon: Play,
           action: onStart,
-          imgUrl: "https://images.unsplash.com/photo-1517672651691-24622a91b550?q=80&w=1600&auto=format&fit=crop",
+          imgUrl: "https://upload.wikimedia.org/wikipedia/commons/3/3e/Tennis_Racket_and_Balls.jpg",
         })}
         {tile({
           title: "Show Results",
           subtitle: "Winners, scores • Export",
           icon: ListChecks,
           action: onResults,
-          imgUrl: "https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?q=80&w=1600&auto=format&fit=crop",
+          imgUrl: "https://www.wikihow.com/Keep-Score-for-Tennis%23/Image:Keep-Score-for-Tennis-Step-1-Version-3.jpg",
         })}
         {tile({
           title: "Manage Players",
           subtitle: "Singles players & Doubles pairs",
           icon: Users,
           action: onSettings,
-          imgUrl: "https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=1600&auto=format&fit=crop",
+          imgUrl: "https://news.cgtn.com/news/3563444e7a45544f31556a4e306b7a4d786b7a4e31457a6333566d54/img/2f296c0a4b63418486e92f07ff1d7ad1/2f296c0a4b63418486e92f07ff1d7ad1.jpg",
         })}
       </div>
     </div>
@@ -561,7 +561,9 @@ const Results = ({ onBack }) => {
     const rows = list.map(m=>[
       new Date(m.finishedAt).toLocaleString(), m.sides[0], m.sides[1], m.winner, m.rule, m.bestOf, m.gamesTarget ?? "", m.scoreline
     ]);
-    const csv = [headers, ...rows].map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
+    const csv = [headers, ...rows]
+      .map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
+      .join("\n");
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -588,7 +590,7 @@ const Results = ({ onBack }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx_auto p-6">
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5"/> Back</Button>
         <h2 className="text-xl font-bold">Results</h2>
@@ -603,7 +605,7 @@ const Results = ({ onBack }) => {
         <Card className="p-6 text-center text-zinc-500">No completed matches yet.</Card>
       ) : (
         <div className="space-y-3">
-          {list.map((m)=>(
+          {list.map((m)=> (
             <Card key={m.id} className="p-4 flex items-center gap-4">
               <div className="flex-1">
                 <div className="font-semibold">{m.sides[0]} vs {m.sides[1]}</div>
@@ -663,3 +665,4 @@ export default function App() {
     </div>
   );
 }
+
