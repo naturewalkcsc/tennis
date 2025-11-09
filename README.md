@@ -1,30 +1,15 @@
-# Tennis Score App (Vercel)
+# Tennis Score App (Vercel) — GLOBAL players + results
 
-A lightweight Lawn Tennis scoring app with global Results using a serverless API.
-- React + Vite + Tailwind
-- Animated UI (framer-motion)
-- Exports CSV/PDF
-- Global results backed by **Vercel KV** (optional). If KV isn't set, the app falls back to device-local storage.
+This build syncs BOTH **Results** and **Players** across devices via Vercel KV.
 
-## Deploy to Vercel
-1. Create a new Vercel project from this folder (or push to GitHub and import).
-2. In **Project → Settings → Environment Variables**, add (optional for global sync):
-   - `KV_REST_API_URL`
-   - `KV_REST_API_TOKEN`
-3. Deploy. The frontend builds to `/dist`; the API route is `/api/matches`.
+## Environment variables (Project → Settings → Environment Variables)
+- KV_REST_API_URL
+- KV_REST_API_TOKEN
 
-### Rename your Vercel URL
-- **Settings → General → Project Name** (changes the default `*.vercel.app` subdomain).
-- **Settings → Domains → Add** to attach a custom domain.
+> If these are not set, the app gracefully falls back to device-local storage (no global sync).
 
-## Local Dev
-```bash
-npm install
-npm run dev
-```
+## Deploy
+1. Import the project into Vercel (or push to GitHub and import).
+2. Add the two env vars above.
+3. Deploy. Frontend builds with Vite → `dist/`. API routes: `/api/matches` and `/api/players`.
 
-## Build / Preview
-```bash
-npm run build
-npm run preview
-```

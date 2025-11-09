@@ -3,25 +3,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, Settings as SettingsIcon, ListChecks, Users, User2, ChevronLeft, Plus, Trash2, ArrowLeftRight, Download, FileDown, Shuffle } from "lucide-react";
 import { jsPDF } from "jspdf";
 
-/**
- * Lawn Tennis Scoring App – Global Results
- * - Serve tracking & side switch
- * - Export CSV/PDF
- * - Global results via Vercel KV (/api/matches). Falls back to localStorage if KV env not set.
- */
+/** Lawn Tennis Scoring App – Global players + results via Vercel KV (fallback to localStorage) */
 
-// LocalStorage Keys
+// Keys for local fallback storage
 const LS_SINGLES = "lt_players_singles";
 const LS_DOUBLES = "lt_players_doubles";
 const LS_THEME = "lt_theme";
 const LS_MATCHES_FALLBACK = "lt_matches_fallback";
+const LS_PLAYERS_FALLBACK = "lt_players_fallback";
 
-// Helpers
+// ------------ helpers -------------
 const readLS = (key, fallback) => { try { const raw = localStorage.getItem(key); return raw? JSON.parse(raw) : fallback; } catch { return fallback; } };
 const writeLS = (key, val) => localStorage.setItem(key, JSON.stringify(val));
 
-// API client
-async function apiList() {
+// API wrappers with graceful fallback
+async function apiMatchesList() {
   try {
     const r = await fetch('/api/matches', { cache: 'no-store' });
     if (!r.ok) throw new Error('api');
@@ -30,7 +26,7 @@ async function apiList() {
     return readLS(LS_MATCHES_FALLBACK, []);
   }
 }
-async function apiAdd(payload) {
+async function apiMatchesAdd(payload) {
   try {
     const r = await fetch('/api/matches', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action:'add', payload }) });
     if (!r.ok) throw new Error('api');
@@ -40,7 +36,7 @@ async function apiAdd(payload) {
     writeLS(LS_MATCHES_FALLBACK, list);
   }
 }
-async function apiClear() {
+async function apiMatchesClear() {
   try {
     const r = await fetch('/api/matches', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action:'clear' }) });
     if (!r.ok) throw new Error('api');
@@ -49,7 +45,29 @@ async function apiClear() {
   }
 }
 
-// UI Primitives
+async function apiPlayersGet() {
+  try {
+    const r = await fetch('/api/players', { cache: 'no-store' });
+    if (!r.ok) throw new Error('api');
+    return await r.json(); // { singles:[], doubles:[] }
+  } catch {
+    const singles = readLS(LS_SINGLES, ["Player A","Player B","Player C"]);
+    const doubles = readLS(LS_DOUBLES, ["Team A/Team B"]);
+    return readLS(LS_PLAYERS_FALLBACK, { singles, doubles });
+  }
+}
+async function apiPlayersSet(obj) {
+  try {
+    const r = await fetch('/api/players', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ payload: obj }) });
+    if (!r.ok) throw new Error('api');
+  } catch {
+    writeLS(LS_PLAYERS_FALLBACK, obj);
+    writeLS(LS_SINGLES, obj.singles);
+    writeLS(LS_DOUBLES, obj.doubles);
+  }
+}
+
+// UI atoms
 const Card = ({ className = "", children }) => (
   <div className={`bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200/60 dark:border-zinc-800/80 ${className}`}>{children}</div>
 );
@@ -168,36 +186,75 @@ const Landing = ({ onStart, onResults, onSettings }) => {
   );
 };
 
-// Settings Page
+// Settings Page (GLOBAL via KV if configured)
 const Settings = ({ onBack }) => {
-  const [singles, setSingles] = useState(()=> readLS(LS_SINGLES, ["Player A","Player B","Player C"]))
-  const [doubles, setDoubles] = useState(()=> readLS(LS_DOUBLES, ["Team A/Team B"]))
+  const [singles, setSingles] = useState([]);
+  const [doubles, setDoubles] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(()=> writeLS(LS_SINGLES, singles), [singles]);
-  useEffect(()=> writeLS(LS_DOUBLES, doubles), [doubles]);
+  useEffect(()=>{
+    let alive = true;
+    (async ()=>{
+      const obj = await apiPlayersGet();
+      if (!alive) return;
+      setSingles(obj.singles || []);
+      setDoubles(obj.doubles || []);
+      setLoading(false);
+    })();
+    return ()=>{ alive = false; };
+  }, []);
 
-  const addItem = (setter, placeholder) => setter(prev => [...prev, placeholder]);
-  const removeItem = (setter, idx) => setter(prev => prev.filter((_,i)=>i!==idx));
-  const updateItem = (setter, idx, val) => setter(prev => prev.map((v,i)=> i===idx? val : v));
+  const pushRemote = async (nsingles, ndoubles) => {
+    setSaving(true);
+    await apiPlayersSet({ singles: nsingles, doubles: ndoubles });
+    setSaving(false);
+  };
+
+  const addItem = (setter, current, placeholder) => {
+    const next = [...current, placeholder];
+    setter(next);
+    pushRemote(
+      setter===setSingles ? next : singles,
+      setter===setDoubles ? next : doubles
+    );
+  };
+  const removeItem = (setter, current, idx) => {
+    const next = current.filter((_,i)=>i!==idx);
+    setter(next);
+    pushRemote(
+      setter===setSingles ? next : singles,
+      setter===setDoubles ? next : doubles
+    );
+  };
+  const updateItem = (setter, current, idx, val) => {
+    const next = current.map((v,i)=> i===idx? val : v);
+    setter(next);
+    pushRemote(
+      setter===setSingles ? next : singles,
+      setter===setDoubles ? next : doubles
+    );
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5"/> Back</Button>
-        <h2 className="text-xl font-bold">Settings</h2>
+        <h2 className="text-xl font-bold">Settings {saving && <span className="text-xs text-zinc-500 ml-2">(syncing…)</span>}</h2>
       </div>
 
+      {loading ? <Card className="p-5 text-zinc-500 text-center">Loading players…</Card> : (
       <div className="grid md:grid-cols-2 gap-6">
         <Card className="p-5">
           <SectionTitle icon={User2}>Singles Players</SectionTitle>
           <div className="space-y-3">
             {singles.map((name, idx)=> (
               <div key={idx} className="flex items-center gap-2">
-                <TextInput value={name} onChange={(v)=>updateItem(setSingles, idx, v)} placeholder="Player name" />
-                <Button variant="ghost" onClick={()=>removeItem(setSingles, idx)}><Trash2 className="w-4 h-4"/></Button>
+                <TextInput value={name} onChange={(v)=>updateItem(setSingles, singles, idx, v)} placeholder="Player name" />
+                <Button variant="ghost" onClick={()=>removeItem(setSingles, singles, idx)}><Trash2 className="w-4 h-4"/></Button>
               </div>
             ))}
-            <Button variant="secondary" onClick={()=>addItem(setSingles, "New Player")}> <Plus className="w-4 h-4"/> Add Player</Button>
+            <Button variant="secondary" onClick={()=>addItem(setSingles, singles, "New Player")}> <Plus className="w-4 h-4"/> Add Player</Button>
           </div>
         </Card>
         <Card className="p-5">
@@ -205,22 +262,32 @@ const Settings = ({ onBack }) => {
           <div className="space-y-3">
             {doubles.map((name, idx)=> (
               <div key={idx} className="flex items-center gap-2">
-                <TextInput value={name} onChange={(v)=>updateItem(setDoubles, idx, v)} placeholder="Pair label e.g. Serena/Venus" />
-                <Button variant="ghost" onClick={()=>removeItem(setDoubles, idx)}><Trash2 className="w-4 h-4"/></Button>
+                <TextInput value={name} onChange={(v)=>updateItem(setDoubles, doubles, idx, v)} placeholder="Pair label e.g. Serena/Venus" />
+                <Button variant="ghost" onClick={()=>removeItem(setDoubles, doubles, idx)}><Trash2 className="w-4 h-4"/></Button>
               </div>
             ))}
-            <Button variant="secondary" onClick={()=>addItem(setDoubles, "Team X/Team Y")}> <Plus className="w-4 h-4"/> Add Pair</Button>
+            <Button variant="secondary" onClick={()=>addItem(setDoubles, doubles, "Team X/Team Y")}> <Plus className="w-4 h-4"/> Add Pair</Button>
           </div>
         </Card>
       </div>
+      )}
     </div>
   );
 };
 
 // Match Config Page
 const MatchConfig = ({ onBack, onStartScoring }) => {
-  const singles = readLS(LS_SINGLES, []);
-  const doubles = readLS(LS_DOUBLES, []);
+  const [players, setPlayers] = useState({ singles: [], doubles: [] });
+
+  useEffect(()=>{
+    let alive = True = true;
+    (async ()=>{
+      const obj = await apiPlayersGet();
+      if (!alive) return;
+      setPlayers(obj);
+    })();
+    return ()=>{ alive = false; };
+  }, []);
 
   const [mode, setMode] = useState("singles");
   const [p1, setP1] = useState("");
@@ -230,7 +297,7 @@ const MatchConfig = ({ onBack, onStartScoring }) => {
   const [gamesTarget, setGamesTarget] = useState("6");
   const [bestOf, setBestOf] = useState("3");
 
-  const playerOpts = mode === "singles" ? singles : doubles;
+  const playerOpts = mode === "singles" ? players.singles : players.doubles;
 
   const canStart = p1 && p2 && p1 !== p2 && (
     (rule === "firstToGames" && Number(gamesTarget) >= 1 && Number(gamesTarget) <= 6) ||
@@ -321,7 +388,7 @@ const MatchConfig = ({ onBack, onStartScoring }) => {
   );
 };
 
-// Scoring helpers
+// ----------- scoring helpers -----------
 const nextPoint = (p) => ({ 0:15, 15:30, 30:40 }[p] ?? (p===40? "Ad": p === "Ad" ? "Game" : p));
 function computeGameWin(a, b) { if (a === "Game") return "A"; if (b === "Game") return "B"; if (a === 40 && b === "Ad") return null; if (b === 40 && a === "Ad") return null; return null; }
 function advancePoint(a, b, who) {
@@ -367,7 +434,7 @@ const Scoring = ({ config, onAbort, onComplete }) => {
     const scoreline = sets.filter(s=>s.finished).map(s=> s.tie ? `${s.gamesA}-${s.gamesB}(${Math.max(s.tieA,s.tieB)})` : `${s.gamesA}-${s.gamesB}`).join(" ");
     const winner = setsA>setsB ? sides[0] : setsB>setsA ? sides[1] : (currentSet.gamesA>currentSet.gamesB ? sides[0] : sides[1]);
     const payload = { id: crypto.randomUUID(), sides, rule, bestOf: effectiveBestOf, gamesTarget, finishedAt: Date.now(), scoreline, winner };
-    await apiAdd(payload);
+    await apiMatchesAdd(payload);
     onComplete();
   };
 
@@ -497,20 +564,20 @@ const Scoring = ({ config, onAbort, onComplete }) => {
   );
 };
 
-// Results Page (global)
+// Results Page
 const Results = ({ onBack }) => {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(()=>{
     let alive = true;
-    (async ()=>{ const data = await apiList(); if (alive) { setList(data); setLoading(false); } })();
+    (async ()=>{ const data = await apiMatchesList(); if (alive) { setList(data); setLoading(false); } })();
     return ()=>{ alive = false; };
   }, []);
 
   const clearAll = async () => {
     if (!confirm('Clear all results for everyone?')) return;
-    await apiClear();
+    await apiMatchesClear();
     setList([]);
   };
 
@@ -518,7 +585,7 @@ const Results = ({ onBack }) => {
     if (!list.length) return;
     const headers = ["Date","Side A","Side B","Winner","Rule","BestOf","GamesTarget","Scoreline"];
     const rows = list.map(m=>[ new Date(m.finishedAt).toLocaleString(), m.sides[0], m.sides[1], m.winner, m.rule, m.bestOf, m.gamesTarget ?? "", m.scoreline ]);
-    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(",")).join("\\n");
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `tennis_results_${Date.now()}.csv`; a.click(); URL.revokeObjectURL(url);
   };

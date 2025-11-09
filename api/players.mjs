@@ -9,8 +9,7 @@ export default async function handler(req, res) {
 
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
-  const key = 'tennis:matches';
-
+  const key = 'tennis:players'; // stores { singles:[], doubles:[] }
   const useLocal = !url || !token;
 
   const kvFetch = async (cmd, ...args) => {
@@ -22,30 +21,22 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      if (useLocal) return res.status(200).json([]);
+      if (useLocal) return res.status(200).json({ singles: [], doubles: [] });
       const r = await kvFetch('GET', key);
-      const list = r && r.result ? JSON.parse(r.result) : [];
-      return res.status(200).json(list);
+      const obj = r && r.result ? JSON.parse(r.result) : { singles: [], doubles: [] };
+      return res.status(200).json(obj);
     }
 
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const action = body.action;
       if (useLocal) return res.status(200).json({ ok: true, storage: 'local-only (KV not configured)' });
 
-      if (action === 'add') {
-        const curr = await kvFetch('GET', key);
-        const list = curr && curr.result ? JSON.parse(curr.result) : [];
-        list.unshift(body.payload);
-        if (list.length > 500) list.pop();
-        await kvFetch('SET', key, JSON.stringify(list));
-        return res.status(200).json({ ok: true });
-      }
-      if (action === 'clear') {
-        await kvFetch('SET', key, JSON.stringify([]));
-        return res.status(200).json({ ok: true });
-      }
-      return res.status(400).json({ error: 'unknown action' });
+      const payload = body.payload || { singles: [], doubles: [] };
+      // sanitize
+      const singles = Array.isArray(payload.singles) ? payload.singles.slice(0, 500) : [];
+      const doubles = Array.isArray(payload.doubles) ? payload.doubles.slice(0, 500) : [];
+      await kvFetch('SET', key, JSON.stringify({ singles, doubles }));
+      return res.status(200).json({ ok: true });
     }
 
     return res.status(405).json({ error: 'method not allowed' });
