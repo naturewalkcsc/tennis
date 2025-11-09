@@ -36,7 +36,8 @@ const Button=({children,onClick,variant="primary",className="",disabled,title})=
 const Radio=({name,value,checked,onChange,label})=>(<label className="flex items-center gap-3 cursor-pointer select-none"><input type="radio" name={name} value={value} checked={checked} onChange={(e)=>onChange(e.target.value)} className="w-4 h-4"/><span className="text-sm text-zinc-800 dark:text-zinc-200">{label}</span></label>);
 const Select=({value,onChange,options,placeholder})=>(<select value={value} onChange={(e)=>onChange(e.target.value)} className="w-full mt-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2"><option value="" disabled>{placeholder}</option>{options.map(o=><option key={o} value={o}>{o}</option>)}</select>);
 const TextInput=({value,onChange,placeholder,type="text",min,max})=>(<input type={type} value={value} onChange={(e)=>onChange(e.target.value)} placeholder={placeholder} min={min} max={max} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2"/>);
-const SectionTitle=({children,icon:Icon})=>(<div className="flex items-center gap-2 mb-3">{Icon?<Icon className="w-5 h-5 text-zinc-500"/>:null}<h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{children}</h3></div>);
+const SectionTitle=({children,icon:Icon})=>(
+<div className="flex items-center gap-2 mb-3">{Icon?<Icon className="w-5 h-5 text-zinc-500"/>:null}<h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{children}</h3></div>);
 
 
 const GlobalBadge=()=>{
@@ -46,10 +47,18 @@ const GlobalBadge=()=>{
 };
 
 
+
+const Toast=({show,text})=> show ? (
+  <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-emerald-600 text-white shadow-lg">{text}</div>
+) : null;
+
 const ThemeToggle=()=>{const [dark,setDark]=useState(()=>readLS(LS_THEME,false));useEffect(()=>{document.documentElement.classList.toggle("dark",dark);writeLS(LS_THEME,dark)},[dark]);return(<Button variant="ghost" onClick={()=>setDark(d=>!d)} className="!px-3 !py-2" title="Toggle theme">{dark?"🌙":"☀️"}</Button>)};
 
 const Landing=({onStart,onResults,onSettings})=>{const Tile=({title,subtitle,icon:Icon,action,imgUrl})=>(<motion.button onClick={action} whileHover={{y:-2,scale:1.01}} whileTap={{scale:0.99}} className="w-full md:w-80 aspect-[5/3] rounded-2xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-left"><div className="h-2/3 w-full relative"><div className="absolute inset-0 bg-gradient-to-br from-green-200 to-emerald-300 dark:from-zinc-800 dark:to-zinc-700"/>{imgUrl?<img src={imgUrl} alt="" className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-70"/>:null}</div><div className="p-4 flex items-center gap-3"><div className="p-2 rounded-xl bg-emerald-100 text-emerald-700"><Icon className="w-5 h-5"/></div><div><div className="text-lg font-semibold">{title}</div><div className="text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</div></div></div></motion.button>);return(<div className="max-w-5xl mx-auto p-6"><div className="flex items-center justify-between mb-8"><div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring</h1><GlobalBadge/></div><div className="flex items-center gap-2"><Button variant="ghost" onClick={onSettings}><SettingsIcon className="w-5 h-5"/> Settings</Button><ThemeToggle/></div></div><div className="grid gap-6 md:grid-cols-3">{<Tile title="Start a Match" subtitle="Singles or Doubles • Quick setup" icon={Play} action={onStart} imgUrl="https://upload.wikimedia.org/wikipedia/commons/3/3e/Tennis_Racket_and_Balls.jpg" />}{<Tile title="Show Results" subtitle="Winners, scores • Export" icon={ListChecks} action={onResults} imgUrl="https://www.wikihow.com/Keep-Score-for-Tennis%23/Image:Keep-Score-for-Tennis-Step-1-Version-3.jpg" />}{<Tile title="Manage Players" subtitle="Singles players & Doubles pairs" icon={Users} action={onSettings} imgUrl="https://news.cgtn.com/news/3563444e7a45544f31556a4e306b7a4d786b7a4e31457a6333566d54/img/2f296c0a4b63418486e92f07ff1d7ad1/2f296c0a4b63418486e92f07ff1d7ad1.jpg" />}</div></div>)};
 
+
+
+const LS_PLAYERS_DRAFT = "lt_players_draft";
 
 const Settings=({onBack})=>{
   const [singles,setSingles]=useState([]);
@@ -58,11 +67,28 @@ const Settings=({onBack})=>{
   const [saving,setSaving]=useState(false);
   const [dirty,setDirty]=useState(false);
   const [error,setError]=useState("");
+  const [toast,setToast]=useState({show:false,text:""});
 
-  // Initial load from server (or fallback) ONCE
+  const saveDraft = (s,d) => {
+    try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify({singles:s, doubles:d})); } catch {}
+  };
+  const loadDraft = () => {
+    try { const raw = localStorage.getItem(LS_PLAYERS_DRAFT); return raw ? JSON.parse(raw) : null; } catch { return null; }
+  };
+  const clearDraft = () => { try { localStorage.removeItem(LS_PLAYERS_DRAFT) } catch {} };
+
+  // Initial load: prefer draft; else server
   useEffect(()=>{
     let alive=true;
     (async()=>{
+      const draft = loadDraft();
+      if (draft) {
+        setSingles(draft.singles||[]);
+        setDoubles(draft.doubles||[]);
+        setLoading(false);
+        setDirty(true);
+        return;
+      }
       try{
         const obj = await apiPlayersGet();
         if(!alive) return;
@@ -77,30 +103,51 @@ const Settings=({onBack})=>{
     return ()=>{alive=false}
   },[]);
 
-  const onChangeSingles = (idx, val) => {
-    setSingles(prev => prev.map((v,i)=> i===idx? val: v));
+  const markDirty = (ns, nd) => {
     setDirty(true);
+    saveDraft(ns, nd);
+  };
+
+  const onChangeSingles = (idx, val) => {
+    setSingles(prev => {
+      const ns = prev.map((v,i)=> i===idx? val: v);
+      markDirty(ns, doubles);
+      return ns;
+    });
   };
   const onChangeDoubles = (idx, val) => {
-    setDoubles(prev => prev.map((v,i)=> i===idx? val: v));
-    setDirty(true);
+    setDoubles(prev => {
+      const nd = prev.map((v,i)=> i===idx? val: v);
+      markDirty(singles, nd);
+      return nd;
+    });
   };
 
-  const addSingles = () => { setSingles(prev=>[...prev, "New Player"]); setDirty(true); };
-  const addDoubles = () => { setDoubles(prev=>[...prev, "Team X/Team Y"]); setDirty(true); };
-  const delSingles = (idx) => { setSingles(prev=>prev.filter((_,i)=>i!==idx)); setDirty(true); };
-  const delDoubles = (idx) => { setDoubles(prev=>prev.filter((_,i)=>i!==idx)); setDirty(true); };
+  const addSingles = () => { const ns=[...singles,"New Player"]; setSingles(ns); markDirty(ns,doubles); };
+  const addDoubles = () => { const nd=[...doubles,"Team X/Team Y"]; setDoubles(nd); markDirty(singles,nd); };
+  const delSingles = (idx) => { const ns=singles.filter((_,i)=>i!==idx); setSingles(ns); markDirty(ns,doubles); };
+  const delDoubles = (idx) => { const nd=doubles.filter((_,i)=>i!==idx); setDoubles(nd); markDirty(singles,nd); };
 
-  const save = async () => {
+  const doSave = async () => {
     setSaving(true); setError("");
     try{
       await apiPlayersSet({ singles, doubles });
       setDirty(false);
+      clearDraft();
+      setToast({show:true,text:"Players saved"});
+      setTimeout(()=>setToast({show:false,text:""}), 1500);
     }catch(e){
       setError("Save failed. Check KV variables and try again.");
     }finally{
       setSaving(false);
     }
+  };
+
+  const handleBack = async () => {
+    if (dirty && !saving) {
+      await doSave(); // autosave on exit
+    }
+    onBack();
   };
 
   const refresh = async () => {
@@ -110,6 +157,7 @@ const Settings=({onBack})=>{
       setSingles(obj.singles||[]);
       setDoubles(obj.doubles||[]);
       setDirty(false);
+      clearDraft();
     }catch(e){
       setError("Refresh failed.");
     }finally{
@@ -119,12 +167,13 @@ const Settings=({onBack})=>{
 
   return (
     <div className="max-w-3xl mx-auto p-6">
+      <Toast show={toast.show} text={toast.text} />
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5"/> Back</Button>
+        <Button variant="ghost" onClick={handleBack}><ChevronLeft className="w-5 h-5"/> Back</Button>
         <h2 className="text-xl font-bold">Manage Players</h2>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="secondary" onClick={refresh} title="Fetch latest from server">Refresh</Button>
-          <Button onClick={save} disabled={!dirty || saving} title="Save to server">{saving? "Saving…" : "Save Changes"}</Button>
+          <Button onClick={doSave} disabled={!dirty || saving} title="Save to server">{saving? "Saving…" : "Save Changes"}</Button>
         </div>
       </div>
 
@@ -159,7 +208,7 @@ const Settings=({onBack})=>{
           </Card>
         </div>
       )}
-      <div className="text-xs text-zinc-500 mt-3">{dirty ? "You have unsaved changes." : "All changes saved."}</div>
+      <div className="text-xs text-zinc-500 mt-3">{dirty ? "You have unsaved changes (auto-saved on Back)." : "All changes saved."}</div>
     </div>
   );
 };
