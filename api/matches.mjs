@@ -13,7 +13,7 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      if (!redis) return res.status(200).json([])
+      if (!redis) return res.status(503).json({ error: 'KV not configured' })
       const list = await redis.get(key) || []
       return res.status(200).json(list)
     }
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
       const action = body.action
-      if (!redis) return res.status(200).json({ ok: true, storage: 'local-only (KV not configured)' })
+      if (!redis) return res.status(503).json({ error: 'KV not configured' })
 
       if (action === 'add') {
         const list = (await redis.get(key)) || []

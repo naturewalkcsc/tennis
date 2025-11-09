@@ -13,14 +13,14 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      if (!redis) return res.status(200).json({ singles: [], doubles: [] })
+      if (!redis) return res.status(503).json({ error: 'KV not configured' })
       const obj = await redis.get(key) || { singles: [], doubles: [] }
       return res.status(200).json(obj)
     }
 
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
-      if (!redis) return res.status(200).json({ ok: true, storage: 'local-only (KV not configured)' })
+      if (!redis) return res.status(503).json({ error: 'KV not configured' })
       const payload = body.payload || { singles: [], doubles: [] }
       const singles = Array.isArray(payload.singles) ? payload.singles.slice(0, 500) : []
       const doubles = Array.isArray(payload.doubles) ? payload.doubles.slice(0, 500) : []

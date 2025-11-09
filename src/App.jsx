@@ -137,7 +137,9 @@ const Settings=({onBack})=>{
       setToast({show:true,text:"Players saved"});
       setTimeout(()=>setToast({show:false,text:""}), 1500);
     }catch(e){
-      setError("Save failed. Check KV variables and try again.");
+      setError("Save failed. KV not connected. Players kept locally.");
+      saveDraft(singles, doubles);
+      setDirty(true);
     }finally{
       setSaving(false);
     }
