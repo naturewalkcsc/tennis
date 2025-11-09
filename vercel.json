@@ -4,9 +4,22 @@
     {
       "src": "package.json",
       "use": "@vercel/static-build"
+    },
+    {
+      "src": "api/*.mjs",
+      "use": "@vercel/node"
     }
   ],
   "framework": "vite",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1.mjs"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/dist/$1"
+    }
+  ]
 }
