@@ -1,4 +1,3 @@
-\
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, Settings as SettingsIcon, ListChecks, Users, User2, ChevronLeft, Plus, Trash2, ArrowLeftRight, Download, FileDown, Shuffle } from "lucide-react";
