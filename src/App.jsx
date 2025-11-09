@@ -50,7 +50,119 @@ const ThemeToggle=()=>{const [dark,setDark]=useState(()=>readLS(LS_THEME,false))
 
 const Landing=({onStart,onResults,onSettings})=>{const Tile=({title,subtitle,icon:Icon,action,imgUrl})=>(<motion.button onClick={action} whileHover={{y:-2,scale:1.01}} whileTap={{scale:0.99}} className="w-full md:w-80 aspect-[5/3] rounded-2xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-left"><div className="h-2/3 w-full relative"><div className="absolute inset-0 bg-gradient-to-br from-green-200 to-emerald-300 dark:from-zinc-800 dark:to-zinc-700"/>{imgUrl?<img src={imgUrl} alt="" className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-70"/>:null}</div><div className="p-4 flex items-center gap-3"><div className="p-2 rounded-xl bg-emerald-100 text-emerald-700"><Icon className="w-5 h-5"/></div><div><div className="text-lg font-semibold">{title}</div><div className="text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</div></div></div></motion.button>);return(<div className="max-w-5xl mx-auto p-6"><div className="flex items-center justify-between mb-8"><div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring</h1><GlobalBadge/></div><div className="flex items-center gap-2"><Button variant="ghost" onClick={onSettings}><SettingsIcon className="w-5 h-5"/> Settings</Button><ThemeToggle/></div></div><div className="grid gap-6 md:grid-cols-3">{<Tile title="Start a Match" subtitle="Singles or Doubles • Quick setup" icon={Play} action={onStart} imgUrl="https://upload.wikimedia.org/wikipedia/commons/3/3e/Tennis_Racket_and_Balls.jpg" />}{<Tile title="Show Results" subtitle="Winners, scores • Export" icon={ListChecks} action={onResults} imgUrl="https://www.wikihow.com/Keep-Score-for-Tennis%23/Image:Keep-Score-for-Tennis-Step-1-Version-3.jpg" />}{<Tile title="Manage Players" subtitle="Singles players & Doubles pairs" icon={Users} action={onSettings} imgUrl="https://news.cgtn.com/news/3563444e7a45544f31556a4e306b7a4d786b7a4e31457a6333566d54/img/2f296c0a4b63418486e92f07ff1d7ad1/2f296c0a4b63418486e92f07ff1d7ad1.jpg" />}</div></div>)};
 
-const Settings=({onBack})=>{const [singles,setSingles]=useState([]);const [doubles,setDoubles]=useState([]);const [saving,setSaving]=useState(false);const [loading,setLoading]=useState(true);useEffect(()=>{let alive=true;(async()=>{const obj=await apiPlayersGet();if(!alive)return;setSingles(obj.singles||[]);setDoubles(obj.doubles||[]);setLoading(false)})().catch(()=>{});const iv=setInterval(async()=>{const obj=await apiPlayersGet();if(!alive)return;setSingles(obj.singles||[]);setDoubles(obj.doubles||[])},5000);return()=>{alive=false;clearInterval(iv)}},[]);const pushRemote=async(nSingles,nDoubles)=>{setSaving(true);await apiPlayersSet({singles:nSingles,doubles:nDoubles});setSaving(false)};const addItem=(setter,cur,placeholder)=>{const next=[...cur,placeholder];setter(next);pushRemote(setter===setSingles?next:singles,setter===setDoubles?next:doubles)};const removeItem=(setter,cur,idx)=>{const next=cur.filter((_,i)=>i!==idx);setter(next);pushRemote(setter===setSingles?next:singles,setter===setDoubles?next:doubles)};const updateItem=(setter,cur,idx,val)=>{const next=cur.map((v,i)=>i===idx?val:v);setter(next);pushRemote(setter===setSingles?next:singles,setter===setDoubles?next:doubles)};return(<div className="max-w-3xl mx-auto p-6"><div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5"/> Back</Button><h2 className="text-xl font-bold">Settings {saving&&<span className="text-xs text-zinc-500 ml-2">(syncing…)</span>}</h2></div>{loading?<Card className="p-5 text-zinc-500 text-center">Loading players…</Card>:(<div className="grid md:grid-cols-2 gap-6"><Card className="p-5"><SectionTitle icon={User2}>Singles Players</SectionTitle><div className="space-y-3">{singles.map((name,idx)=>(<div key={idx} className="flex items-center gap-2"><TextInput value={name} onChange={(v)=>updateItem(setSingles,singles,idx,v)} placeholder="Player name"/><Button variant="ghost" onClick={()=>removeItem(setSingles,singles,idx)}><Trash2 className="w-4 h-4"/></Button></div>))}<Button variant="secondary" onClick={()=>addItem(setSingles,singles,"New Player")}><Plus className="w-4 h-4"/> Add Player</Button></div></Card><Card className="p-5"><SectionTitle icon={Users}>Doubles Pairs</SectionTitle><div className="space-y-3">{doubles.map((name,idx)=>(<div key={idx} className="flex items-center gap-2"><TextInput value={name} onChange={(v)=>updateItem(setDoubles,doubles,idx,v)} placeholder="Pair label e.g. Serena/Venus"/><Button variant="ghost" onClick={()=>removeItem(setDoubles,doubles,idx)}><Trash2 className="w-4 h-4"/></Button></div>))}<Button variant="secondary" onClick={()=>addItem(setDoubles,doubles,"Team X/Team Y")}><Plus className="w-4 h-4"/> Add Pair</Button></div></Card></div>)}</div>)};
+
+const Settings=({onBack})=>{
+  const [singles,setSingles]=useState([]);
+  const [doubles,setDoubles]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+  const [dirty,setDirty]=useState(false);
+  const [error,setError]=useState("");
+
+  // Initial load from server (or fallback) ONCE
+  useEffect(()=>{
+    let alive=true;
+    (async()=>{
+      try{
+        const obj = await apiPlayersGet();
+        if(!alive) return;
+        setSingles(obj.singles||[]);
+        setDoubles(obj.doubles||[]);
+      }catch(e){
+        setError("Could not load players.");
+      }finally{
+        if(alive) setLoading(false);
+      }
+    })();
+    return ()=>{alive=false}
+  },[]);
+
+  const onChangeSingles = (idx, val) => {
+    setSingles(prev => prev.map((v,i)=> i===idx? val: v));
+    setDirty(true);
+  };
+  const onChangeDoubles = (idx, val) => {
+    setDoubles(prev => prev.map((v,i)=> i===idx? val: v));
+    setDirty(true);
+  };
+
+  const addSingles = () => { setSingles(prev=>[...prev, "New Player"]); setDirty(true); };
+  const addDoubles = () => { setDoubles(prev=>[...prev, "Team X/Team Y"]); setDirty(true); };
+  const delSingles = (idx) => { setSingles(prev=>prev.filter((_,i)=>i!==idx)); setDirty(true); };
+  const delDoubles = (idx) => { setDoubles(prev=>prev.filter((_,i)=>i!==idx)); setDirty(true); };
+
+  const save = async () => {
+    setSaving(true); setError("");
+    try{
+      await apiPlayersSet({ singles, doubles });
+      setDirty(false);
+    }catch(e){
+      setError("Save failed. Check KV variables and try again.");
+    }finally{
+      setSaving(false);
+    }
+  };
+
+  const refresh = async () => {
+    setLoading(true); setError("");
+    try{
+      const obj = await apiPlayersGet();
+      setSingles(obj.singles||[]);
+      setDoubles(obj.doubles||[]);
+      setDirty(false);
+    }catch(e){
+      setError("Refresh failed.");
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5"/> Back</Button>
+        <h2 className="text-xl font-bold">Manage Players</h2>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" onClick={refresh} title="Fetch latest from server">Refresh</Button>
+          <Button onClick={save} disabled={!dirty || saving} title="Save to server">{saving? "Saving…" : "Save Changes"}</Button>
+        </div>
+      </div>
+
+      {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200 rounded-xl">{error}</Card>}
+
+      {loading ? <Card className="p-5 text-zinc-500 text-center">Loading players…</Card> : (
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <SectionTitle icon={User2}>Singles Players</SectionTitle>
+            <div className="space-y-3">
+              {singles.map((name, idx)=> (
+                <div key={idx} className="flex items-center gap-2">
+                  <TextInput value={name} onChange={(v)=>onChangeSingles(idx, v)} placeholder="Player name" />
+                  <Button variant="ghost" onClick={()=>delSingles(idx)}><Trash2 className="w-4 h-4"/></Button>
+                </div>
+              ))}
+              <Button variant="secondary" onClick={addSingles}><Plus className="w-4 h-4"/> Add Player</Button>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <SectionTitle icon={Users}>Doubles Pairs</SectionTitle>
+            <div className="space-y-3">
+              {doubles.map((name, idx)=> (
+                <div key={idx} className="flex items-center gap-2">
+                  <TextInput value={name} onChange={(v)=>onChangeDoubles(idx, v)} placeholder="Pair label e.g. Serena/Venus" />
+                  <Button variant="ghost" onClick={()=>delDoubles(idx)}><Trash2 className="w-4 h-4"/></Button>
+                </div>
+              ))}
+              <Button variant="secondary" onClick={addDoubles}><Plus className="w-4 h-4"/> Add Pair</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+      <div className="text-xs text-zinc-500 mt-3">{dirty ? "You have unsaved changes." : "All changes saved."}</div>
+    </div>
+  );
+};
 
 const MatchConfig=({onBack,onStartScoring})=>{const [players,setPlayers]=useState({singles:[],doubles:[]});useEffect(()=>{let alive=true;(async()=>{const obj=await apiPlayersGet();if(!alive)return;setPlayers(obj)})().catch(()=>{});return()=>{alive=false}},[]);const [mode,setMode]=useState("singles");const [p1,setP1]=useState("");const [p2,setP2]=useState("");const [rule,setRule]=useState("regular");const [gamesTarget,setGamesTarget]=useState("6");const [bestOf,setBestOf]=useState("3");const playerOpts=mode==="singles"?players.singles:players.doubles;const canStart=p1&&p2&&p1!==p2&&((rule==="firstToGames"&&Number(gamesTarget)>=1&&Number(gamesTarget)<=6)||(rule==="bestOfSets"&&Number(bestOf)>=1&&Number(bestOf)<=3)||(rule==="regular"));const start=()=>{const cfg={mode,sides:[p1,p2],rule,gamesTarget:Number(gamesTarget),bestOf:Number(bestOf),createdAt:Date.now(),startingServer:0};onStartScoring(cfg)};return(<div className="max-w-3xl mx-auto p-6"><div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5"/> Back</Button><h2 className="text-xl font-bold">Start a Match</h2></div><Card className="p-6 space-y-6"><div><SectionTitle icon={Users}>Match Type</SectionTitle><div className="flex gap-6"><Radio name="mode" value="singles" checked={mode==='singles'} onChange={setMode} label="Singles"/><Radio name="mode" value="doubles" checked={mode==='doubles'} onChange={setMode} label="Doubles"/></div></div><div><SectionTitle icon={Users}>Select Players</SectionTitle><div className="grid md:grid-cols-2 gap-4"><div><label className="text-sm text-zinc-600 dark:text-zinc-400">{mode==='singles'?'Player 1':'Team 1'}</label><Select value={p1} onChange={setP1} options={playerOpts} placeholder="Choose..."/></div><div><label className="text-sm text-zinc-600 dark:text-zinc-400">{mode==='singles'?'Player 2':'Team 2'}</label><Select value={p2} onChange={setP2} options={playerOpts} placeholder="Choose..."/></div></div></div><div><SectionTitle icon={ListChecks}>Winning Criteria</SectionTitle><div className="space-y-4"><label className="flex items-start gap-3"><input type="radio" name="rule" value="firstToGames" checked={rule==='firstToGames'} onChange={(e)=>setRule(e.target.value)} className="mt-1"/><div><div className="font-medium">First to N Games</div><div className="text-sm text-zinc-600 dark:text-zinc-400">Any player/team reaching specified number of games (1–6).</div>{rule==='firstToGames'&&(<div className="mt-3 w-40"><TextInput type="number" value={gamesTarget} onChange={setGamesTarget} min={1} max={6} placeholder="Enter 1–6"/></div>)}</div></label><label className="flex items-start gap-3"><input type="radio" name="rule" value="regular" checked={rule==='regular'} onChange={(e)=>setRule(e.target.value)} className="mt-1"/><div><div className="font-medium">Regular Match</div><div className="text-sm text-zinc-600 dark:text-zinc-400">Sets to 6 (win by 2), tie-break to 7 at 6–6, best of 3 default.</div></div></label><label className="flex items-start gap-3"><input type="radio" name="rule" value="bestOfSets" checked={rule==='bestOfSets'} onChange={(e)=>setRule(e.target.value)} className="mt-1"/><div><div className="font-medium">Number of Sets</div><div className="text-sm text-zinc-600 dark:text-zinc-400">Choose best-of-N sets (1–3).</div>{rule==='bestOfSets'&&(<div className="mt-3 w-40"><Select value={bestOf} onChange={setBestOf} options={['1','3']} placeholder="Select 1 or 3"/></div>)}</div></label></div></div><div className="pt-2"><Button onClick={start} disabled={!canStart}><Play className="w-4 h-4"/> Start</Button></div></Card></div>)};
 
