@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Play, Settings as SettingsIcon, ListChecks, Users, User2, ChevronLeft, Plus, Trash2, SwapHorizontal, Download, FileDown, Shuffle } from "lucide-react";
+import { Trophy, Play, Settings as SettingsIcon, ListChecks, Users, User2, ChevronLeft, Plus, Trash2, ArrowLeftRight, Download, FileDown, Shuffle } from "lucide-react";
 import { jsPDF } from "jspdf";
 
 /**
@@ -484,7 +484,7 @@ const Scoring = ({ config, onAbort, onComplete }) => {
       <Card className="p-6">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={()=>setFlipped(f=>!f)} title="Switch Sides"><SwapHorizontal className="w-4 h-4"/> Switch Sides</Button>
+            <Button variant="secondary" onClick={()=>setFlipped(f=>!f)} title="Switch Sides"><ArrowLeftRight className="w-4 h-4"/> Switch Sides</Button>
             <Button variant="secondary" onClick={()=>setServer(s=>1-s)} title="Manual Server Toggle"><Shuffle className="w-4 h-4"/> Switch Server</Button>
           </div>
           <div className="text-sm text-zinc-600 dark:text-zinc-300">Server: <span className="font-semibold">{tiebreakServer()===0? sides[0] : sides[1]}</span>{currentSet.tie && <span className="ml-2 px-2 py-0.5 rounded bg-amber-100 text-amber-700 text-xs">Tie-break</span>}</div>
