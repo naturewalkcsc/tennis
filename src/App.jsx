@@ -127,6 +127,7 @@ const ThemeToggle = () => {
     </Button>
   );
 };
+/*
 const GlobalBadge = () => {
   const [on, setOn] = useState(false);
   useEffect(() => { let alive = true; (async () => { const ok = await apiStatus(); if (alive) setOn(ok); })(); return () => { alive = false; } }, []);
@@ -135,6 +136,7 @@ const GlobalBadge = () => {
       title={on ? "Global sync: ON" : "Global sync: OFF"}>{on ? "GLOBAL: ON" : "GLOBAL: OFF"}</span>
   );
 };
+/*
 
 /* ----------------------- Landing ----------------------- */
 const Landing = ({ onStart, onResults, onSettings }) => {
@@ -167,7 +169,6 @@ const Landing = ({ onStart, onResults, onSettings }) => {
         <div className="flex items-center gap-3">
           <Trophy className="w-6 h-6 text-green-600" />
           <h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1>
-          <GlobalBadge />
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={onSettings}><SettingsIcon className="w-5 h-5" /> Settings</Button>
