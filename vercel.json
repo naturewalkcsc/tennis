@@ -4,8 +4,10 @@
     { "src": "package.json", "use": "@vercel/static-build" },
     { "src": "api/*.mjs", "use": "@vercel/node" }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1.mjs" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/viewer", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
