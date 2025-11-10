@@ -166,7 +166,7 @@ const Landing = ({ onStart, onResults, onSettings }) => {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <Trophy className="w-6 h-6 text-green-600" />
-          <h1 className="text-2xl font-bold">Lawn Tennis Scoring</h1>
+          <h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1>
           <GlobalBadge />
         </div>
         <div className="flex items-center gap-2">
@@ -690,7 +690,7 @@ export default function App() {
           )}
         </AnimatePresence>
       </div>
-      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring</footer>
+      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()}RNW CSC</footer>
     </div>
   );
 }
