@@ -19,6 +19,7 @@ const LS_DOUBLES = "lt_players_doubles";
 const LS_THEME = "lt_theme";
 const LS_MATCHES_FALLBACK = "lt_matches_fallback";
 const LS_PLAYERS_FALLBACK = "lt_players_fallback";
+// LS_COURT is unused now (hardcourt-only), safe to keep or remove.
 const LS_COURT = "lt_court_theme";
 
 const readLS = (k,f)=>{ try{const r=localStorage.getItem(k); return r? JSON.parse(r):f}catch{return f} };
@@ -38,8 +39,8 @@ const Radio=({name,value,checked,onChange,label})=>(<label className="flex items
 const Select=({value,onChange,options,placeholder})=>(<select value={value} onChange={(e)=>onChange(e.target.value)} className="w-full mt-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2"><option value="" disabled>{placeholder}</option>{options.map(o=><option key={o} value={o}>{o}</option>)}</select>);
 const TextInput=({value,onChange,placeholder,type="text",min,max})=>(<input type={type} value={value} onChange={(e)=>onChange(e.target.value)} placeholder={placeholder} min={min} max={max} className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2"/>);
 const SectionTitle=({children,icon:Icon})=>(
-<div className="flex items-center gap-2 mb-3">{Icon?<Icon className="w-5 h-5 text-zinc-500"/>:null}<h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{children}</h3></div>);
-
+  <div className="flex items-center gap-2 mb-3">{Icon?<Icon className="w-5 h-5 text-zinc-500"/>:null}<h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{children}</h3></div>
+);
 
 const GlobalBadge=()=>{
   const [on,setOn]=React.useState(false);
@@ -47,35 +48,13 @@ const GlobalBadge=()=>{
   return (<span className={"ml-3 inline-flex items-center px-2 py-1 rounded-full text-xs "+(on?"bg-emerald-100 text-emerald-700":"bg-zinc-200 text-zinc-600")} title={on?"Global sync: ON":"Global sync: OFF"}>{on?"GLOBAL: ON":"GLOBAL: OFF"}</span>);
 };
 
-
-
 const Toast=({show,text})=> show ? (
   <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-emerald-600 text-white shadow-lg">{text}</div>
 ) : null;
 
-
-  useEffect(()=>{ try{ localStorage.setItem(LS_COURT,court) }catch{}; document.documentElement.classList.remove('theme-grass','theme-clay','theme-hardcourt'); document.documentElement.classList.add('theme-'+court); },[court]);
-  const Btn=({v,label,swatch})=>(
-    <button onClick={()=>setCourt(v)} title={label}
-      className={"inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm "+(court===v?"border-emerald-500":"border-zinc-300 dark:border-zinc-700")}>
-      <span className="inline-block w-4 h-4 rounded" style={{background:swatch}}></span>{label}
-    </button>
-  );
-  return (
-    <div className="flex items-center gap-2">
-      <Btn v="grass" label="Grass" swatch="#70c174"/>
-      <Btn v="clay" label="Clay" swatch="#d36b3b"/>
-      <Btn v="hardcourt" label="Hardcourt" swatch="#3b6ad3"/>
-    </div>
-  );
-//};
-
-
 const ThemeToggle=()=>{const [dark,setDark]=useState(()=>readLS(LS_THEME,false));useEffect(()=>{document.documentElement.classList.toggle("dark",dark);writeLS(LS_THEME,dark)},[dark]);return(<Button variant="ghost" onClick={()=>setDark(d=>!d)} className="!px-3 !py-2" title="Toggle theme">{dark?"🌙":"☀️"}</Button>)};
 
 const Landing=({onStart,onResults,onSettings})=>{const Tile=({title,subtitle,icon:Icon,action,imgUrl})=>(<motion.button onClick={action} whileHover={{y:-2,scale:1.01}} whileTap={{scale:0.99}} className="w-full md:w-80 aspect-[5/3] rounded-2xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-left"><div className="h-2/3 w-full relative"><div className="absolute inset-0 bg-gradient-to-br from-green-200 to-emerald-300 dark:from-zinc-800 dark:to-zinc-700"/>{imgUrl?<img src={imgUrl} alt="" className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-70"/>:null}</div><div className="p-4 flex items-center gap-3"><div className="p-2 rounded-xl bg-emerald-100 text-emerald-700"><Icon className="w-5 h-5"/></div><div><div className="text-lg font-semibold">{title}</div><div className="text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</div></div></div></motion.button>);return(<div className="max-w-5xl mx-auto p-6"><div className="flex items-center justify-between mb-8"><div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring</h1><GlobalBadge/></div><div className="flex items-center gap-2"><Button variant="ghost" onClick={onSettings}><SettingsIcon className="w-5 h-5"/> Settings</Button><ThemeToggle/></div></div><div className="grid gap-6 md:grid-cols-3">{<Tile title="Start a Match" subtitle="Singles or Doubles • Quick setup" icon={Play} action={onStart} imgUrl="https://upload.wikimedia.org/wikipedia/commons/3/3e/Tennis_Racket_and_Balls.jpg" />}{<Tile title="Show Results" subtitle="Winners, scores • Export" icon={ListChecks} action={onResults} imgUrl="https://www.wikihow.com/Keep-Score-for-Tennis%23/Image:Keep-Score-for-Tennis-Step-1-Version-3.jpg" />}{<Tile title="Manage Players" subtitle="Singles players & Doubles pairs" icon={Users} action={onSettings} imgUrl="https://news.cgtn.com/news/3563444e7a45544f31556a4e306b7a4d786b7a4e31457a6333566d54/img/2f296c0a4b63418486e92f07ff1d7ad1/2f296c0a4b63418486e92f07ff1d7ad1.jpg" />}</div></div>)};
-
-
 
 const LS_PLAYERS_DRAFT = "lt_players_draft";
 
@@ -247,5 +226,24 @@ const Scoring=({config,onAbort,onComplete})=>{const {sides,rule,bestOf,gamesTarg
 
 const Results=({onBack})=>{const [list,setList]=useState([]);const [loading,setLoading]=useState(true);useEffect(()=>{let alive=true;(async()=>{const data=await apiMatchesList();if(alive){setList(data);setLoading(false)}})();const iv=setInterval(async()=>{const data=await apiMatchesList();if(alive)setList(data)},5000);return()=>{alive=false;clearInterval(iv)}},[]);const clearAll=async()=>{if(!confirm('Clear all results for everyone?'))return;await apiMatchesClear();setList([])};const exportCSV=()=>{if(!list.length)return;const headers=["Date","Side A","Side B","Winner","Rule","BestOf","GamesTarget","Scoreline"];const rows=list.map(m=>[new Date(m.finishedAt).toLocaleString(),m.sides[0],m.sides[1],m.winner,m.rule,m.bestOf,m.gamesTarget??"",m.scoreline]);const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\\n");const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`tennis_results_${Date.now()}.csv`;a.click();URL.revokeObjectURL(url)};const exportPDF=()=>{if(!list.length)return;const doc=new jsPDF();doc.setFontSize(14);doc.text("Tennis Match Results",14,16);doc.setFontSize(10);let y=24;const lh=6;const addLine=(t)=>{doc.text(t,14,y);y+=lh;if(y>280){doc.addPage();y=20}};list.forEach((m,i)=>{addLine(`${i+1}. ${new Date(m.finishedAt).toLocaleString()}`);addLine(`   ${m.sides[0]} vs ${m.sides[1]} — Winner: ${m.winner}`);addLine(`   Rule: ${m.rule}${m.bestOf?`, Best of ${m.bestOf}`:''}${m.gamesTarget?`, First to ${m.gamesTarget} games`:''}`);addLine(`   Score: ${m.scoreline}`);y+=2});doc.save(`tennis_results_${Date.now()}.pdf`)};return(<div className="max-w-4xl mx-auto p-6"><div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5"/> Back</Button><h2 className="text-xl font-bold">Results</h2><div className="ml-auto flex items-center gap-2"><Button variant="secondary" onClick={exportCSV} title="Export CSV"><Download className="w-4 h-4"/> CSV</Button><Button variant="secondary" onClick={exportPDF} title="Export PDF"><FileDown className="w-4 h-4"/> PDF</Button><Button variant="secondary" onClick={clearAll}>Clear All</Button></div></div>{loading?(<Card className="p-6 text-center text-zinc-500">Loading…</Card>):list.length===0?(<Card className="p-6 text-center text-zinc-500">No completed matches yet.</Card>):(<div className="space-y-3">{list.map(m=>(<Card key={m.id} className="p-4 flex items-center gap-4"><div className="flex-1"><div className="font-semibold">{m.sides[0]} vs {m.sides[1]}</div><div className="text-sm text-zinc-500">{new Date(m.finishedAt).toLocaleString()}</div></div><div className="text-center"><div className="text-sm uppercase tracking-wide text-zinc-400">Winner</div><div className="font-semibold">{m.winner}</div></div><div className="ml-6 text-lg font-mono">{m.scoreline}</div></Card>))}</div>)}</div>)};
 
-export default function App(){const [view,setView]=useState("landing");const [cfg,setCfg]=useState(null);const to=v=>setView(v);return (
-    <div className="min-h-screen app-bg"><div className="max-w-6xl mx-auto py-8"><AnimatePresence mode="wait">{view==='landing'&&(<motion.div key="landing" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Landing onStart={()=>to('config')} onResults={()=>to('results')} onSettings={()=>to('settings')}/></motion.div>)}{view==='settings'&&(<motion.div key="settings" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Settings onBack={()=>to('landing')}/></motion.div>)}{view==='config'&&(<motion.div key="config" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><MatchConfig onBack={()=>to('landing')} onStartScoring={(c)=>{setCfg(c);to('scoring')}}/></motion.div>)}{view==='scoring'&&cfg&&(<motion.div key="scoring" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Scoring config={cfg} onAbort={()=>to('landing')} onComplete={()=>to('results')}/></motion.div>)}{view==='results'&&(<motion.div key="results" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Results onBack={()=>to('landing')}/></motion.div>)}</AnimatePresence></div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring</footer></div>)};
+export default function App(){
+  const [view,setView]=useState("landing");
+  const [cfg,setCfg]=useState(null);
+  const to=v=>setView(v);
+
+  return (
+    <div className="min-h-screen app-bg">
+      <div className="max-w-6xl mx-auto py-8">
+        <AnimatePresence mode="wait">
+          {view==='landing'&&(<motion.div key="landing" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Landing onStart={()=>to('config')} onResults={()=>to('results')} onSettings={()=>to('settings')}/></motion.div>)}
+          {view==='settings'&&(<motion.div key="settings" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Settings onBack={()=>to('landing')}/></motion.div>)}
+          {view==='config'&&(<motion.div key="config" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><MatchConfig onBack={()=>to('landing')} onStartScoring={(c)=>{setCfg(c);to('scoring')}}/></motion.div>)}
+          {view==='scoring'&&cfg&&(<motion.div key="scoring" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Scoring config={cfg} onAbort={()=>to('landing')} onComplete={()=>to('results')}/></motion.div>)}
+          {view==='results'&&(<motion.div key="results" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Results onBack={()=>to('landing')}/></motion.div>)}
+        </AnimatePresence>
+      </div>
+      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring</footer>
+    </div>
+  );
+}
+
