@@ -10,10 +10,12 @@ export default async function handler(req,res){
   if(!redis) return res.status(503).json({error:'KV not configured'})
   try{
     if(req.method==='GET'){ const list=await redis.get(key)||[]; return res.status(200).json(list) }
-    if(req.method==='POST'){ const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{}); const action=body.action;
-      if(action==='add'){ const list=(await redis.get(key))||[]; list.unshift(body.payload); if(list.length>500)list.pop(); await redis.set(key,list); return res.status(200).json({ok:true}) }
-      if(action==='clear'){ await redis.set(key,[]); return res.status(200).json({ok:true}) }
-      return res.status(400).json({error:'unknown action'}) }
+    if(req.method==='POST'){
+      const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{})
+      if(body.action==='add'){ const list=(await redis.get(key))||[]; list.unshift(body.payload); await redis.set(key,list); return res.status(200).json({ok:true}) }
+      if(body.action==='clear'){ await redis.set(key,[]); return res.status(200).json({ok:true}) }
+      return res.status(400).json({error:'unknown action'})
+    }
     return res.status(405).json({error:'method not allowed'})
-  }catch(e){ return res.status(500).json({error:e.message||'server error'}) }
+  }catch(e){ return res.status(500).json({error:e.message}) }
 }
