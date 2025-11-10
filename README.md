@@ -1,9 +1,15 @@
-# Tennis Score App — Admin + Read-only Viewer
+# Tennis Score App — FIX for 404/blank and GLOBAL: OFF
 
-- Admin (manage players, fixtures, scoring): `/`
-- Viewer (read-only fixtures + results): `/viewer`
+What changed
+- `vercel.json` is now strict JSON and only contains SPA rewrites:
+  - `/viewer` -> `/index.html`
+  - `/(.*)` -> `/index.html`
+- API functions are kept in `/api/*.js` so Vercel auto-detects them. This restores `/api/status` and GLOBAL: ON.
+- `vercel-build` runs `vite build` (no custom copy step).
 
-Vercel:
-- Build Command: `vercel-build`
-- Output Directory: `dist`
-- Env Vars: `KV_REST_API_URL`, `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`).
+Deploy steps
+1) On Vercel, set env vars (Project → Settings → Environment Variables):
+   - KV_REST_API_URL
+   - KV_REST_API_TOKEN
+2) Redeploy.
+3) Visit `/` for admin; `/viewer` for read-only page.

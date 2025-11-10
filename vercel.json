@@ -1,13 +1,12 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "package.json", "use": "@vercel/static-build" },
-    { "src": "api/*.mjs", "use": "@vercel/node" }
-  ],
-  "buildCommand": "npm run vercel-build",
-  "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/viewer", "destination": "/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/viewer",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
