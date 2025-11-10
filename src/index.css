@@ -1,1 +1,22 @@
 @tailwind base;@tailwind components;@tailwind utilities;html,body,#root{height:100%}
+
+/* Court themes */
+:root {
+  --court-bg-start: #e8f8ed; /* default grass-like */
+  --court-bg-end:   #d7f2e2;
+}
+.theme-grass {
+  --court-bg-start: #e8f8ed;
+  --court-bg-end:   #c6ebd3;
+}
+.theme-clay {
+  --court-bg-start: #ffe4d6;
+  --court-bg-end:   #f7b99f;
+}
+.theme-hardcourt {
+  --court-bg-start: #e7efff;
+  --court-bg-end:   #bcd3ff;
+}
+
+/* App background uses CSS vars */
+.app-bg{background-image: linear-gradient(135deg, #e7efff, #bcd3ff);}
