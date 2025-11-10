@@ -1,4 +1,4 @@
-{
+
   "version": 2,
   "builds": [
     { "src": "package.json", "use": "@vercel/static-build" },
@@ -6,9 +6,6 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1.mjs" },
-
-    /* ✅ Rewrite all non-API routes (including /viewer) to the SPA */
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
-
