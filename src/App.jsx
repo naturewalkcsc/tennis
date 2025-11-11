@@ -105,10 +105,10 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
         <Trophy className="w-6 h-6 text-green-600" />
         <h1 className="text-2xl font-bold">Lawn Tennis Scoring (Admin)</h1>
       </div>
-      <div className="grid md:grid-cols-3 gap-6">
-        <Tile title="Start Match" subtitle="Choose from fixtures" src={imgStart} action={onStart} />
-        <Tile title="Results" subtitle="Active • Upcoming • Completed" src={imgScore} action={onResults} />
-        <Tile title="Manage Players" subtitle="Singles & Doubles" src={imgSettings} action={onSettings} />
+      <div className="grid gap-6 md:grid-cols-3">
+          <Tile title="Start a Match" subtitle="Singles or Doubles • Quick setup" icon={Play} action={onStart} imgUrl={StartMatchImg}/>
+          <Tile title="Show Results" subtitle="Winners, scores • Export" icon={ListChecks} action={onResults} imgUrl={ScoreImg}/>
+          <Tile title="Manage Players" subtitle="Singles players & Doubles pairs" icon={Users} action={onSettings} imgUrl={SettingsImg}/>
       </div>
       <div className="mt-6">
         <Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4" /> Fixtures</Button>
