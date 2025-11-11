@@ -41,7 +41,7 @@ const ThemeToggle=()=>{const [dark,setDark]=useState(()=>readLS(LS_THEME,false))
 // ---------- Simple Local Login (protects only Admin UI) ----------
 function AdminLogin({onOk}){
   const [u,setU]=useState("admin");
-  const [p,setP]=useState("rnwtennis123$");
+  const [p,setP]=useState("");
   const [err,setErr]=useState("");
   const submit=(e)=>{e.preventDefault();
     if(u==="admin" && p==="rnwtennis123$"){ localStorage.setItem("lt_admin","1"); onOk(); }
