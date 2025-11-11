@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Play, Settings as SettingsIcon, ListChecks, Users, User2, ChevronLeft, Plus, Trash2, ArrowLeftRight, Download, FileDown, Shuffle, CalendarPlus, RefreshCw, X, Eye } from "lucide-react";
+import {
+  Trophy, Play, Settings as SettingsIcon, ListChecks, Users, User2,
+  ChevronLeft, Plus, Trash2, ArrowLeftRight, Download, FileDown, Shuffle,
+  CalendarPlus, RefreshCw, X, Eye
+} from "lucide-react";
 import { jsPDF } from "jspdf";
 
 const LS_THEME="lt_theme", LS_MATCHES_FALLBACK="lt_matches_fallback", LS_PLAYERS_DRAFT="lt_players_draft";
@@ -8,6 +12,7 @@ const readLS=(k,f)=>{try{const r=localStorage.getItem(k);return r?JSON.parse(r):
 const writeLS=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 const buster=()=>'?t='+Date.now();
 
+// Keep images in src next to this file
 import StartMatchImg from "./StartMatch.jpg";
 import ScoreImg from "./Score.jpg";
 import SettingsImg from "./Settings.jpg";
@@ -23,6 +28,8 @@ const apiFixturesList=async()=>{const r=await fetch('/api/fixtures'+buster(),{ca
 const apiFixturesAdd=async(payload)=>{const r=await fetch('/api/fixtures'+buster(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'add',payload})});if(!r.ok)throw 0}
 const apiFixturesRemove=async(id)=>{const r=await fetch('/api/fixtures'+buster(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'remove',id})});if(!r.ok)throw 0}
 const apiFixturesClear=async()=>{const r=await fetch('/api/fixtures'+buster(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'clear'})});if(!r.ok)throw 0}
+// NEW: update fixtures (status, scoreline, winner, start time, etc.)
+const apiFixturesUpdate=async(id,patch)=>{const r=await fetch('/api/fixtures'+buster(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'update',id,patch})});if(!r.ok)throw 0}
 
 // UI primitives
 const Card=({className="",children})=>(<div className={`bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200/60 dark:border-zinc-800/80 ${className}`}>{children}</div>);
@@ -123,7 +130,7 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
       </div>
     </div>
     <div className="grid gap-6 md:grid-cols-3">
-      <Tile title="Start a Match" subtitle="Singles or Doubles • Quick setup" icon={Play} action={onStart} imgUrl={StartMatchImg}/>
+      <Tile title="Start a Match" subtitle="Choose from fixtures" icon={Play} action={onStart} imgUrl={StartMatchImg}/>
       <Tile title="Show Results" subtitle="Winners, scores • Export" icon={ListChecks} action={onResults} imgUrl={ScoreImg}/>
       <Tile title="Manage Players" subtitle="Singles players & Doubles pairs" icon={Users} action={onSettings} imgUrl={SettingsImg}/>
     </div>
@@ -243,7 +250,7 @@ const Fixtures=({onBack})=>{
   const add=async(e)=>{
     e.preventDefault();
     const start = new Date(`${date}T${time}:00`).getTime();
-    const payload = { id: crypto.randomUUID(), mode, sides:[a,b], start };
+    const payload = { id: crypto.randomUUID(), mode, sides:[a,b], start, status:'upcoming' };
     await apiFixturesAdd(payload);
     setList(prev=>[...prev,payload].sort((x,y)=>x.start-y.start));
     setA(''); setB(''); setDate(''); setTime('');
@@ -318,7 +325,7 @@ function winnerSets(sets){let A=0,B=0;for(const s of sets){if(!s.finished)contin
 
 // ---------- Scoring ----------
 function Scoring({config,onAbort,onComplete}){
-  const {sides,rule,bestOf,gamesTarget,startingServer}=config;
+  const {sides,rule,bestOf,gamesTarget,startingServer,fixtureId}=config;
   const effectiveBestOf=rule==='bestOfSets'?bestOf:(rule==='regular'?3:1);
   const [points,setPoints]=useState([0,0]);
   const [sets,setSets]=useState([makeEmptySet()]);
@@ -330,7 +337,17 @@ function Scoring({config,onAbort,onComplete}){
   const gameTargetMode=rule==='firstToGames';
   const matchDone=(()=>{if(gameTargetMode)return currentSet.finished&&(currentSet.gamesA===gamesTarget||currentSet.gamesB===gamesTarget);return(setsA===targetSets||setsB===targetSets)})();
   const tiebreakServer=()=>{if(!currentSet.tie)return server;const tb=currentSet.tieA+currentSet.tieB;const start=currentSet.tieStart??server;if(tb===0)return start;const block=Math.floor((tb-1)/2)%2;return block===0?1-start:start};
-  const recordResult=async()=>{const scoreline=sets.filter(s=>s.finished).map(s=>s.tie?`${s.gamesA}-${s.gamesB}(${Math.max(s.tieA,s.tieB)})`:`${s.gamesA}-${s.gamesB}`).join(" ");const winner=setsA>setsB?sides[0]:setsB>setsA?sides[1]:(currentSet.gamesA>currentSet.gamesB?sides[0]:sides[1]);const payload={id:crypto.randomUUID(),sides,rule,bestOf:effectiveBestOf,gamesTarget,finishedAt:Date.now(),scoreline,winner};await apiMatchesAdd(payload);onComplete()};
+  const recordResult=async()=>{
+    const scoreline=sets.filter(s=>s.finished).map(s=>s.tie?`${s.gamesA}-${s.gamesB}(${Math.max(s.tieA,s.tieB)})`:`${s.gamesA}-${s.gamesB}`).join(" ");
+    const winner=setsA>setsB?sides[0]:setsB>setsA?sides[1]:(currentSet.gamesA>currentSet.gamesB?sides[0]:sides[1]);
+    const payload={id:crypto.randomUUID(),sides,rule,bestOf:effectiveBestOf,gamesTarget,finishedAt:Date.now(),scoreline,winner};
+    await apiMatchesAdd(payload);
+    // If started from a fixture, mark it completed and attach score
+    if (fixtureId){
+      await apiFixturesUpdate(fixtureId,{status:'completed',finishedAt:payload.finishedAt,winner:payload.winner,scoreline:payload.scoreline});
+    }
+    onComplete()
+  };
   const startNextGameRotateServer=()=>setServer(p=>1-p);
   const pointTo=(logical)=>{
     if(matchDone)return;
@@ -405,67 +422,120 @@ function Scoring({config,onAbort,onComplete}){
   </div>);
 }
 
-// ---------- Results ----------
+// ---------- Results (Active • Upcoming • Completed) ----------
 const Results=({onBack})=>{
-  const [list,setList]=useState([]); const [loading,setLoading]=useState(true);
-  useEffect(()=>{ let alive=true; (async()=>{ const data=await apiMatchesList(); if(alive){ setList(data); setLoading(false) } })();
-    const iv=setInterval(async()=>{ const data=await apiMatchesList(); if(alive) setList(data) },5000);
-    return()=>{ alive=false; clearInterval(iv) } },[]);
-  const clearAll=async()=>{ if(!confirm('Clear all results for everyone?')) return; await apiMatchesClear(); setList([]) };
-  const exportCSV=()=>{
-    if(!list.length) return;
-    const headers=['Date','Side A','Side B','Winner','Rule','BestOf','GamesTarget','Scoreline'];
-    const rows=list.map(m=>[new Date(m.finishedAt).toLocaleString(),m.sides[0],m.sides[1],m.winner,m.rule,m.bestOf,m.gamesTarget??'',m.scoreline]);
-    const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n');
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`tennis_results_${Date.now()}.csv`; a.click(); URL.revokeObjectURL(url);
-  };
-  const exportPDF=()=>{
-    if(!list.length)return; const doc=new jsPDF(); doc.setFontSize(14); doc.text('Tennis Match Results',14,16); doc.setFontSize(10);
-    let y=24; const lh=6; const addLine=t=>{doc.text(t,14,y); y+=lh; if(y>280){doc.addPage(); y=20}};
-    list.forEach((m,i)=>{ addLine(`${i+1}. ${new Date(m.finishedAt).toLocaleString()}`); addLine(`   ${m.sides[0]} vs ${m.sides[1]} — Winner: ${m.winner}`); addLine(`   Rule: ${m.rule}${m.bestOf?`, Best of ${m.bestOf}`:''}${m.gamesTarget?`, First to ${m.gamesTarget} games`:''}`); addLine(`   Score: ${m.scoreline}`); y+=2 });
-    doc.save(`tennis_results_${Date.now()}.pdf`);
-  };
-  return(<div className="max-w-4xl mx-auto p-6">
+  const [fixtures,setFixtures]=useState([]);
+  const [matches,setMatches]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{ let alive=true; (async()=>{
+      const fx=await apiFixturesList(); const ms=await apiMatchesList();
+      if(alive){ setFixtures(fx); setMatches(ms); setLoading(false) }
+    })();
+    const iv=setInterval(async()=>{ try{ setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()) }catch{} },8000);
+    return()=>{ alive=false; clearInterval(iv) }
+  },[]);
+
+  const active = fixtures.filter(f=>f.status==='active');
+  const upcoming = fixtures.filter(f=>!f.status || f.status==='upcoming').sort((a,b)=>a.start-b.start);
+  const completedFixtures = fixtures.filter(f=>f.status==='completed');
+  const completedMatches = matches.map(m=>({id:m.id,sides:m.sides,finishedAt:m.finishedAt,scoreline:m.scoreline,winner:m.winner,mode:m.mode||'singles'}));
+  const completed = [...completedFixtures, ...completedMatches].sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0));
+
+  return(<div className="max-w-5xl mx-auto p-6">
     <div className="flex items-center gap-3 mb-6">
       <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5"/> Back</Button>
       <h2 className="text-xl font-bold">Results</h2>
       <div className="ml-auto flex items-center gap-2">
-        <Button variant="secondary" onClick={exportCSV} title="Export CSV"><Download className="w-4 h-4"/> CSV</Button>
-        <Button variant="secondary" onClick={exportPDF} title="Export PDF"><FileDown className="w-4 h-4"/> PDF</Button>
-        <Button variant="secondary" onClick={clearAll}>Clear All</Button>
+        <Button variant="secondary" onClick={async()=>{await apiMatchesClear();}} title="Clear stored matches"><FileDown className="w-4 h-4"/> Reset Local</Button>
       </div>
     </div>
-    {loading?(<Card className="p-6 text-center text-zinc-500">Loading…</Card>):list.length===0?(<Card className="p-6 text-center text-zinc-500">No completed matches yet.</Card>):(<div className="space-y-3">{list.map(m=>(<Card key={m.id} className="p-4 flex items-center gap-4"><div className="flex-1"><div className="font-semibold">{m.sides[0]} vs {m.sides[1]}</div><div className="text-sm text-zinc-500">{new Date(m.finishedAt).toLocaleString()}</div></div><div className="text-center"><div className="text-sm uppercase tracking-wide text-zinc-400">Winner</div><div className="font-semibold">{m.winner}</div></div><div className="ml-6 text-lg font-mono">{m.scoreline}</div></Card>))}</div>)}
+    {loading?(<Card className="p-6 text-center text-zinc-500">Loading…</Card>):(
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card className="p-5">
+          <div className="text-lg font-semibold mb-3">Active</div>
+          {active.length?active.map(f=>(
+            <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+              <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+            </div>
+          )):<div className="text-zinc-500">No active match.</div>}
+          <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
+          {upcoming.length?upcoming.map(f=>(
+            <div key={f.id} className="py-2 border-b last:border-0">
+              <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600">{f.mode}</span></div>
+              <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+            </div>
+          )):<div className="text-zinc-500">No upcoming fixtures.</div>}
+        </Card>
+        <Card className="p-5">
+          <div className="text-lg font-semibold mb-3">Completed</div>
+          {completed.length?completed.map(m=>(
+            <div key={m.id+String(m.finishedAt)} className="py-2 border-b last:border-0">
+              <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
+              <div className="text-sm text-zinc-500">{m.finishedAt?new Date(m.finishedAt).toLocaleString():""}</div>
+              <div className="mt-1 text-sm"><span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner||''}</span> <span className="ml-3 font-mono">{m.scoreline||''}</span></div>
+            </div>
+          )):<div className="text-zinc-500">No results yet.</div>}
+        </Card>
+      </div>
+    )}
   </div>);
 };
 
-// ---------- Match Config ----------
-function MatchConfig({ onBack, onStartScoring }){
-  const [players,setPlayers]=useState({singles:[],doubles:[]})
-  useEffect(()=>{ let alive=true; (async()=>{ try{ const p=await apiPlayersGet(); if(alive) setPlayers(p) }catch{} })(); return ()=>{alive=false} },[])
-  const [mode,setMode]=useState("singles"); const [p1,setP1]=useState(""); const [p2,setP2]=useState("");
-  const [rule,setRule]=useState("regular"); const [gamesTarget,setGamesTarget]=useState("6"); const [bestOf,setBestOf]=useState("3");
-  const opts = mode==='singles'? players.singles : players.doubles;
-  const canStart = p1&&p2&&p1!==p2&&((rule==="firstToGames"&&Number(gamesTarget)>=1&&Number(gamesTarget)<=6)||(rule==="bestOfSets"&&Number(bestOf)>=1&&Number(bestOf)<=3)||(rule==="regular"));
-  const start=()=> onStartScoring({mode,sides:[p1,p2],rule,gamesTarget:Number(gamesTarget),bestOf:Number(bestOf),createdAt:Date.now(),startingServer:0})
+// ---------- Start from Fixtures (replaces old player dropdown page) ----------
+function StartFromFixtures({ onBack, onStartScoring }){
+  const [mode,setMode]=useState('singles');
+  const [fixtures,setFixtures]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{ let alive=true;(async()=>{
+    try{ const fx=await apiFixturesList(); if(alive) setFixtures(fx) }finally{ if(alive) setLoading(false) }
+  })(); return()=>{alive=false} },[]);
+
+  const list=fixtures.filter(f=>(f.mode||'singles')===mode && f.status!=='completed');
+
+  const startFixture=async(fx)=>{
+    const now=Date.now();
+    // demote any other active
+    for(const other of fixtures){ if(other.id!==fx.id && other.status==='active'){ await apiFixturesUpdate(other.id,{status:'upcoming'}) } }
+    // mark this one active; if in the future, move start time to now
+    const patch={status:'active'}; if(fx.start>now) patch.start=now;
+    await apiFixturesUpdate(fx.id,patch);
+    onStartScoring({
+      mode:fx.mode, sides:fx.sides,
+      rule:'regular', bestOf:3, gamesTarget:6, startingServer:0,
+      fixtureId:fx.id
+    });
+  };
+
   return (<div className="max-w-3xl mx-auto p-6">
     <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5"/> Back</Button><h2 className="text-xl font-bold">Start a Match</h2></div>
-    <Card className="p-6 space-y-6">
-      <div><SectionTitle icon={Users}>Match Type</SectionTitle><div className="flex gap-6"><Radio name="mode" value="singles" checked={mode==='singles'} onChange={setMode} label="Singles"/><Radio name="mode" value="doubles" checked={mode==='doubles'} onChange={setMode} label="Doubles"/></div></div>
-      <div><SectionTitle icon={Users}>Select Players</SectionTitle><div className="grid md:grid-cols-2 gap-4">
-        <div><div className="text-sm text-zinc-600 dark:text-zinc-400 mb-1">{mode==='singles'?'Player 1':'Team 1'}</div><Select value={p1} onChange={setP1} options={opts} placeholder="Choose..."/></div>
-        <div><div className="text-sm text-zinc-600 dark:text-zinc-400 mb-1">{mode==='singles'?'Player 2':'Team 2'}</div><Select value={p2} onChange={setP2} options={opts} placeholder="Choose..."/></div>
-      </div></div>
-      <div><SectionTitle icon={ListChecks}>Winning Criteria</SectionTitle><div className="space-y-4">
-        <label className="flex items-start gap-3"><input type="radio" name="rule" value="firstToGames" checked={rule==='firstToGames'} onChange={(e)=>setRule(e.target.value)} className="mt-1"/><div><div className="font-medium">First to N Games</div><div className="text-sm text-zinc-600 dark:text-zinc-400">Any player/team reaching specified number of games (1–6).</div>{rule==='firstToGames'&&(<div className="mt-3 w-40"><TextInput type="number" value={gamesTarget} onChange={setGamesTarget} min={1} max={6} placeholder="Enter 1–6"/></div>)}</div></label>
-        <label className="flex items-start gap-3"><input type="radio" name="rule" value="regular" checked={rule==='regular'} onChange={(e)=>setRule(e.target.value)} className="mt-1"/><div><div className="font-medium">Regular Match</div><div className="text-sm text-zinc-600 dark:text-zinc-400">Sets to 6 (win by 2), tie-break to 7 at 6–6, best of 3 default.</div></div></label>
-        <label className="flex items-start gap-3"><input type="radio" name="rule" value="bestOfSets" checked={rule==='bestOfSets'} onChange={(e)=>setRule(e.target.value)} className="mt-1"/><div><div className="font-medium">Number of Sets</div><div className="text-sm text-zinc-600 dark:text-zinc-400">Choose best-of-N sets (1–3).</div>{rule==='bestOfSets'&&(<div className="mt-3 w-40"><Select value={bestOf} onChange={setBestOf} options={['1','3']} placeholder="Select 1 or 3"/></div>)}</div></label>
-      </div></div>
-      <div className="pt-2"><Button onClick={start} disabled={!canStart}><Play className="w-4 h-4"/> Start</Button></div>
+    <Card className="p-5">
+      <div className="flex gap-6 mb-4">
+        <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode==='singles'} onChange={()=>setMode('singles')}/> Singles</label>
+        <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode==='doubles'} onChange={()=>setMode('doubles')}/> Doubles</label>
+      </div>
+      {loading ? <div className="text-zinc-500">Loading fixtures…</div> :
+       list.length===0 ? <div className="text-zinc-500">No fixtures for {mode}.</div> :
+       <div className="space-y-3">
+         {list.map(f=>(
+           <Card key={f.id} className="p-4 flex items-center gap-4">
+             <div className="flex-1">
+               <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+               <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+             </div>
+             <Button onClick={()=>startFixture(f)}><Play className="w-4 h-4"/> Start Now</Button>
+           </Card>
+         ))}
+       </div>}
     </Card>
-  </div>)
+  </div>);
 }
+
+// ---------- Match Config (kept for reference but NOT used now) ----------
+function MatchConfig(){ return null; } // deprecated by StartFromFixtures
 
 // ---------- Admin App ----------
 function AdminApp(){
@@ -477,11 +547,11 @@ function AdminApp(){
   return(<div className="app-bg"><div className="max-w-6xl mx-auto py-8">
     <AnimatePresence mode="wait">
       {view==='landing'&&(<motion.div key="landing" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}>
-        <Landing onStart={()=>to('config')} onResults={()=>to('results')} onSettings={()=>to('settings')} onFixtures={()=>to('fixtures')}/>
+        <Landing onStart={()=>to('start')} onResults={()=>to('results')} onSettings={()=>to('settings')} onFixtures={()=>to('fixtures')}/>
       </motion.div>)}
       {view==='settings'&&(<motion.div key="settings" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Settings onBack={()=>to('landing')}/></motion.div>)}
       {view==='fixtures'&&(<motion.div key="fixtures" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Fixtures onBack={()=>to('landing')}/></motion.div>)}
-      {view==='config'&&(<motion.div key="config" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><MatchConfig onBack={()=>to('landing')} onStartScoring={(c)=>{setCfg(c);to('scoring')}}/></motion.div>)}
+      {view==='start'&&(<motion.div key="start" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><StartFromFixtures onBack={()=>to('landing')} onStartScoring={(c)=>{setCfg(c);to('scoring')}}/></motion.div>)}
       {view==='scoring'&&cfg&&(<motion.div key="scoring" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Scoring config={cfg} onAbort={()=>to('landing')} onComplete={()=>to('results')}/></motion.div>)}
       {view==='results'&&(<motion.div key="results" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Results onBack={()=>to('landing')}/></motion.div>)}
     </AnimatePresence>
@@ -494,3 +564,4 @@ export default function Root(){
   if (path.startsWith('/viewer')) return <Viewer/>;
   return <AdminApp/>;
 }
+
