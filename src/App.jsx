@@ -8,6 +8,10 @@ const readLS=(k,f)=>{try{const r=localStorage.getItem(k);return r?JSON.parse(r):
 const writeLS=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 const buster=()=>'?t='+Date.now();
 
+import StartMatchImg from "./StartMatch.jpg";
+import ScoreImg from "./Score.jpg";
+import SettingsImg from "./Settings.jpg";
+
 // APIs (no auth; admin UI is gated locally)
 const apiStatus=async()=>{try{const r=await fetch('/api/status'+buster(),{cache:'no-store'});if(!r.ok)throw 0;const j=await r.json();return!!j.kv}catch{return false}};
 const apiPlayersGet=async()=>{const r=await fetch('/api/players'+buster(),{cache:'no-store'});if(!r.ok)throw 0;return await r.json()};
@@ -67,7 +71,7 @@ function Viewer(){
   })(); const iv=setInterval(async()=>{ try{ const fx=await apiFixturesList(); const rs=await apiMatchesList(); setFixtures(fx); setResults(rs) }catch{} },10000); return()=>{alive=false; clearInterval(iv)} },[]);
   return (<div className="app-bg"><div className="max-w-5xl mx-auto p-6">
     <div className="flex items-center justify-between mb-6">
-      <div className="flex items-center gap-3"><Eye className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Tournament Viewer</h1></div>
+      <div className="flex items-center gap-3"><Eye className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1></div>
       <ThemeToggle/>
     </div>
     {loading? <Card className="p-6 text-center text-zinc-500">Loading…</Card> :
@@ -119,9 +123,9 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
       </div>
     </div>
     <div className="grid gap-6 md:grid-cols-3">
-      <Tile title="Start a Match" subtitle="Singles or Doubles • Quick setup" icon={Play} action={onStart} imgUrl="https://upload.wikimedia.org/wikipedia/commons/3/3e/Tennis_Racket_and_Balls.jpg"/>
-      <Tile title="Show Results" subtitle="Winners, scores • Export" icon={ListChecks} action={onResults} imgUrl="https://www.wikihow.com/Keep-Score-for-Tennis%23/Image:Keep-Score-for-Tennis-Step-1-Version-3.jpg"/>
-      <Tile title="Manage Players" subtitle="Singles players & Doubles pairs" icon={Users} action={onSettings} imgUrl="https://news.cgtn.com/news/3563444e7a45544f31556a4e306b7a4d786b7a4e31457a6333566d54/img/2f296c0a4b63418486e92f07ff1d7ad1/2f296c0a4b63418486e92f07ff1d7ad1.jpg"/>
+      <Tile title="Start a Match" subtitle="Singles or Doubles • Quick setup" icon={Play} action={onStart} imgUrl={StartMatchImg}/>
+      <Tile title="Show Results" subtitle="Winners, scores • Export" icon={ListChecks} action={onResults} imgUrl={ScoreImg}/>
+      <Tile title="Manage Players" subtitle="Singles players & Doubles pairs" icon={Users} action={onSettings} imgUrl={SettingsImg}/>
     </div>
   </div>);
 };
