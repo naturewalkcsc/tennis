@@ -67,7 +67,7 @@ function Viewer(){
   })(); const iv=setInterval(async()=>{ try{ const fx=await apiFixturesList(); const rs=await apiMatchesList(); setFixtures(fx); setResults(rs) }catch{} },10000); return()=>{alive=false; clearInterval(iv)} },[]);
   return (<div className="app-bg"><div className="max-w-5xl mx-auto p-6">
     <div className="flex items-center justify-between mb-6">
-      <div className="flex items-center gap-3"><Eye className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Tournament Viewer</h1><GlobalBadge/></div>
+      <div className="flex items-center gap-3"><Eye className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Tournament Viewer</h1></div>
       <ThemeToggle/>
     </div>
     {loading? <Card className="p-6 text-center text-zinc-500">Loading…</Card> :
@@ -113,12 +113,9 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
   );
   return (<div className="max-w-5xl mx-auto p-6">
     <div className="flex items-center justify-between mb-8">
-      <div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring</h1><GlobalBadge/></div>
+      <div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1><GlobalBadge/></div>
       <div className="flex items-center gap-2">
-        <a className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900" href="/viewer" title="Open read-only viewer"><Eye className="w-4 h-4"/> Viewer</a>
         <Button variant="ghost" onClick={onFixtures}><CalendarPlus className="w-5 h-5"/> Fixtures</Button>
-        <Button variant="ghost" onClick={onSettings}><SettingsIcon className="w-5 h-5"/> Settings</Button>
-        <ThemeToggle/>
       </div>
     </div>
     <div className="grid gap-6 md:grid-cols-3">
@@ -484,7 +481,7 @@ function AdminApp(){
       {view==='scoring'&&cfg&&(<motion.div key="scoring" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Scoring config={cfg} onAbort={()=>to('landing')} onComplete={()=>to('results')}/></motion.div>)}
       {view==='results'&&(<motion.div key="results" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Results onBack={()=>to('landing')}/></motion.div>)}
     </AnimatePresence>
-  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring</footer></div>)
+  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW CSC</footer></div>)
 }
 
 // ---------- Root router ----------
