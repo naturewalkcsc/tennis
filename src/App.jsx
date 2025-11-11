@@ -79,7 +79,7 @@ function AdminLogin({onOk}){
 function Viewer(){
   const [fixtures,setFixtures]=useState([]);
   const [results,setResults]=useState([]);
-  const [loading,setLoading]=useState=true);
+  const [loading,setLoading]=useState(true);
   useEffect(()=>{ let alive=true;(async()=>{
     try{ const fx=await apiFixturesList(); const rs=await apiMatchesList(); if(!alive) return; setFixtures(fx); setResults(rs) }catch{} finally{ if(alive) setLoading(false) }
   })(); const iv=setInterval(async()=>{ try{ const fx=await apiFixturesList(); const rs=await apiMatchesList(); setFixtures(fx); setResults(rs) }catch{} },10000); return()=>{alive=false; clearInterval(iv)} },[]);
