@@ -1,6 +1,6 @@
 {
-  "routes": [
-    { "handle": "filesystem" },         // serve files in /public first
-    { "src": "/(.*)", "dest": "/index.html" }  // SPA fallback for everything else
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
