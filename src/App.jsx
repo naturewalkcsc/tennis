@@ -716,6 +716,10 @@ const Results = ({ onBack }) => {
 
 /* ----------------- App shell ----------------- */
 export default function App() {
+  const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+  if (path.startsWith('/viewer')) {
+    return <Viewer />; // public viewer, no login
+  }
   const [view, setView] = useState("landing");
   const [cfg, setCfg] = useState(null);
   const logged = localStorage.getItem("lt_admin") === "1";
@@ -778,3 +782,125 @@ export default function App() {
   );
 }
 
+function Viewer(){
+  const [fixtures,setFixtures]=React.useState([]);
+  const [results,setResults]=React.useState([]);
+  const [loading,setLoading]=React.useState(true);
+  const buster = () => `?t=${Date.now()}`;
+
+  const apiFixturesList = async () => {
+    const r = await fetch('/api/fixtures'+buster(), { cache:'no-store' });
+    if(!r.ok) throw 0;
+    return await r.json();
+  };
+  const apiMatchesList = async () => {
+    try{
+      const r = await fetch('/api/matches'+buster(), { cache:'no-store' });
+      if(!r.ok) throw 0;
+      return await r.json();
+    }catch{
+      return [];
+    }
+  };
+
+  React.useEffect(()=>{
+    let alive = true;
+    (async ()=>{
+      try{
+        const [fx,ms] = await Promise.all([apiFixturesList(), apiMatchesList()]);
+        if(!alive) return;
+        setFixtures(fx);
+        setResults(ms);
+      } finally {
+        if(alive) setLoading(false);
+      }
+    })();
+
+    // auto refresh every 10s so the page stays live
+    const iv = setInterval(async ()=>{
+      try{
+        const [fx,ms] = await Promise.all([apiFixturesList(), apiMatchesList()]);
+        setFixtures(fx);
+        setResults(ms);
+      }catch{}
+    }, 10000);
+
+    return ()=>{ alive=false; clearInterval(iv); };
+  },[]);
+
+  const active    = fixtures.filter(f => f.status === 'active');
+  const upcoming  = fixtures.filter(f => !f.status || f.status === 'upcoming');
+  const completedFixtures = fixtures.filter(f => f.status === 'completed');
+  // Also show historical results if you record them separately
+  const completed = [
+    ...completedFixtures,
+    ...results.map(m => ({
+      id: m.id,
+      sides: m.sides,
+      finishedAt: m.finishedAt,
+      scoreline: m.scoreline,
+      winner: m.winner,
+      mode: m.mode || 'singles'
+    }))
+  ].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
+
+  const Card = ({className="", children}) =>
+    <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>{children}</div>;
+
+  return (
+    <div className="app-bg">
+      <div className="max-w-5xl mx-auto p-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Tournament Viewer</h1>
+        </div>
+
+        {loading ? (
+          <Card className="p-6 text-center text-zinc-500">Loading…</Card>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="p-5">
+              <div className="text-lg font-semibold mb-3">Active</div>
+              {active.length ? active.map(f=>(
+                <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+                  <div className="ml-auto text-sm text-zinc-500">
+                    {new Date(f.start).toLocaleString()}
+                  </div>
+                </div>
+              )) : <div className="text-zinc-500">No live match.</div>}
+
+              <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
+              {upcoming.length ? upcoming.map(f=>(
+                <div key={f.id} className="py-2 border-b last:border-0">
+                  <div className="font-medium">
+                    {f.sides?.[0]} vs {f.sides?.[1]}
+                    <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>
+                  </div>
+                  <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                </div>
+              )) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+            </Card>
+
+            <Card className="p-5">
+              <div className="text-lg font-semibold mb-3">Completed</div>
+              {completed.length ? completed.map(m=>(
+                <div key={(m.id||'')+String(m.finishedAt||'')} className="py-2 border-b last:border-0">
+                  <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
+                  <div className="text-sm text-zinc-500">
+                    {m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}
+                  </div>
+                  <div className="mt-1 text-sm">
+                    <span className="uppercase text-zinc-400 text-xs">Winner</span>{" "}
+                    <span className="font-semibold">{m.winner||''}</span>{" "}
+                    <span className="ml-3 font-mono">{m.scoreline||''}</span>
+                  </div>
+                </div>
+              )) : <div className="text-zinc-500">No completed matches yet.</div>}
+            </Card>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
