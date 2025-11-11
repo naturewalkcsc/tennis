@@ -3,13 +3,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, Settings as SettingsIcon, ListChecks, Users, User2, ChevronLeft, Plus, Trash2, ArrowLeftRight, Download, FileDown, Shuffle, CalendarPlus, RefreshCw, X, Eye } from "lucide-react";
 import { jsPDF } from "jspdf";
 
-/* ---------- Shared helpers ---------- */
 const LS_THEME="lt_theme", LS_MATCHES_FALLBACK="lt_matches_fallback", LS_PLAYERS_DRAFT="lt_players_draft";
 const readLS=(k,f)=>{try{const r=localStorage.getItem(k);return r?JSON.parse(r):f}catch{return f}};
 const writeLS=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 const buster=()=>'?t='+Date.now();
 
-/* API wrappers (KV-backed with local fallback for results) */
+// APIs (no auth; admin UI is gated locally)
 const apiStatus=async()=>{try{const r=await fetch('/api/status'+buster(),{cache:'no-store'});if(!r.ok)throw 0;const j=await r.json();return!!j.kv}catch{return false}};
 const apiPlayersGet=async()=>{const r=await fetch('/api/players'+buster(),{cache:'no-store'});if(!r.ok)throw 0;return await r.json()};
 const apiPlayersSet=async(obj)=>{const r=await fetch('/api/players'+buster(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({payload:obj})});if(!r.ok)throw 0};
@@ -21,7 +20,7 @@ const apiFixturesAdd=async(payload)=>{const r=await fetch('/api/fixtures'+buster
 const apiFixturesRemove=async(id)=>{const r=await fetch('/api/fixtures'+buster(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'remove',id})});if(!r.ok)throw 0}
 const apiFixturesClear=async()=>{const r=await fetch('/api/fixtures'+buster(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'clear'})});if(!r.ok)throw 0}
 
-/* ---------- Small UI primitives ---------- */
+// UI primitives
 const Card=({className="",children})=>(<div className={`bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200/60 dark:border-zinc-800/80 ${className}`}>{children}</div>);
 const Button=({children,onClick,variant="primary",className="",disabled,title,type="button"})=>{
   const base="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-base font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2";
@@ -35,7 +34,30 @@ const SectionTitle=({children,icon:Icon})=>(<div className="flex items-center ga
 const GlobalBadge=()=>{const [on,setOn]=useState(false);useEffect(()=>{let alive=true;(async()=>{const ok=await apiStatus();if(alive)setOn(ok)})();return()=>{alive=false}},[]);return(<span className={`ml-3 inline-flex items-center px-2 py-1 rounded-full text-xs ${on?'bg-emerald-100 text-emerald-700':'bg-zinc-200 text-zinc-600'}`}>{on?'GLOBAL: ON':'GLOBAL: OFF'}</span>)};
 const ThemeToggle=()=>{const [dark,setDark]=useState(()=>readLS(LS_THEME,false));useEffect(()=>{document.documentElement.classList.toggle("dark",dark);writeLS(LS_THEME,dark)},[dark]);return(<Button variant="ghost" onClick={()=>setDark(d=>!d)} className="!px-3 !py-2" title="Toggle theme">{dark?"🌙":"☀️"}</Button>)};
 
-/* ---------- Viewer (read-only) ---------- */
+// ---------- Simple Local Login (protects only Admin UI) ----------
+function AdminLogin({onOk}){
+  const [u,setU]=useState("admin");
+  const [p,setP]=useState("rnwtennis123$");
+  const [err,setErr]=useState("");
+  const submit=(e)=>{e.preventDefault();
+    if(u==="admin" && p==="rnwtennis123$"){ localStorage.setItem("lt_admin","1"); onOk(); }
+    else { setErr("Invalid username or password"); }
+  };
+  return (<div className="app-bg"><div className="max-w-sm mx-auto p-6">
+    <div className="mb-6 text-center"><h1 className="text-2xl font-bold">Admin Login</h1><div className="text-sm text-zinc-600">Default: admin / rnwtennis123$</div></div>
+    <Card className="p-5">
+      <form onSubmit={submit} className="space-y-4">
+        <div><div className="text-sm mb-1">Username</div><TextInput value={u} onChange={setU} placeholder="admin"/></div>
+        <div><div className="text-sm mb-1">Password</div><TextInput type="password" value={p} onChange={setP} placeholder="••••••••"/></div>
+        {err && <div className="text-sm text-red-600">{err}</div>}
+        <Button type="submit" className="w-full">Enter Admin</Button>
+      </form>
+    </Card>
+    <div className="mt-6 text-sm text-zinc-600">Viewer is public: <a className="underline" href="/viewer">/viewer</a></div>
+  </div></div>);
+}
+
+// ---------- Viewer (public) ----------
 function Viewer(){
   const [fixtures,setFixtures]=useState([]);
   const [results,setResults]=useState([]);
@@ -45,7 +67,8 @@ function Viewer(){
   })(); const iv=setInterval(async()=>{ try{ const fx=await apiFixturesList(); const rs=await apiMatchesList(); setFixtures(fx); setResults(rs) }catch{} },10000); return()=>{alive=false; clearInterval(iv)} },[]);
   return (<div className="app-bg"><div className="max-w-5xl mx-auto p-6">
     <div className="flex items-center justify-between mb-6">
-      <div className="flex items-center gap-3"><Eye className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Tournament Viewer</h1></div>
+      <div className="flex items-center gap-3"><Eye className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Tournament Viewer</h1><GlobalBadge/></div>
+      <ThemeToggle/>
     </div>
     {loading? <Card className="p-6 text-center text-zinc-500">Loading…</Card> :
     <div className="grid md:grid-cols-2 gap-6">
@@ -77,7 +100,7 @@ function Viewer(){
   </div></div>);
 }
 
-/* ---------- Admin landing ---------- */
+// ---------- Landing ----------
 const Landing=({onStart,onResults,onSettings,onFixtures})=>{
   const Tile=({title,subtitle,icon:Icon,action,imgUrl})=>(
     <motion.button onClick={action} whileHover={{y:-2,scale:1.01}} whileTap={{scale:0.99}} className="w-full md:w-80 aspect-[5/3] rounded-2xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-left">
@@ -90,8 +113,9 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
   );
   return (<div className="max-w-5xl mx-auto p-6">
     <div className="flex items-center justify-between mb-8">
-      <div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1><GlobalBadge/></div>
+      <div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring</h1><GlobalBadge/></div>
       <div className="flex items-center gap-2">
+        <a className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900" href="/viewer" title="Open read-only viewer"><Eye className="w-4 h-4"/> Viewer</a>
         <Button variant="ghost" onClick={onFixtures}><CalendarPlus className="w-5 h-5"/> Fixtures</Button>
         <Button variant="ghost" onClick={onSettings}><SettingsIcon className="w-5 h-5"/> Settings</Button>
         <ThemeToggle/>
@@ -105,7 +129,7 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
   </div>);
 };
 
-/* ---------- Settings (players) ---------- */
+// ---------- Settings (players) ----------
 const Settings=({onBack})=>{
   const [singles,setSingles]=useState([]);
   const [doubles,setDoubles]=useState([]);
@@ -195,7 +219,7 @@ const Settings=({onBack})=>{
   </div>);
 };
 
-/* ---------- Fixtures (schedule) ---------- */
+// ---------- Fixtures ----------
 const Fixtures=({onBack})=>{
   const [players,setPlayers]=useState({singles:[],doubles:[]});
   const [mode,setMode]=useState('singles');
@@ -283,7 +307,7 @@ const Fixtures=({onBack})=>{
   </div>);
 };
 
-/* ---------- Scoring helpers ---------- */
+// ---------- Scoring helpers ----------
 const nextPoint=(p)=>({0:15,15:30,30:40}[p]??(p===40?"Ad":p==="Ad"?"Game":p));
 function computeGameWin(a,b){if(a==="Game")return"A";if(b==="Game")return"B";if(a===40&&b==="Ad")return null;if(b===40&&a==="Ad")return null;return null}
 function advancePoint(a,b,who){let pA=a,pB=b;if(who===0){if(pA===40&&pB===40){pA="Ad"}else if(pA==="Ad"){pA="Game"}else if(pB==="Ad"){pB=40}else{pA=nextPoint(pA)}}else{if(pA===40&&pB===40){pB="Ad"}else if(pB==="Ad"){pB="Game"}else if(pA==="Ad"){pA=40}else{pB=nextPoint(pB)}}return[pA,pB]}
@@ -291,7 +315,7 @@ function makeEmptySet(){return{gamesA:0,gamesB:0,tieA:0,tieB:0,tie:false,finishe
 function setOver(s){if(s.tie){if((s.tieA>=7||s.tieB>=7)&&Math.abs(s.tieA-s.tieB)>=2)return true;return false}else{const a=s.gamesA,b=s.gamesB;if((a>=6||b>=6)&&Math.abs(a-b)>=2)return true;if(a===7||b===7)return true;return false}}
 function winnerSets(sets){let A=0,B=0;for(const s of sets){if(!s.finished)continue;if(s.tie){if(s.tieA>s.tieB)A++;else if(s.tieB>s.tieA)B++;}else{if(s.gamesA>s.gamesB)A++;else if(s.gamesB>s.gamesA)B++;}}return{A,B}}
 
-/* ---------- Scoring ---------- */
+// ---------- Scoring ----------
 function Scoring({config,onAbort,onComplete}){
   const {sides,rule,bestOf,gamesTarget,startingServer}=config;
   const effectiveBestOf=rule==='bestOfSets'?bestOf:(rule==='regular'?3:1);
@@ -380,7 +404,7 @@ function Scoring({config,onAbort,onComplete}){
   </div>);
 }
 
-/* ---------- Results ---------- */
+// ---------- Results ----------
 const Results=({onBack})=>{
   const [list,setList]=useState([]); const [loading,setLoading]=useState(true);
   useEffect(()=>{ let alive=true; (async()=>{ const data=await apiMatchesList(); if(alive){ setList(data); setLoading(false) } })();
@@ -415,7 +439,7 @@ const Results=({onBack})=>{
   </div>);
 };
 
-/* ---------- Match Config ---------- */
+// ---------- Match Config ----------
 function MatchConfig({ onBack, onStartScoring }){
   const [players,setPlayers]=useState({singles:[],doubles:[]})
   useEffect(()=>{ let alive=true; (async()=>{ try{ const p=await apiPlayersGet(); if(alive) setPlayers(p) }catch{} })(); return ()=>{alive=false} },[])
@@ -442,11 +466,13 @@ function MatchConfig({ onBack, onStartScoring }){
   </div>)
 }
 
-/* ---------- Admin app shell ---------- */
+// ---------- Admin App ----------
 function AdminApp(){
   const [view,setView]=useState('landing');
   const [cfg,setCfg]=useState(null);
   const to=v=>setView(v);
+  const logged=localStorage.getItem("lt_admin")==="1";
+  if(!logged) return <AdminLogin onOk={()=>window.location.reload()}/>;
   return(<div className="app-bg"><div className="max-w-6xl mx-auto py-8">
     <AnimatePresence mode="wait">
       {view==='landing'&&(<motion.div key="landing" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}>
@@ -458,10 +484,10 @@ function AdminApp(){
       {view==='scoring'&&cfg&&(<motion.div key="scoring" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Scoring config={cfg} onAbort={()=>to('landing')} onComplete={()=>to('results')}/></motion.div>)}
       {view==='results'&&(<motion.div key="results" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Results onBack={()=>to('landing')}/></motion.div>)}
     </AnimatePresence>
-  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW CSC</footer></div>)
+  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring</footer></div>)
 }
 
-/* ---------- Root router ---------- */
+// ---------- Root router ----------
 export default function Root(){
   const path = typeof window!=='undefined' ? window.location.pathname : '/';
   if (path.startsWith('/viewer')) return <Viewer/>;
