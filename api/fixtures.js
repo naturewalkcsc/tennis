@@ -13,9 +13,10 @@ export default async function handler(req,res){
     if(req.method==='POST'){
       const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
       const action=body.action||'add';
-      if(action==='add'){ const f=body.payload||{}; const list=(await redis.get(key))||[]; list.push(f); await redis.set(key,list); return res.status(200).json({ok:true}) }
+      if(action==='add'){ const f=body.payload||{}; const list=(await redis.get(key))||[]; list.push({status:f.status||'upcoming',active:false,...f}); await redis.set(key,list); return res.status(200).json({ok:true}) }
       if(action==='clear'){ await redis.set(key,[]); return res.status(200).json({ok:true}) }
       if(action==='remove'){ const id=body.id; let list=(await redis.get(key))||[]; list=list.filter(x=>x.id!==id); await redis.set(key,list); return res.status(200).json({ok:true}) }
+      if(action==='update'){ const {id,patch}=body; let list=(await redis.get(key))||[]; list=list.map(x=>x.id===id?{...x,...patch}:x); await redis.set(key,list); return res.status(200).json({ok:true}) }
       return res.status(400).json({error:'unknown action'})
     }
     if(req.method==='DELETE'){ await redis.set(key,[]); return res.status(200).json({ok:true}) }
