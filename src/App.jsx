@@ -2,6 +2,10 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
 
+import StartImg from "./assets/StartMatch.jpg";
+import ScoreImg from "./assets/Score.jpg";
+import SettingsImg from "./assets/Settings.jpg";
+
 const LS_MATCHES_FALLBACK="lt_matches_fallback", LS_PLAYERS_DRAFT="lt_players_draft";
 const readLS=(k,f)=>{try{const r=localStorage.getItem(k);return r?JSON.parse(r):f}catch{return f}};
 const writeLS=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
@@ -56,9 +60,9 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
   return (<div className="max-w-5xl mx-auto p-6">
     <div className="flex items-center gap-3 mb-8"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring (Admin)</h1></div>
     <div className="grid md:grid-cols-3 gap-6">
-      <Tile title="Start Match" subtitle="Choose from fixtures" src={asset('StartMatch.jpg')} action={onStart}/>
-      <Tile title="Results" subtitle="Active • Upcoming • Completed" src={asset('Score.jpg')} action={onResults}/>
-      <Tile title="Manage Players" subtitle="Singles & Doubles" src={asset('Settings.jpg')} action={onSettings}/>
+      <Tile title="Start Match" subtitle="Choose from fixtures" img={StartImg} action={onStart}/>
+      <Tile title="Results" subtitle="Active • Upcoming • Completed" img={ScoreImg} action={onResults}/>
+      <Tile title="Manage Players" subtitle="Singles & Doubles" img={SettingsImg} action={onSettings}/>
     </div>
     <div className="mt-6"><Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4"/> Fixtures</Button></div>
   </div>);
