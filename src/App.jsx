@@ -6,8 +6,9 @@ const LS_MATCHES_FALLBACK="lt_matches_fallback", LS_PLAYERS_DRAFT="lt_players_dr
 const readLS=(k,f)=>{try{const r=localStorage.getItem(k);return r?JSON.parse(r):f}catch{return f}};
 const writeLS=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 const buster=()=>'?t='+Date.now();
+const asset=(p)=> (import.meta.env.BASE_URL + p); // works in dev and prod
 
-/* ---- Local-only admin gate (no prefilled pwd) ---- */
+/* ---- Local admin gate (no prefilled pwd) ---- */
 function AdminLogin({onOk}){
   const [u,setU]=useState("admin"); const [p,setP]=useState(""); const [err,setErr]=useState("");
   const submit=(e)=>{e.preventDefault(); if(u==="admin" && p==="rnwtennis123$"){ localStorage.setItem("lt_admin","1"); onOk(); } else setErr("Invalid username or password"); };
@@ -44,7 +45,7 @@ const Button=({children,onClick,variant="primary",className="",type="button",dis
   return(<button type={type} onClick={onClick} disabled={disabled} className={`${base} ${styles} ${disabled?'opacity-50 cursor-not-allowed':''} ${className}`}>{children}</button>)
 };
 
-/* ---- Landing (uses /StartMatch.jpg etc.) ---- */
+/* ---- Landing (uses asset() -> public/) ---- */
 const Landing=({onStart,onResults,onSettings,onFixtures})=>{
   const Tile=({title,subtitle,src,action})=>(
     <motion.button onClick={action} whileHover={{y:-2}} className="w-full md:w-80 rounded-2xl overflow-hidden border shadow bg-white text-left">
@@ -55,13 +56,16 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
   return (<div className="max-w-5xl mx-auto p-6">
     <div className="flex items-center gap-3 mb-8"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring (Admin)</h1></div>
     <div className="grid md:grid-cols-3 gap-6">
-      <Tile title="Start Match" subtitle="Choose from fixtures" src="StartMatch.jpg" action={onStart}/>
-      <Tile title="Results" subtitle="Active • Upcoming • Completed" src="Score.jpg" action={onResults}/>
-      <Tile title="Manage Players" subtitle="Singles & Doubles" src="Settings.jpg" action={onSettings}/>
+      <Tile title="Start Match" subtitle="Choose from fixtures" src={asset('StartMatch.jpg')} action={onStart}/>
+      <Tile title="Results" subtitle="Active • Upcoming • Completed" src={asset('Score.jpg')} action={onResults}/>
+      <Tile title="Manage Players" subtitle="Singles & Doubles" src={asset('Settings.jpg')} action={onSettings}/>
     </div>
     <div className="mt-6"><Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4"/> Fixtures</Button></div>
   </div>);
 };
+
+/* ---- (rest identical to prior no-viewer build) ---- */
+// Settings, Fixtures, StartFromFixtures, Scoring, Results definitions are same as previous cell content.
 
 /* ---- Settings (players) ---- */
 const Settings=({onBack})=>{
