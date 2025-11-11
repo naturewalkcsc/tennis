@@ -80,11 +80,11 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
     </motion.button>
   );
   return (<div className="max-w-5xl mx-auto p-6">
-    <div className="flex items-center justify-between mb-8"><div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring</h1><GlobalBadge/></div><a className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200" href="/viewer"><Eye className="w-4 h-4 inline mr-2"/>Viewer</a></div>
+    <div className="flex items-center justify-between mb-8"><div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1></div>
     <div className="grid md:grid-cols-3 gap-6">
-      <Tile title="Start Match" subtitle="Choose from fixtures" src="/StartMatch.jpg" action={onStart}/>
-      <Tile title="Results" subtitle="Active • Upcoming • Completed" src="/Score.jpg" action={onResults}/>
-      <Tile title="Manage Players" subtitle="Singles & Doubles" src="/Settings.jpg" action={onSettings}/>
+      <Tile title="Start Match" subtitle="Choose from fixtures" src="public/StartMatch.jpg" action={onStart}/>
+      <Tile title="Results" subtitle="Active • Upcoming • Completed" src="public/Score.jpg" action={onResults}/>
+      <Tile title="Manage Players" subtitle="Singles & Doubles" src="public/Settings.jpg" action={onSettings}/>
     </div>
     <div className="mt-6"><Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4"/> Fixtures</Button></div>
   </div>);
@@ -208,7 +208,7 @@ function AdminApp(){
       {view==='scoring'&&cfg&&(<motion.div key="scoring" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Scoring config={cfg} onAbort={()=>to('landing')} onComplete={()=>to('results')}/></motion.div>)}
       {view==='results'&&(<motion.div key="results" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Results onBack={()=>to('landing')}/></motion.div>)}
     </AnimatePresence>
-  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring</footer></div>);
+  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW CSC </footer></div>);
 }
 
 /* -------- Router -------- */
