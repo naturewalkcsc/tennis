@@ -80,7 +80,7 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
     </motion.button>
   );
   return (<div className="max-w-5xl mx-auto p-6">
-    <div className="flex items-center justify-between mb-8"><div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1></div>
+    <div className="flex items-center justify-between mb-8"><div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">RNW Tennis Tournament</h1><GlobalBadge/></div><a className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200" href="/viewer"><Eye className="w-4 h-4 inline mr-2"/>Viewer</a></div>
     <div className="grid md:grid-cols-3 gap-6">
       <Tile title="Start Match" subtitle="Choose from fixtures" src="public/StartMatch.jpg" action={onStart}/>
       <Tile title="Results" subtitle="Active • Upcoming • Completed" src="public/Score.jpg" action={onResults}/>
@@ -208,7 +208,7 @@ function AdminApp(){
       {view==='scoring'&&cfg&&(<motion.div key="scoring" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Scoring config={cfg} onAbort={()=>to('landing')} onComplete={()=>to('results')}/></motion.div>)}
       {view==='results'&&(<motion.div key="results" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Results onBack={()=>to('landing')}/></motion.div>)}
     </AnimatePresence>
-  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW CSC </footer></div>);
+  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW NPL 2025 </footer></div>);
 }
 
 /* -------- Router -------- */
