@@ -55,9 +55,9 @@ const Landing=({onStart,onResults,onSettings,onFixtures})=>{
   return (<div className="max-w-5xl mx-auto p-6">
     <div className="flex items-center gap-3 mb-8"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring (Admin)</h1></div>
     <div className="grid md:grid-cols-3 gap-6">
-      <Tile title="Start Match" subtitle="Choose from fixtures" src="/StartMatch.jpg" action={onStart}/>
-      <Tile title="Results" subtitle="Active • Upcoming • Completed" src="/Score.jpg" action={onResults}/>
-      <Tile title="Manage Players" subtitle="Singles & Doubles" src="/Settings.jpg" action={onSettings}/>
+      <Tile title="Start Match" subtitle="Choose from fixtures" src="StartMatch.jpg" action={onStart}/>
+      <Tile title="Results" subtitle="Active • Upcoming • Completed" src="Score.jpg" action={onResults}/>
+      <Tile title="Manage Players" subtitle="Singles & Doubles" src="Settings.jpg" action={onSettings}/>
     </div>
     <div className="mt-6"><Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4"/> Fixtures</Button></div>
   </div>);
