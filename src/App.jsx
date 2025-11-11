@@ -1,14 +1,13 @@
-// src/App.jsx
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
 
-// ✅ Images bundled from src/assets (these already work in your setup)
+// === Images from src/assets (must exist) ===
 import imgStart from "./assets/StartMatch.jpg";
 import imgScore from "./assets/Score.jpg";
 import imgSettings from "./assets/Settings.jpg";
 
-/* ---------------- Local + API helpers ---------------- */
+// === Local fallbacks (browser-only) for matches when KV is off ===
 const LS_MATCHES_FALLBACK = "lt_matches_fallback";
 const LS_PLAYERS_DRAFT = "lt_players_draft";
 const readLS = (k, f) => {
@@ -17,7 +16,107 @@ const readLS = (k, f) => {
 const writeLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 const buster = () => "?t=" + Date.now();
 
-/* ----- Admin (simple local login; no prefilled password) ----- */
+// === API wrappers ===
+const apiPlayersGet = async () => {
+  const r = await fetch("/api/players" + buster(), { cache: "no-store" });
+  if (!r.ok) throw 0;
+  return await r.json();
+};
+const apiPlayersSet = async (obj) => {
+  const r = await fetch("/api/players" + buster(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ payload: obj }),
+  });
+  if (!r.ok) throw 0;
+};
+const apiMatchesList = async () => {
+  try {
+    const r = await fetch("/api/matches" + buster(), { cache: "no-store" });
+    if (!r.ok) throw 0;
+    return await r.json();
+  } catch {
+    return readLS(LS_MATCHES_FALLBACK, []);
+  }
+};
+const apiMatchesAdd = async (payload) => {
+  try {
+    const r = await fetch("/api/matches" + buster(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "add", payload }),
+    });
+    if (!r.ok) throw 0;
+  } catch {
+    const list = readLS(LS_MATCHES_FALLBACK, []);
+    list.unshift(payload);
+    writeLS(LS_MATCHES_FALLBACK, list);
+  }
+};
+const apiFixturesList = async () => {
+  const r = await fetch("/api/fixtures" + buster(), { cache: "no-store" });
+  if (!r.ok) throw 0;
+  return await r.json();
+};
+const apiFixturesAdd = async (payload) => {
+  const r = await fetch("/api/fixtures" + buster(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "add", payload }),
+  });
+  if (!r.ok) throw 0;
+};
+const apiFixturesRemove = async (id) => {
+  const r = await fetch("/api/fixtures" + buster(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "remove", id }),
+  });
+  if (!r.ok) throw 0;
+};
+const apiFixturesClear = async () => {
+  const r = await fetch("/api/fixtures" + buster(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "clear" }),
+  });
+  if (!r.ok) throw 0;
+};
+const apiFixturesUpdate = async (id, patch) => {
+  const r = await fetch("/api/fixtures" + buster(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "update", id, patch }),
+  });
+  if (!r.ok) throw 0;
+};
+
+// === UI primitives ===
+const Card = ({ className = "", children }) => (
+  <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>
+    {children}
+  </div>
+);
+const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled }) => {
+  const base = "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium";
+  const styles = {
+    primary: "bg-green-600 hover:bg-green-700 text-white",
+    secondary: "bg-zinc-100 hover:bg-zinc-200",
+    ghost: "hover:bg-zinc-100",
+  }[variant];
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${base} ${styles} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+// === Admin login (local only) ===
 function AdminLogin({ onOk }) {
   const [u, setU] = useState("admin");
   const [p, setP] = useState("");
@@ -40,11 +139,11 @@ function AdminLogin({ onOk }) {
           <form onSubmit={submit} className="space-y-4">
             <div>
               <div className="text-sm mb-1">Username</div>
-              <input className="w-full rounded-xl border px-3 py-2" value={u} onChange={e => setU(e.target.value)} />
+              <input className="w-full rounded-xl border px-3 py-2" value={u} onChange={(e) => setU(e.target.value)} />
             </div>
             <div>
               <div className="text-sm mb-1">Password</div>
-              <input type="password" className="w-full rounded-xl border px-3 py-2" value={p} onChange={e => setP(e.target.value)} />
+              <input type="password" className="w-full rounded-xl border px-3 py-2" value={p} onChange={(e) => setP(e.target.value)} />
             </div>
             {err && <div className="text-sm text-red-600">{err}</div>}
             <button type="submit" className="w-full px-4 py-3 rounded-xl bg-green-600 text-white">Enter Admin</button>
@@ -55,131 +154,14 @@ function AdminLogin({ onOk }) {
   );
 }
 
-/* ---------------- API wrappers ---------------- */
-const apiPlayersGet = async () => {
-  const r = await fetch("/api/players" + buster(), { cache: "no-store" });
-  if (!r.ok) throw 0;
-  return await r.json();
-};
-const apiPlayersSet = async (obj) => {
-  const r = await fetch("/api/players" + buster(), {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ payload: obj })
-  });
-  if (!r.ok) throw 0;
-};
-
-const apiMatchesList = async () => {
-  try {
-    const r = await fetch("/api/matches" + buster(), { cache: "no-store" });
-    if (!r.ok) throw 0;
-    return await r.json();
-  } catch {
-    return readLS(LS_MATCHES_FALLBACK, []);
-  }
-};
-const apiMatchesAdd = async (payload) => {
-  try {
-    const r = await fetch("/api/matches" + buster(), {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add", payload })
-    });
-    if (!r.ok) throw 0;
-  } catch {
-    const list = readLS(LS_MATCHES_FALLBACK, []);
-    list.unshift(payload);
-    writeLS(LS_MATCHES_FALLBACK, list);
-  }
-};
-
-const apiFixturesList = async () => {
-  const r = await fetch("/api/fixtures" + buster(), { cache: "no-store" });
-  if (!r.ok) throw 0;
-  return await r.json();
-};
-const apiFixturesAdd = async (payload) => {
-  const r = await fetch("/api/fixtures" + buster(), {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "add", payload })
-  });
-  if (!r.ok) throw 0;
-};
-const apiFixturesRemove = async (id) => {
-  const r = await fetch("/api/fixtures" + buster(), {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "remove", id })
-  });
-  if (!r.ok) throw 0;
-};
-const apiFixturesClear = async () => {
-  const r = await fetch("/api/fixtures" + buster(), {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "clear" })
-  });
-  if (!r.ok) throw 0;
-};
-
-/* 
- * Try preferred UPDATE action. If it 400s on older API, we fallback by
- * fetching list, patching in client, and pushing the whole list via a
- * compatibility POST payload {action:'setAll', list} (add this server-side
- * if you need the fallback). If 'setAll' is not supported, you’ll need to
- * deploy the newer fixtures API with 'update'.
- */
-const apiFixturesUpdate = async (id, patch) => {
-  const tryUpdate = async () => {
-    const r = await fetch("/api/fixtures" + buster(), {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "update", id, patch })
-    });
-    if (!r.ok) throw r;
-    return true;
-  };
-
-  try {
-    await tryUpdate();
-  } catch (err) {
-    // Fallback path (requires server support):
-    try {
-      const list = await apiFixturesList();
-      const merged = list.map(f => f.id === id ? { ...f, ...patch } : f);
-      const r2 = await fetch("/api/fixtures" + buster(), {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "setAll", list: merged })
-      });
-      if (!r2.ok) throw 0;
-    } catch {
-      // If this also fails, surface original error in console (UI continues)
-      console.warn("Fixtures update failed; ensure /api/fixtures supports {action:'update'} or 'setAll'.");
-      throw err;
-    }
-  }
-};
-
-/* ---------------- Small UI primitives ---------------- */
-const Card = ({ className = "", children }) => (
-  <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>{children}</div>
-);
-const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled }) => {
-  const base = "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium";
-  const styles = {
-    primary: "bg-green-600 hover:bg-green-700 text-white",
-    secondary: "bg-zinc-100 hover:bg-zinc-200",
-    ghost: "hover:bg-zinc-100"
-  }[variant];
-  return (
-    <button type={type} onClick={onClick} disabled={disabled}
-      className={`${base} ${styles} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}>
-      {children}
-    </button>
-  );
-};
-
-/* ---------------- Landing ---------------- */
+// === Landing (images from src/assets imports) ===
 const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
   const Tile = ({ title, subtitle, src, action }) => (
-    <motion.button onClick={action} whileHover={{ y: -2 }}
-      className="w-full md:w-80 rounded-2xl overflow-hidden border shadow bg-white text-left">
+    <motion.button
+      onClick={action}
+      whileHover={{ y: -2 }}
+      className="w-full md:w-80 rounded-2xl overflow-hidden border shadow bg-white text-left"
+    >
       <div className="h-40 relative">
         <img src={src} className="absolute inset-0 w-full h-full object-cover" alt="" />
       </div>
@@ -201,13 +183,15 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
         <Tile title="Manage Players" subtitle="Singles & Doubles" src={imgSettings} action={onSettings} />
       </div>
       <div className="mt-6">
-        <Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4" /> Fixtures</Button>
+        <Button variant="secondary" onClick={onFixtures}>
+          <CalendarPlus className="w-4 h-4" /> Fixtures
+        </Button>
       </div>
     </div>
   );
 };
 
-/* ---------------- Settings (Players) ---------------- */
+// === Settings (players) ===
 const Settings = ({ onBack }) => {
   const [singles, setSingles] = useState([]);
   const [doubles, setDoubles] = useState([]);
@@ -216,23 +200,29 @@ const Settings = ({ onBack }) => {
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState("");
 
-  const saveDraft = (s, d) => { try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify({ singles: s, doubles: d })) } catch { } };
-  const loadDraft = () => { try { const r = localStorage.getItem(LS_PLAYERS_DRAFT); return r ? JSON.parse(r) : null } catch { return null } };
-  const clearDraft = () => { try { localStorage.removeItem(LS_PLAYERS_DRAFT) } catch { } };
+  const saveDraft = (s, d) => { try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify({ singles: s, doubles: d })); } catch {} };
+  const loadDraft = () => { try { const r = localStorage.getItem(LS_PLAYERS_DRAFT); return r ? JSON.parse(r) : null; } catch { return null; } };
+  const clearDraft = () => { try { localStorage.removeItem(LS_PLAYERS_DRAFT); } catch {} };
 
   useEffect(() => {
     let alive = true;
     (async () => {
       const d = loadDraft();
       if (d) {
-        setSingles(d.singles || []); setDoubles(d.doubles || []);
-        setDirty(true); setLoading(false); return;
+        setSingles(d.singles || []);
+        setDoubles(d.doubles || []);
+        setDirty(true);
+        setLoading(false);
+        return;
       }
       try {
         const obj = await apiPlayersGet();
         if (alive) { setSingles(obj.singles || []); setDoubles(obj.doubles || []); }
-      } catch { setError("Could not load players"); }
-      finally { if (alive) setLoading(false); }
+      } catch {
+        setError("Could not load players");
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
     return () => { alive = false; };
   }, []);
@@ -260,14 +250,16 @@ const Settings = ({ onBack }) => {
         <div className="ml-auto"><Button onClick={save} disabled={!dirty || saving}>{saving ? "Saving…" : "Save Changes"}</Button></div>
       </div>
       {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200 rounded-xl">{error}</Card>}
-      {loading ? <Card className="p-5 text-center text-zinc-500">Loading…</Card> : (
+      {loading ? (
+        <Card className="p-5 text-center text-zinc-500">Loading…</Card>
+      ) : (
         <div className="grid md:grid-cols-2 gap-6">
           <Card className="p-5">
             <div className="font-semibold mb-3">Singles</div>
             <div className="space-y-3">
               {singles.map((name, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updSingles(idx, e.target.value)} />
+                  <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={(e) => updSingles(idx, e.target.value)} />
                   <button onClick={() => delSingles(idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
@@ -279,7 +271,7 @@ const Settings = ({ onBack }) => {
             <div className="space-y-3">
               {doubles.map((name, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updDoubles(idx, e.target.value)} />
+                  <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={(e) => updDoubles(idx, e.target.value)} />
                   <button onClick={() => delDoubles(idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
@@ -292,7 +284,7 @@ const Settings = ({ onBack }) => {
   );
 };
 
-/* ---------------- Fixtures (create/list/remove) ---------------- */
+// === Fixtures (add/list/remove/update) ===
 const Fixtures = ({ onBack }) => {
   const [players, setPlayers] = useState({ singles: [], doubles: [] });
   const [mode, setMode] = useState("singles");
@@ -306,8 +298,8 @@ const Fixtures = ({ onBack }) => {
   useEffect(() => {
     let alive = true;
     (async () => {
-      try { const p = await apiPlayersGet(); if (alive) setPlayers(p); } catch { }
-      try { const fx = await apiFixturesList(); if (alive) setList(fx); } catch { }
+      try { const p = await apiPlayersGet(); if (alive) setPlayers(p); } catch {}
+      try { const fx = await apiFixturesList(); if (alive) setList(fx); } catch {}
       finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };
@@ -321,18 +313,11 @@ const Fixtures = ({ onBack }) => {
     const start = new Date(`${date}T${time}:00`).getTime();
     const payload = { id: crypto.randomUUID(), mode, sides: [a, b], start, status: "upcoming" };
     await apiFixturesAdd(payload);
-    setList(prev => [...prev, payload].sort((x, y) => x.start - y.start));
+    setList((prev) => [...prev, payload].sort((x, y) => x.start - y.start));
     setA(""); setB(""); setDate(""); setTime("");
   };
-  const remove = async (id) => {
-    await apiFixturesRemove(id);
-    setList(prev => prev.filter(f => f.id !== id));
-  };
-  const clear = async () => {
-    if (!confirm("Clear ALL fixtures?")) return;
-    await apiFixturesClear();
-    setList([]);
-  };
+  const remove = async (id) => { await apiFixturesRemove(id); setList((prev) => prev.filter((f) => f.id !== id)); };
+  const clear = async () => { if (!confirm("Clear ALL fixtures?")) return; await apiFixturesClear(); setList([]); };
   const refresh = async () => { setList(await apiFixturesList()); };
 
   return (
@@ -345,7 +330,10 @@ const Fixtures = ({ onBack }) => {
           <Button variant="secondary" onClick={clear}>Clear All</Button>
         </div>
       </div>
-      {loading ? <Card className="p-5 text-center text-zinc-500">Loading…</Card> : (
+
+      {loading ? (
+        <Card className="p-5 text-center text-zinc-500">Loading…</Card>
+      ) : (
         <>
           <Card className="p-5 mb-6">
             <div className="font-semibold mb-3">Schedule a Match</div>
@@ -359,29 +347,39 @@ const Fixtures = ({ onBack }) => {
               </div>
               <div>
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
+                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={(e) => setA(e.target.value)}>
                   <option value="">Choose…</option>
-                  {options.map(o => <option key={o} value={o}>{o}</option>)}
+                  {options.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div>
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
+                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={(e) => setB(e.target.value)}>
                   <option value="">Choose…</option>
-                  {options.map(o => <option key={o} value={o}>{o}</option>)}
+                  {options.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <div><div className="text-sm mb-1">Date</div><input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} /></div>
-                <div><div className="text-sm mb-1">Time</div><input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} /></div>
+                <div>
+                  <div className="text-sm mb-1">Date</div>
+                  <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={(e) => setDate(e.target.value)} />
+                </div>
+                <div>
+                  <div className="text-sm mb-1">Time</div>
+                  <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={(e) => setTime(e.target.value)} />
+                </div>
               </div>
-              <div className="md:col-span-4"><Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button></div>
+              <div className="md:col-span-4">
+                <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
+              </div>
             </form>
           </Card>
 
-          {list.length === 0 ? <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card> : (
+          {list.length === 0 ? (
+            <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card>
+          ) : (
             <div className="space-y-3">
-              {list.map(f => (
+              {list.map((f) => (
                 <Card key={f.id} className="p-4 flex items-center gap-4">
                   <div className="flex-1">
                     <div className="font-semibold">
@@ -390,7 +388,11 @@ const Fixtures = ({ onBack }) => {
                     </div>
                     <div className="text-sm text-zinc-500">
                       {new Date(f.start).toLocaleString()}{" "}
-                      {f.status === "active" && <span className="ml-2 inline-flex items-center gap-1 text-emerald-600"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live</span>}
+                      {f.status === "active" && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-emerald-600">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live
+                        </span>
+                      )}
                       {f.status === "completed" && <span className="ml-2 text-zinc-500 text-xs">(completed)</span>}
                     </div>
                   </div>
@@ -405,7 +407,7 @@ const Fixtures = ({ onBack }) => {
   );
 };
 
-/* ---------------- Start From Fixtures ---------------- */
+// === Start Match (from fixtures) ===
 function StartFromFixtures({ onBack, onStartScoring }) {
   const [mode, setMode] = useState("singles");
   const [fixtures, setFixtures] = useState([]);
@@ -427,10 +429,10 @@ function StartFromFixtures({ onBack, onStartScoring }) {
     const patch = { status: "active" };
     if (fx.start > now) patch.start = now;
 
-    // Mark any other active fixture back to upcoming
+    // ensure only one active
     for (const other of fixtures) {
       if (other.id !== fx.id && other.status === "active") {
-        try { await apiFixturesUpdate(other.id, { status: "upcoming" }); } catch {}
+        await apiFixturesUpdate(other.id, { status: "upcoming" });
       }
     }
     await apiFixturesUpdate(fx.id, patch);
@@ -438,11 +440,10 @@ function StartFromFixtures({ onBack, onStartScoring }) {
     onStartScoring({
       mode: fx.mode,
       sides: fx.sides,
-      rule: "fast4",      // custom rule tag
-      bestOf: 1,          // irrelevant under fast4 single set
-      gamesTarget: 4,     // first to 4 games
+      // scoring config (no-AD, first to 4, tiebreak @ 3-3 to 5, sudden death at 4-4)
+      rule: "firstToFour",
       startingServer: 0,
-      fixtureId: fx.id
+      fixtureId: fx.id,
     });
   };
 
@@ -463,7 +464,7 @@ function StartFromFixtures({ onBack, onStartScoring }) {
           <div className="text-zinc-500">No fixtures for {mode}.</div>
         ) : (
           <div className="space-y-3">
-            {list.map(f => (
+            {list.map((f) => (
               <Card key={f.id} className="p-4 flex items-center gap-4">
                 <div className="flex-1">
                   <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}</div>
@@ -479,129 +480,126 @@ function StartFromFixtures({ onBack, onStartScoring }) {
   );
 }
 
-/* ---------------- Scoring (FAST4-style rules) ----------------
-   - First to 4 games wins the set
-   - Tiebreak at 3–3: first to 5; at 4–4 next point wins
-   - No-AD scoring: at 40–40, next point wins the game
----------------------------------------------------------------- */
-const nextPointNoAd = (p) => ({ 0: 15, 15: 30, 30: 40 }[p] ?? p);
+// === Scoring (No-AD, First-to-4, TB to 5 @3-3 with 4-4 sudden death) ===
 
-function makeEmptySetFast4() {
+// No-AD game progression: 0 -> 15 -> 30 -> 40 -> Game (if deuce, next wins)
+const nextPoint = (p) => ({ 0: 15, 15: 30, 30: 40 }[p] ?? (p === 40 ? "Game" : p));
+
+function advanceNoAdPoint(a, b, who) {
+  let pA = a, pB = b;
+  // if both at 40, next point wins game (no-AD)
+  const deuce = pA === 40 && pB === 40;
+  if (who === 0) {
+    if (deuce) pA = "Game";
+    else pA = nextPoint(pA);
+  } else {
+    if (deuce) pB = "Game";
+    else pB = nextPoint(pB);
+  }
+  return [pA, pB];
+}
+
+function makeEmptySet() {
   return { gamesA: 0, gamesB: 0, tie: false, tieA: 0, tieB: 0, finished: false };
 }
 
-// Game over check with no-ad: at 40–40 next point wins
-function applyPointGameNoAd(a, b, whoScored) {
-  let pA = a, pB = b;
-  // If both 40 -> deciding point, scorer wins game
-  if (pA === 40 && pB === 40) {
-    return { pA: 0, pB: 0, gameWinner: whoScored === 0 ? "A" : "B" };
+function setOverFirstToFour(s) {
+  // First to 4 games (win by 1) – except if 3-3 -> tiebreak enabled
+  if (s.tie) {
+    // TB to 5; if 4-4 then next point wins (i.e., 5 without 2 difference)
+    if (s.tieA >= 5 || s.tieB >= 5) return true;
+    return false;
+  } else {
+    if (s.gamesA >= 4 || s.gamesB >= 4) return true;
+    return false;
   }
-  // Normal progress
-  if (whoScored === 0) pA = nextPointNoAd(pA); else pB = nextPointNoAd(pB);
-
-  // If someone beyond 40 (i.e., just won from 40), declare game
-  if (pA === 40 && whoScored === 0) {
-    // Need one more only if opponent is less than 40; handle via check below
-  }
-  if (pB === 40 && whoScored === 1) {
-    // same
-  }
-
-  // If one side reaches beyond mapping (not used here), or we detect win:
-  // Win happens when scorer was at 40 and opponent < 40
-  if (whoScored === 0 && a === 40 && b !== 40) return { pA: 0, pB: 0, gameWinner: "A" };
-  if (whoScored === 1 && b === 40 && a !== 40) return { pA: 0, pB: 0, gameWinner: "B" };
-
-  return { pA, pB, gameWinner: null };
 }
 
 function Scoring({ config, onAbort, onComplete }) {
-  const { sides, gamesTarget = 4, startingServer = 0, fixtureId } = config; // rule fast4
+  const { sides, startingServer = 0, fixtureId } = config;
 
-  // Points, sets (only one set for fast4), server is not essential here
+  // Using a single "set" with these rules.
   const [points, setPoints] = useState([0, 0]);
-  const [setState, setSetState] = useState(makeEmptySetFast4());
+  const [setObj, setSetObj] = useState(makeEmptySet());
+  const [server, setServer] = useState(startingServer || 0);
 
-  const matchDone = setState.finished;
-
-  // Tiebreak logic: at 3–3 enter tie; first to 5 wins; 4–4 next point wins
-  const inTie = setState.tie;
+  const matchDone = setObj.finished;
 
   const pointTo = (who) => {
     if (matchDone) return;
 
-    // If in tiebreak
-    if (inTie) {
-      const ns = { ...setState };
-      if (who === 0) ns.tieA++; else ns.tieB++;
-      // Win at 5 (and at 4–4 next point wins ⇒ exactly first to 5)
-      if (ns.tieA === 5 || ns.tieB === 5) {
-        ns.finished = true;
+    if (setObj.tie) {
+      // Tiebreak to 5; if 4-4 -> next point wins (i.e., whoever reaches 5)
+      const so = { ...setObj };
+      if (who === 0) so.tieA++;
+      else so.tieB++;
+      if (so.tieA >= 5 || so.tieB >= 5) {
+        so.finished = true;
       }
-      setSetState(ns);
+      setSetObj(so);
       return;
     }
 
-    // Normal game with NO-AD
-    const { pA, pB, gameWinner } = applyPointGameNoAd(points[0], points[1], who);
-    if (gameWinner) {
-      const ns = { ...setState };
-      if (gameWinner === "A") ns.gamesA++; else ns.gamesB++;
+    // Normal game, no-AD
+    let [a, b] = advanceNoAdPoint(points[0], points[1], who);
+    setPoints([a, b]);
 
-      // Tiebreak trigger at 3–3 (before finishing)
-      if (ns.gamesA === 3 && ns.gamesB === 3) {
-        ns.tie = true;
-        setSetState(ns);
-        setPoints([0, 0]);
-        return;
-      }
+    const gameWonA = a === "Game";
+    const gameWonB = b === "Game";
+    if (!gameWonA && !gameWonB) return;
 
-      // First to 4 games wins the set
-      if (ns.gamesA === gamesTarget || ns.gamesB === gamesTarget) {
-        ns.finished = true;
-      }
-      setSetState(ns);
-      setPoints([0, 0]);
-      return;
+    const so = { ...setObj };
+    if (gameWonA) so.gamesA++;
+    if (gameWonB) so.gamesB++;
+
+    // Reset points for next game
+    setPoints([0, 0]);
+
+    // At 3-3 -> go to tiebreak
+    if (so.gamesA === 3 && so.gamesB === 3) {
+      so.tie = true; // start TB
+    } else if (so.gamesA >= 4 || so.gamesB >= 4) {
+      // First to 4 ends
+      so.finished = true;
     }
 
-    // No game end: just update points
-    setPoints([pA, pB]);
+    setSetObj(so);
+    setServer((s) => 1 - s);
   };
 
-  // When set/match finishes, persist and complete
-  useEffect(() => {
-    if (!matchDone) return;
-    const finalize = async () => {
-      // Compose scoreline (e.g., "4-2" or "4-3(5)")
-      const baseScore = `${setState.gamesA}-${setState.gamesB}`;
-      const scoreline = setState.tie ? `${baseScore}(${Math.max(setState.tieA, setState.tieB)})` : baseScore;
-      const winner = setState.tie
-        ? (setState.tieA > setState.tieB ? sides[0] : sides[1])
-        : (setState.gamesA > setState.gamesB ? sides[0] : sides[1]);
+  const recordResult = async () => {
+    const scoreline = setObj.tie
+      ? `${setObj.gamesA}-${setObj.gamesB} TB ${setObj.tieA}-${setObj.tieB}`
+      : `${setObj.gamesA}-${setObj.gamesB}`;
+    const winner =
+      setObj.tie
+        ? (setObj.tieA > setObj.tieB ? sides[0] : sides[1])
+        : (setObj.gamesA > setObj.gamesB ? sides[0] : sides[1]);
 
-      const payload = {
-        id: crypto.randomUUID(),
-        sides,
-        rule: "fast4",
-        bestOf: 1,
-        gamesTarget,
-        finishedAt: Date.now(),
-        scoreline,
-        winner
-      };
-      await apiMatchesAdd(payload);
-      if (fixtureId) {
-        try {
-          await apiFixturesUpdate(fixtureId, { status: "completed", finishedAt: payload.finishedAt, winner: payload.winner, scoreline: payload.scoreline });
-        } catch { /* handled by apiFixturesUpdate */ }
-      }
-      onComplete();
+    const payload = {
+      id: crypto.randomUUID(),
+      sides,
+      rule: "firstToFour_noAd_tbTo5",
+      finishedAt: Date.now(),
+      scoreline,
+      winner,
     };
-    finalize();
+    await apiMatchesAdd(payload);
+    if (fixtureId) {
+      await apiFixturesUpdate(fixtureId, {
+        status: "completed",
+        finishedAt: payload.finishedAt,
+        winner: payload.winner,
+        scoreline: payload.scoreline,
+      });
+    }
+    onComplete();
+  };
+
+  useEffect(() => {
+    if (matchDone) recordResult();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchDone]);
+  }, [setObj.finished]);
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -609,45 +607,40 @@ function Scoring({ config, onAbort, onComplete }) {
         <Button variant="ghost" onClick={onAbort}><ChevronLeft className="w-5 h-5" /> Quit</Button>
         <h2 className="text-xl font-bold">Scoring • {sides[0]} vs {sides[1]}</h2>
       </div>
+
       <Card className="p-6">
-        {!inTie ? (
-          <>
-            <div className="grid grid-cols-3 gap-4 items-center">
-              <div className="text-right text-3xl font-bold">{String(points[0])}</div>
-              <div className="text-center">—</div>
-              <div className="text-3xl font-bold">{String(points[1])}</div>
-            </div>
-            <div className="mt-6 grid grid-cols-2 gap-4">
-              <Button onClick={() => pointTo(0)} className="w-full">Point {sides[0]}</Button>
-              <Button onClick={() => pointTo(1)} className="w-full">Point {sides[1]}</Button>
-            </div>
-            <div className="mt-6">
-              <div className="font-semibold mb-2">Games</div>
-              <div className="text-sm font-mono">{setState.gamesA} - {setState.gamesB}</div>
-              <div className="text-xs text-zinc-500 mt-1">No-AD: at 40–40 next point wins</div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="text-lg font-semibold">Tiebreak (first to 5; at 4–4 next point wins)</div>
-            <div className="grid grid-cols-3 gap-4 items-center mt-4">
-              <div className="text-right text-3xl font-bold">{setState.tieA}</div>
-              <div className="text-center">—</div>
-              <div className="text-3xl font-bold">{setState.tieB}</div>
-            </div>
-            <div className="mt-6 grid grid-cols-2 gap-4">
-              <Button onClick={() => pointTo(0)} className="w-full">Point {sides[0]}</Button>
-              <Button onClick={() => pointTo(1)} className="w-full">Point {sides[1]}</Button>
-            </div>
-            <div className="mt-6 text-sm font-mono">Games {setState.gamesA}-{setState.gamesB} • TB {setState.tieA}-{setState.tieB}</div>
-          </>
-        )}
+        {/* Points */}
+        <div className="grid grid-cols-3 gap-4 items-center">
+          <div className="text-right text-3xl font-bold">{String(points[0])}</div>
+          <div className="text-center">—</div>
+          <div className="text-3xl font-bold">{String(points[1])}</div>
+        </div>
+
+        {/* Buttons */}
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <Button onClick={() => pointTo(0)} className="w-full">Point {sides[0]}</Button>
+          <Button onClick={() => pointTo(1)} className="w-full">Point {sides[1]}</Button>
+        </div>
+
+        {/* Set state */}
+        <div className="mt-6">
+          <div className="font-semibold mb-2">Set</div>
+          <div className="text-sm font-mono">
+            {!setObj.tie
+              ? `${setObj.gamesA}-${setObj.gamesB}`
+              : `${setObj.gamesA}-${setObj.gamesB} TB ${setObj.tieA}-${setObj.tieB}`
+            }
+          </div>
+          <div className="text-xs text-zinc-500 mt-1">
+            Rules: First to 4 • No-AD • TB at 3–3 to 5 (4–4 next point wins)
+          </div>
+        </div>
       </Card>
     </div>
   );
 }
 
-/* ---------------- Results ---------------- */
+// === Results ===
 const Results = ({ onBack }) => {
   const [fixtures, setFixtures] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -661,7 +654,7 @@ const Results = ({ onBack }) => {
       if (alive) { setFixtures(fx); setMatches(ms); setLoading(false); }
     })();
     const iv = setInterval(async () => {
-      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch { }
+      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch {}
     }, 8000);
     return () => { alive = false; clearInterval(iv); };
   }, []);
@@ -670,8 +663,12 @@ const Results = ({ onBack }) => {
   const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
   const completedFixtures = fixtures.filter(f => f.status === "completed");
   const completed = [...completedFixtures, ...matches.map(m => ({
-    id: m.id, sides: m.sides, finishedAt: m.finishedAt,
-    scoreline: m.scoreline, winner: m.winner, mode: m.mode || "singles"
+    id: m.id,
+    sides: m.sides,
+    finishedAt: m.finishedAt,
+    scoreline: m.scoreline,
+    winner: m.winner,
+    mode: m.mode || "singles",
   }))].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
 
   return (
@@ -680,19 +677,23 @@ const Results = ({ onBack }) => {
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
         <h2 className="text-xl font-bold">Results</h2>
       </div>
-      {loading ? <Card className="p-6 text-center text-zinc-500">Loading…</Card> : (
+
+      {loading ? (
+        <Card className="p-6 text-center text-zinc-500">Loading…</Card>
+      ) : (
         <div className="grid md:grid-cols-2 gap-6">
           <Card className="p-5">
             <div className="text-lg font-semibold mb-3">Active</div>
-            {active.length ? active.map(f => (
+            {active.length ? active.map((f) => (
               <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
                 <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
               </div>
             )) : <div className="text-zinc-500">No active match.</div>}
+
             <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
-            {upcoming.length ? upcoming.map(f => (
+            {upcoming.length ? upcoming.map((f) => (
               <div key={f.id} className="py-2 border-b last:border-0">
                 <div className="font-medium">
                   {f.sides?.[0]} vs {f.sides?.[1]}{" "}
@@ -705,12 +706,13 @@ const Results = ({ onBack }) => {
 
           <Card className="p-5">
             <div className="text-lg font-semibold mb-3">Completed</div>
-            {completed.length ? completed.map(m => (
+            {completed.length ? completed.map((m) => (
               <div key={m.id + String(m.finishedAt)} className="py-2 border-b last:border-0">
                 <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
                 <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
                 <div className="mt-1 text-sm">
-                  <span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner || ""}</span>
+                  <span className="uppercase text-zinc-400 text-xs">Winner</span>{" "}
+                  <span className="font-semibold">{m.winner || ""}</span>{" "}
                   <span className="ml-3 font-mono">{m.scoreline || ""}</span>
                 </div>
               </div>
@@ -722,13 +724,15 @@ const Results = ({ onBack }) => {
   );
 };
 
-/* ---------------- App Shell ---------------- */
+// === App shell ===
 export default function App() {
   const [view, setView] = useState("landing");
   const [cfg, setCfg] = useState(null);
-  const logged = localStorage.getItem("lt_admin") === "1";
+
+  const logged = typeof window !== "undefined" && localStorage.getItem("lt_admin") === "1";
   if (!logged) return <AdminLogin onOk={() => window.location.reload()} />;
-  const to = v => setView(v);
+
+  const to = (v) => setView(v);
 
   return (
     <div className="app-bg">
@@ -759,7 +763,11 @@ export default function App() {
           )}
           {view === "scoring" && cfg && (
             <motion.div key="scoring" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Scoring config={cfg} onAbort={() => to("landing")} onComplete={() => to("results")} />
+              <Scoring
+                config={cfg}
+                onAbort={() => to("landing")}
+                onComplete={() => to("results")}
+              />
             </motion.div>
           )}
           {view === "results" && (
@@ -769,7 +777,9 @@ export default function App() {
           )}
         </AnimatePresence>
       </div>
-      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring (Admin)</footer>
+      <footer className="py-6 text-center text-xs text-zinc-500">
+        © {new Date().getFullYear()} Lawn Tennis Scoring (Admin)
+      </footer>
     </div>
   );
 }
