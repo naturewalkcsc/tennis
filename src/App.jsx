@@ -1,22 +1,23 @@
-import React, { useState, useEffect } from "react";
+// src/App.jsx
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
 
-// 🔴 Image imports from *src* (put the JPGs right beside this file or inside src/)
-import imgStart from "./StartMatch.jpg";
-import imgScore from "./Score.jpg";
-import imgSettings from "./Settings.jpg";
+// ✅ Images from src/assets so they always bundle and show up
+import imgStart from "./assets/StartMatch.jpg";
+import imgScore from "./assets/Score.jpg";
+import imgSettings from "./assets/Settings.jpg";
 
-// ------------------ Local storage helpers ------------------
+// ----- Local storage keys & helpers -----
 const LS_MATCHES_FALLBACK = "lt_matches_fallback";
 const LS_PLAYERS_DRAFT = "lt_players_draft";
 const readLS = (k, f) => {
   try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : f; } catch { return f; }
 };
-const writeLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
-const buster = () => "?t=" + Date.now();
+const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const buster = () => `?t=${Date.now()}`;
 
-// ------------------ Local admin login (no prefilled password) ------------------
+// ----- Local Admin Login (no prefilled password) -----
 function AdminLogin({ onOk }) {
   const [u, setU] = useState("admin");
   const [p, setP] = useState("");
@@ -26,9 +27,7 @@ function AdminLogin({ onOk }) {
     if (u === "admin" && p === "rnwtennis123$") {
       localStorage.setItem("lt_admin", "1");
       onOk();
-    } else {
-      setErr("Invalid username or password");
-    }
+    } else setErr("Invalid username or password");
   };
   return (
     <div className="app-bg">
@@ -41,11 +40,11 @@ function AdminLogin({ onOk }) {
           <form onSubmit={submit} className="space-y-4">
             <div>
               <div className="text-sm mb-1">Username</div>
-              <input className="w-full rounded-xl border px-3 py-2" value={u} onChange={e => setU(e.target.value)} />
+              <input className="w-full rounded-xl border px-3 py-2" value={u} onChange={e=>setU(e.target.value)} />
             </div>
             <div>
               <div className="text-sm mb-1">Password</div>
-              <input type="password" className="w-full rounded-xl border px-3 py-2" value={p} onChange={e => setP(e.target.value)} />
+              <input type="password" className="w-full rounded-xl border px-3 py-2" value={p} onChange={e=>setP(e.target.value)} />
             </div>
             {err && <div className="text-sm text-red-600">{err}</div>}
             <button type="submit" className="w-full px-4 py-3 rounded-xl bg-green-600 text-white">Enter Admin</button>
@@ -56,7 +55,7 @@ function AdminLogin({ onOk }) {
   );
 }
 
-// ------------------ API wrappers ------------------
+// ----- API wrappers (KV-backed; falls back to local history for matches list) -----
 const apiPlayersGet = async () => {
   const r = await fetch("/api/players" + buster(), { cache: "no-store" });
   if (!r.ok) throw 0;
@@ -69,6 +68,7 @@ const apiPlayersSet = async (obj) => {
   });
   if (!r.ok) throw 0;
 };
+
 const apiMatchesList = async () => {
   try {
     const r = await fetch("/api/matches" + buster(), { cache: "no-store" });
@@ -91,6 +91,7 @@ const apiMatchesAdd = async (payload) => {
     writeLS(LS_MATCHES_FALLBACK, list);
   }
 };
+
 const apiFixturesList = async () => {
   const r = await fetch("/api/fixtures" + buster(), { cache: "no-store" });
   if (!r.ok) throw 0;
@@ -125,7 +126,7 @@ const apiFixturesUpdate = async (id, patch) => {
   if (!r.ok) throw 0;
 };
 
-// ------------------ UI primitives ------------------
+// ----- Small UI primitives -----
 const Card = ({ className = "", children }) => (
   <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>{children}</div>
 );
@@ -134,7 +135,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", type =
   const styles = {
     primary: "bg-green-600 hover:bg-green-700 text-white",
     secondary: "bg-zinc-100 hover:bg-zinc-200",
-    ghost: "hover:bg-zinc-100"
+    ghost: "hover:bg-zinc-100",
   }[variant];
   return (
     <button type={type} onClick={onClick} disabled={disabled}
@@ -144,7 +145,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", type =
   );
 };
 
-// ------------------ Landing (uses images from src imports) ------------------
+// ----- Landing (tiles use imported images) -----
 const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
   const Tile = ({ title, subtitle, src, action }) => (
     <motion.button onClick={action} whileHover={{ y: -2 }}
@@ -158,7 +159,6 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
       </div>
     </motion.button>
   );
-
   return (
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-8">
@@ -171,15 +171,13 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
         <Tile title="Manage Players" subtitle="Singles & Doubles" src={imgSettings} action={onSettings} />
       </div>
       <div className="mt-6">
-        <Button variant="secondary" onClick={onFixtures}>
-          <CalendarPlus className="w-4 h-4" /> Fixtures
-        </Button>
+        <Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4" /> Fixtures</Button>
       </div>
     </div>
   );
 };
 
-// ------------------ Settings (players) ------------------
+// ----- Settings (Players) -----
 const Settings = ({ onBack }) => {
   const [singles, setSingles] = useState([]);
   const [doubles, setDoubles] = useState([]);
@@ -188,34 +186,23 @@ const Settings = ({ onBack }) => {
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState("");
 
-  const saveDraft = (s, d) => { try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify({ singles: s, doubles: d })) } catch { } };
+  const saveDraft = (s, d) => { try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify({ singles: s, doubles: d })) } catch {} };
   const loadDraft = () => { try { const r = localStorage.getItem(LS_PLAYERS_DRAFT); return r ? JSON.parse(r) : null } catch { return null } };
-  const clearDraft = () => { try { localStorage.removeItem(LS_PLAYERS_DRAFT) } catch { } };
+  const clearDraft = () => { try { localStorage.removeItem(LS_PLAYERS_DRAFT) } catch {} };
 
   useEffect(() => {
     let alive = true;
     (async () => {
       const d = loadDraft();
-      if (d) {
-        setSingles(d.singles || []);
-        setDoubles(d.doubles || []);
-        setDirty(true);
-        setLoading(false);
-        return;
-      }
+      if (d) { setSingles(d.singles || []); setDoubles(d.doubles || []); setDirty(true); setLoading(false); return; }
       try {
         const obj = await apiPlayersGet();
-        if (alive) {
-          setSingles(obj.singles || []);
-          setDoubles(obj.doubles || []);
-        }
+        if (alive) { setSingles(obj.singles || []); setDoubles(obj.doubles || []); }
       } catch {
         setError("Could not load players");
-      } finally {
-        if (alive) setLoading(false);
-      }
+      } finally { if (alive) setLoading(false); }
     })();
-    return () => { alive = false; };
+    return () => { alive = false };
   }, []);
 
   const mark = (s, d) => { setDirty(true); saveDraft(s, d); };
@@ -240,7 +227,9 @@ const Settings = ({ onBack }) => {
         <h2 className="text-xl font-bold">Manage Players</h2>
         <div className="ml-auto"><Button onClick={save} disabled={!dirty || saving}>{saving ? "Saving…" : "Save Changes"}</Button></div>
       </div>
+
       {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200 rounded-xl">{error}</Card>}
+
       {loading ? (
         <Card className="p-5 text-center text-zinc-500">Loading…</Card>
       ) : (
@@ -250,20 +239,21 @@ const Settings = ({ onBack }) => {
             <div className="space-y-3">
               {singles.map((name, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updSingles(idx, e.target.value)} />
-                  <button onClick={() => delSingles(idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
+                  <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e=>updSingles(idx, e.target.value)} />
+                  <button onClick={()=>delSingles(idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
               <Button variant="secondary" onClick={addSingles}><Plus className="w-4 h-4" /> Add Player</Button>
             </div>
           </Card>
+
           <Card className="p-5">
             <div className="font-semibold mb-3">Doubles</div>
             <div className="space-y-3">
               {doubles.map((name, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updDoubles(idx, e.target.value)} />
-                  <button onClick={() => delDoubles(idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
+                  <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e=>updDoubles(idx, e.target.value)} />
+                  <button onClick={()=>delDoubles(idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
               <Button variant="secondary" onClick={addDoubles}><Plus className="w-4 h-4" /> Add Pair</Button>
@@ -275,25 +265,22 @@ const Settings = ({ onBack }) => {
   );
 };
 
-// ------------------ Fixtures ------------------
+// ----- Fixtures (create/list/clear/remove) -----
 const Fixtures = ({ onBack }) => {
   const [players, setPlayers] = useState({ singles: [], doubles: [] });
   const [mode, setMode] = useState("singles");
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [a, setA] = useState(""); const [b, setB] = useState("");
+  const [date, setDate] = useState(""); const [time, setTime] = useState("");
+  const [list, setList] = useState([]); const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      try { const p = await apiPlayersGet(); if (alive) setPlayers(p); } catch { }
-      try { const fx = await apiFixturesList(); if (alive) setList(fx); } catch { }
+      try { const p = await apiPlayersGet(); if (alive) setPlayers(p); } catch {}
+      try { const fx = await apiFixturesList(); if (alive) setList(fx); } catch {}
       finally { if (alive) setLoading(false); }
     })();
-    return () => { alive = false; };
+    return () => { alive = false };
   }, []);
 
   const options = mode === "singles" ? players.singles : players.doubles;
@@ -321,6 +308,7 @@ const Fixtures = ({ onBack }) => {
           <Button variant="secondary" onClick={clear}>Clear All</Button>
         </div>
       </div>
+
       {loading ? (
         <Card className="p-5 text-center text-zinc-500">Loading…</Card>
       ) : (
@@ -331,25 +319,25 @@ const Fixtures = ({ onBack }) => {
               <div className="md:col-span-1">
                 <div className="text-sm mb-1">Type</div>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode==='singles'} onChange={()=>setMode('singles')}/> Singles</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode==='doubles'} onChange={()=>setMode('doubles')}/> Doubles</label>
                 </div>
               </div>
               <div>
-                <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
+                <div className="text-sm mb-1">{mode==='singles'?'Player 1':'Team 1'}</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e=>setA(e.target.value)}>
                   <option value="">Choose…</option>{options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div>
-                <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
+                <div className="text-sm mb-1">{mode==='singles'?'Player 2':'Team 2'}</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e=>setB(e.target.value)}>
                   <option value="">Choose…</option>{options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <div><div className="text-sm mb-1">Date</div><input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} /></div>
-                <div><div className="text-sm mb-1">Time</div><input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} /></div>
+                <div><div className="text-sm mb-1">Date</div><input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e=>setDate(e.target.value)} /></div>
+                <div><div className="text-sm mb-1">Time</div><input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e=>setTime(e.target.value)} /></div>
               </div>
               <div className="md:col-span-4"><Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button></div>
             </form>
@@ -363,14 +351,14 @@ const Fixtures = ({ onBack }) => {
                 <Card key={f.id} className="p-4 flex items-center gap-4">
                   <div className="flex-1">
                     <div className="font-semibold">
-                      {f.sides?.[0]} vs {f.sides?.[1]}
+                      {f.sides?.[0]} vs {f.sides?.[1]}{" "}
                       <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>
                     </div>
                     <div className="text-sm text-zinc-500">
                       {new Date(f.start).toLocaleString()}
                       {f.status === "active" && (
                         <span className="ml-2 inline-flex items-center gap-1 text-emerald-600">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Live
                         </span>
                       )}
                       {f.status === "completed" && <span className="ml-2 text-zinc-500 text-xs">(completed)</span>}
@@ -387,7 +375,7 @@ const Fixtures = ({ onBack }) => {
   );
 };
 
-// ------------------ Start from Fixtures ------------------
+// ----- Start Match FROM FIXTURES -----
 function StartFromFixtures({ onBack, onStartScoring }) {
   const [mode, setMode] = useState("singles");
   const [fixtures, setFixtures] = useState([]);
@@ -424,7 +412,7 @@ function StartFromFixtures({ onBack, onStartScoring }) {
       bestOf: 3,
       gamesTarget: 6,
       startingServer: 0,
-      fixtureId: fx.id
+      fixtureId: fx.id,
     });
   };
 
@@ -434,11 +422,17 @@ function StartFromFixtures({ onBack, onStartScoring }) {
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
         <h2 className="text-xl font-bold">Start Match</h2>
       </div>
+
       <Card className="p-5">
         <div className="flex gap-6 mb-4">
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="m" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="m" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles
+          </label>
         </div>
+
         {loading ? (
           <div className="text-zinc-500">Loading fixtures…</div>
         ) : list.length === 0 ? (
@@ -461,9 +455,15 @@ function StartFromFixtures({ onBack, onStartScoring }) {
   );
 }
 
-// ------------------ Scoring ------------------
+// ----- Scoring -----
 const nextPoint = (p) => ({ 0: 15, 15: 30, 30: 40 }[p] ?? (p === 40 ? "Ad" : p === "Ad" ? "Game" : p));
-function computeGameWin(a, b) { if (a === "Game") return "A"; if (b === "Game") return "B"; if (a === 40 && b === "Ad") return null; if (b === 40 && a === "Ad") return null; return null; }
+function computeGameWin(a, b) {
+  if (a === "Game") return "A";
+  if (b === "Game") return "B";
+  if (a === 40 && b === "Ad") return null;
+  if (b === 40 && a === "Ad") return null;
+  return null;
+}
 function advancePoint(a, b, who) {
   let pA = a, pB = b;
   if (who === 0) {
@@ -479,31 +479,14 @@ function advancePoint(a, b, who) {
   }
   return [pA, pB];
 }
-function makeEmptySet() { return { gamesA: 0, gamesB: 0, tie: false, tieA: 0, tieB: 0, finished: false, tieStart: null }; }
-function setOver(s) {
-  if (s.tie) {
-    if ((s.tieA >= 7 || s.tieB >= 7) && Math.abs(s.tieA - s.tieB) >= 2) return true;
-    return false;
-  } else {
-    const a = s.gamesA, b = s.gamesB;
-    if ((a >= 6 || b >= 6) && Math.abs(a - b) >= 2) return true;
-    if (a === 7 || b === 7) return true;
-    return false;
-  }
-}
-function winnerSets(sets) {
-  let A = 0, B = 0;
-  for (const s of sets) {
-    if (!s.finished) continue;
-    if (s.tie) { if (s.tieA > s.tieB) A++; else if (s.tieB > s.tieA) B++; }
-    else { if (s.gamesA > s.gamesB) A++; else if (s.gamesB > s.gamesA) B++; }
-  }
-  return { A, B };
-}
+function makeEmptySet(){return{gamesA:0,gamesB:0,tie:false,tieA:0,tieB:0,finished:false,tieStart:null}}
+function setOver(s){if(s.tie){if((s.tieA>=7||s.tieB>=7)&&Math.abs(s.tieA-s.tieB)>=2)return true;return false}else{const a=s.gamesA,b=s.gamesB;if((a>=6||b>=6)&&Math.abs(a-b)>=2)return true;if(a===7||b===7)return true;return false}}
+function winnerSets(sets){let A=0,B=0;for(const s of sets){if(!s.finished)continue;if(s.tie){if(s.tieA>s.tieB)A++;else if(s.tieB>s.tieA)B++;}else{if(s.gamesA>s.gamesB)A++;else if(s.gamesB>s.gamesA)B++;}}return{A,B}}
 
 function Scoring({ config, onAbort, onComplete }) {
   const { sides, rule, bestOf, gamesTarget, startingServer, fixtureId } = config;
   const effectiveBestOf = rule === "bestOfSets" ? bestOf : (rule === "regular" ? 3 : 1);
+
   const [points, setPoints] = useState([0, 0]);
   const [sets, setSets] = useState([makeEmptySet()]);
   const [server, setServer] = useState(startingServer || 0);
@@ -512,6 +495,7 @@ function Scoring({ config, onAbort, onComplete }) {
   const targetSets = Math.floor(effectiveBestOf / 2) + 1;
   const currentSet = sets[sets.length - 1];
   const gameTargetMode = rule === "firstToGames";
+
   const matchDone = (() => {
     if (gameTargetMode) return currentSet.finished && (currentSet.gamesA === gamesTarget || currentSet.gamesB === gamesTarget);
     return (setsA === targetSets || setsB === targetSets);
@@ -529,9 +513,11 @@ function Scoring({ config, onAbort, onComplete }) {
     setPoints([a, b]);
     const gw = computeGameWin(a, b);
     if (!gw) return;
+
     const ns = [...sets]; const so = { ...currentSet };
     if (gw === "A") so.gamesA++; else so.gamesB++;
     setPoints([0, 0]);
+
     if (gameTargetMode) {
       if (so.gamesA === gamesTarget || so.gamesB === gamesTarget) so.finished = true;
     } else {
@@ -539,6 +525,7 @@ function Scoring({ config, onAbort, onComplete }) {
       else if (setOver(so)) { so.finished = true; }
     }
     ns[ns.length - 1] = so; setSets(ns); setServer(s => 1 - s);
+
     if (so.finished && !gameTargetMode) {
       const { A, B } = winnerSets(ns);
       if (A < targetSets && B < targetSets) setSets(prev => [...prev, makeEmptySet()]);
@@ -550,19 +537,16 @@ function Scoring({ config, onAbort, onComplete }) {
       .filter(s => s.finished)
       .map(s => s.tie ? `${s.gamesA}-${s.gamesB}(${Math.max(s.tieA, s.tieB)})` : `${s.gamesA}-${s.gamesB}`)
       .join(" ");
-    const winner = setsA > setsB ? sides[0] : setsB > setsA ? sides[1] : (currentSet.gamesA > currentSet.gamesB ? sides[0] : sides[1]);
-    const payload = {
-      id: crypto.randomUUID(),
-      sides, rule, bestOf: effectiveBestOf, gamesTarget, finishedAt: Date.now(), scoreline: sl, winner
-    };
+    const winner =
+      setsA > setsB ? sides[0] :
+      setsB > setsA ? sides[1] :
+      (currentSet.gamesA > currentSet.gamesB ? sides[0] : sides[1]);
+
+    const payload = { id: crypto.randomUUID(), sides, rule, bestOf: effectiveBestOf, gamesTarget, finishedAt: Date.now(), scoreline: sl, winner };
     await apiMatchesAdd(payload);
+
     if (fixtureId) {
-      await apiFixturesUpdate(fixtureId, {
-        status: "completed",
-        finishedAt: payload.finishedAt,
-        winner: payload.winner,
-        scoreline: payload.scoreline
-      });
+      await apiFixturesUpdate(fixtureId, { status: "completed", finishedAt: payload.finishedAt, winner: payload.winner, scoreline: payload.scoreline });
     }
     onComplete();
   };
@@ -600,7 +584,7 @@ function Scoring({ config, onAbort, onComplete }) {
   );
 }
 
-// ------------------ Results ------------------
+// ----- Results (Active • Upcoming • Completed) -----
 const Results = ({ onBack }) => {
   const [fixtures, setFixtures] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -614,7 +598,7 @@ const Results = ({ onBack }) => {
       if (alive) { setFixtures(fx); setMatches(ms); setLoading(false); }
     })();
     const iv = setInterval(async () => {
-      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch { }
+      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch {}
     }, 8000);
     return () => { alive = false; clearInterval(iv); };
   }, []);
@@ -632,6 +616,7 @@ const Results = ({ onBack }) => {
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
         <h2 className="text-xl font-bold">Results</h2>
       </div>
+
       {loading ? (
         <Card className="p-6 text-center text-zinc-500">Loading…</Card>
       ) : (
@@ -640,11 +625,12 @@ const Results = ({ onBack }) => {
             <div className="text-lg font-semibold mb-3">Active</div>
             {active.length ? active.map(f => (
               <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
                 <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
               </div>
             )) : <div className="text-zinc-500">No active match.</div>}
+
             <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
             {upcoming.length ? upcoming.map(f => (
               <div key={f.id} className="py-2 border-b last:border-0">
@@ -676,15 +662,15 @@ const Results = ({ onBack }) => {
   );
 };
 
-// ------------------ App Shell ------------------
+// ----- App Shell (Admin only) -----
 export default function App() {
   const [view, setView] = useState("landing");
   const [cfg, setCfg] = useState(null);
-  const logged = typeof window !== "undefined" && localStorage.getItem("lt_admin") === "1";
+
+  const logged = localStorage.getItem("lt_admin") === "1";
   if (!logged) return <AdminLogin onOk={() => window.location.reload()} />;
 
   const to = (v) => setView(v);
-
   return (
     <div className="app-bg">
       <div className="max-w-6xl mx-auto py-8">
@@ -724,9 +710,7 @@ export default function App() {
           )}
         </AnimatePresence>
       </div>
-      <footer className="py-6 text-center text-xs text-zinc-500">
-        © {new Date().getFullYear()} Lawn Tennis Scoring (Admin)
-      </footer>
+      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring (Admin)</footer>
     </div>
   );
 }
