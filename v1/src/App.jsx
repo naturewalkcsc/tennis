@@ -485,7 +485,7 @@ function AdminApp(){
       {view==='scoring'&&cfg&&(<motion.div key="scoring" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Scoring config={cfg} onAbort={()=>to('landing')} onComplete={()=>to('results')}/></motion.div>)}
       {view==='results'&&(<motion.div key="results" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}><Results onBack={()=>to('landing')}/></motion.div>)}
     </AnimatePresence>
-  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW CSC</footer></div>)
+  </div><footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW CSC </footer></div>)
 }
 
 // ---------- Root router ----------
