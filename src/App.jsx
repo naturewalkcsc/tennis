@@ -181,7 +181,7 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-8">
         <Trophy className="w-6 h-6 text-green-600" />
-        <h1 className="text-2xl font-bold">Lawn Tennis Scoring (Admin)</h1>
+        <h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1>
       </div>
       <div className="grid md:grid-cols-3 gap-6">
         <Tile title="Start Match" subtitle="Choose from fixtures" src={imgStart} action={onStart} />
@@ -776,7 +776,7 @@ export default function App() {
         </AnimatePresence>
       </div>
       <footer className="py-6 text-center text-xs text-zinc-500">
-        © {new Date().getFullYear()} Lawn Tennis Scoring (Admin)
+        © {new Date().getFullYear()} RNW NPL
       </footer>
     </div>
   );
@@ -851,7 +851,7 @@ function Viewer(){
     <div className="app-bg">
       <div className="max-w-5xl mx-auto p-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">Tournament Viewer</h1>
+          <h1 className="text-2xl font-bold">RNW Tennis Tournament</h1>
         </div>
 
         {loading ? (
