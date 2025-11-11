@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/viewer",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
