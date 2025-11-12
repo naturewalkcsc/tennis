@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { Download } from "lucide-react"; // keep other imports you already use
-
+import "jspdf-autotable";
 
 // ✅ Images live in src/ (same folder as this file or adjust paths accordingly)
 import imgStart from "./StartMatch.jpg";
