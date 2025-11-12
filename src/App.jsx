@@ -723,8 +723,9 @@ export default function App() {
   console.log("Somesh --------> admin login");
   const [view, setView] = useState("landing");
   const [cfg, setCfg] = useState(null);
-  const logged = localStorage.getItem("lt_admin") === "1";
-  if (!logged) return <AdminLogin onOk={() => window.location.reload()} />;
+  //const logged = localStorage.getItem("lt_admin") === "1";
+  //if (!logged) return <AdminLogin onOk={() => window.location.reload()} />;
+  return <AdminLogin onOk={() => window.location.reload()} />;
 
   const to = (v) => setView(v);
 
