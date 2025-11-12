@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
 import { jsPDF } from "jspdf";
-import { Download, ChevronLeft } from "lucide-react"; // keep other imports you already use
+import { Download } from "lucide-react"; // keep other imports you already use
 
 
 // ✅ Images live in src/ (same folder as this file or adjust paths accordingly)
