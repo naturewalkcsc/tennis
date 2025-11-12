@@ -13,9 +13,9 @@ import {
   Eye,
 } from "lucide-react";
 
-import imgStart from "./assets/StartMatch.jpg";
-import imgScore from "./assets/Score.jpg";
-import imgSettings from "./assets/Settings.jpg";
+import imgStart from "./StartMatch.jpg";
+import imgScore from "./Score.jpg";
+import imgSettings from "./Settings.jpg";
 
 /* -------------------- Utilities -------------------- */
 const LS_MATCHES_FALLBACK = "lt_matches_fallback";
