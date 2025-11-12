@@ -645,134 +645,144 @@ function Scoring({ config, onAbort, onComplete }) {
 
 /* ----------------- Results ----------------- */
 function Results({ onBack }) {
-  const [matches, setMatches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [fixtures, setFixtures] = React.useState(null);
+  const [matches, setMatches] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
 
-  useEffect(() => {
+  React.useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const list = await apiMatchesList();
-        if (alive) setMatches(list);
+        const [fxRes, mRes] = await Promise.all([
+          fetch('/api/fixtures?t=' + Date.now(), { cache: 'no-store' }),
+          fetch('/api/matches?t=' + Date.now(), { cache: 'no-store' })
+        ]);
+
+        // parse safely
+        const fxJson = fxRes.ok ? await safeJson(fxRes) : { _httpStatus: fxRes.status, _text: await fxRes.text() };
+        const mJson = mRes.ok ? await safeJson(mRes) : { _httpStatus: mRes.status, _text: await mRes.text() };
+
+        if (!alive) return;
+        setFixtures(fxJson);
+        setMatches(mJson);
+
+        // fallback to localStorage if empty
+        if ((!fxJson || (Array.isArray(fxJson) && fxJson.length === 0)) && localStorage.getItem('lt_fixtures_fallback')) {
+          try { setFixtures(JSON.parse(localStorage.getItem('lt_fixtures_fallback'))); } catch(e) {}
+        }
+        if ((!mJson || (Array.isArray(mJson) && mJson.length === 0)) && localStorage.getItem('lt_matches_fallback')) {
+          try { setMatches(JSON.parse(localStorage.getItem('lt_matches_fallback'))); } catch(e) {}
+        }
       } catch (e) {
-        console.error(e);
+        console.error('Results fetch error', e);
+        setError(String(e));
+        // fallback
+        try {
+          const fx = JSON.parse(localStorage.getItem('lt_fixtures_fallback') || 'null');
+          const ms = JSON.parse(localStorage.getItem('lt_matches_fallback') || 'null');
+          setFixtures(fx);
+          setMatches(ms);
+        } catch {}
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
+
+    async function safeJson(res){
+      try { return await res.json(); }
+      catch(e){ return { _httpStatus: res.status, _text: await res.text() }; }
+    }
   }, []);
 
-  const completedMatches = matches.filter((m) => m.status === "completed");
-  const upcomingMatches = matches.filter((m) => m.status === "upcoming");
-  const activeMatch = matches.find((m) => m.status === "active");
+  // If server returned object with error status, show raw JSON so you can inspect it:
+  const debugFixtures = fixtures;
+  const debugMatches = matches;
 
-  const downloadPDF = () => {
-    if (completedMatches.length === 0) {
-      alert("No completed matches to export.");
-      return;
-    }
+  // compute what to show
+  const active = Array.isArray(debugFixtures) ? debugFixtures.filter(f => f.status === 'active') : [];
+  const upcoming = Array.isArray(debugFixtures) ? debugFixtures.filter(f => !f.status || f.status === 'upcoming') : [];
+  const completedFixtures = Array.isArray(debugFixtures) ? debugFixtures.filter(f => f.status === 'completed') : [];
+  const completedMatches = Array.isArray(debugMatches) ? debugMatches : [];
 
-    const doc = new jsPDF({ orientation: "landscape" });
-    doc.setFontSize(16);
-    doc.text("🏆 Completed Match Results", 14, 15);
+  const downloadCompletedPDF = () => {
+    const allCompleted = [...completedFixtures.map(f => ({
+      id: f.id, sides: f.sides, mode: f.mode, finishedAt: f.finishedAt || f.start, winner: f.winner || '', score: f.scoreline || f.score || ''
+    })), ...completedMatches.map(m => ({
+      id: m.id, sides: m.sides, mode: m.mode || 'singles', finishedAt: m.finishedAt, winner: m.winner || '', score: m.scoreline || m.score || ''
+    }))];
 
-    const tableData = completedMatches.map((m, i) => [
-      i + 1,
-      m.mode || "Singles",
-      m.sides ? `${m.sides[0]} vs ${m.sides[1]}` : "-",
-      new Date(m.start).toLocaleString(),
-      m.winner || "-",
-      m.score || "-",
-    ]);
+    if (allCompleted.length === 0) { alert('No completed matches to export.'); return; }
+
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(14);
+    doc.text('Completed Matches', 14, 16);
+
+    const body = allCompleted.map((r, i) => ([
+      i+1,
+      r.mode,
+      (r.sides || []).join(' vs '),
+      r.finishedAt ? new Date(r.finishedAt).toLocaleString() : '',
+      r.winner || '',
+      r.score || ''
+    ]));
 
     doc.autoTable({
-      head: [["#", "Type", "Match", "Date", "Winner", "Score"]],
-      body: tableData,
-      startY: 25,
-      styles: {
-        cellPadding: 3,
-        fontSize: 11,
-        halign: "center",
-      },
-      columnStyles: {
-        0: { cellWidth: 10 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 65 },
-        3: { cellWidth: 40 },
-        4: { cellWidth: 40 },
-        5: { cellWidth: 35 },
-      },
-      tableWidth: "auto",
+      head: [['#','Type','Match','Finished','Winner','Score']],
+      body,
+      startY: 22,
+      styles: { fontSize: 10 },
+      columnStyles: { 0: {cellWidth: 10}, 1:{cellWidth:30}, 2:{cellWidth:120}, 3:{cellWidth:50}, 4:{cellWidth:60}, 5:{cellWidth:50} },
+      tableWidth: 'auto'
     });
 
-    doc.save("Completed_Matches.pdf");
+    doc.save('Completed_Matches.pdf');
   };
 
   return (
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={onBack}>
-          <ChevronLeft className="w-5 h-5" /> Back
-        </Button>
+        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
         <h2 className="text-xl font-bold">Results</h2>
         <div className="ml-auto">
-          <Button variant="secondary" onClick={downloadPDF}>
-            📄 Download PDF
-          </Button>
+          <Button variant="secondary" onClick={downloadCompletedPDF}>📄 Download Completed PDF</Button>
         </div>
       </div>
 
-      {loading ? (
-        <Card className="p-5 text-zinc-500 text-center">Loading...</Card>
-      ) : (
+      {loading ? (<Card className="p-5 text-center">Loading…</Card>) : (
         <>
-          {activeMatch && (
-            <Card className="p-4 mb-4 border-green-500 border-2 animate-pulse">
-              <div className="font-semibold">
-                🔥 Active Match: {activeMatch.sides.join(" vs ")}
-              </div>
+          {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200 rounded-xl">Error: {error}</Card>}
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="p-5">
+              <div className="text-lg font-semibold mb-3">Active</div>
+              {active.length ? active.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No active match.</div>}
+
+              <div className="text-lg font-semibold mt-4 mb-2">Upcoming</div>
+              {upcoming.length ? upcoming.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
             </Card>
-          )}
 
-          <h3 className="text-lg font-semibold mt-4 mb-2">Upcoming Matches</h3>
-          {upcomingMatches.length === 0 ? (
-            <div className="text-zinc-500 text-sm mb-4">None</div>
-          ) : (
-            upcomingMatches.map((m) => (
-              <Card key={m.id} className="p-4 mb-3">
-                <div className="font-medium">
-                  {m.sides.join(" vs ")} ({m.mode})
-                </div>
-                <div className="text-sm text-zinc-500">
-                  {new Date(m.start).toLocaleString()}
-                </div>
-              </Card>
-            ))
-          )}
+            <Card className="p-5">
+              <div className="text-lg font-semibold mb-3">Completed</div>
+              {(completedFixtures.length || completedMatches.length) ? (
+                <>
+                  {completedFixtures.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">Winner: {f.winner || '-'} • Score: {f.scoreline || f.score || '-'}</div></div>))}
+                  {completedMatches.map(m => (<div key={m.id} className="py-2 border-b last:border-0"><div className="font-medium">{(m.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">Winner: {m.winner || '-'} • Score: {m.scoreline || m.score || '-'}</div></div>))}
+                </>
+              ) : <div className="text-zinc-500">No results yet.</div>}
+            </Card>
+          </div>
 
-          <h3 className="text-lg font-semibold mt-6 mb-2">Completed Matches</h3>
-          {completedMatches.length === 0 ? (
-            <div className="text-zinc-500 text-sm">No completed matches.</div>
-          ) : (
-            completedMatches.map((m) => (
-              <Card key={m.id} className="p-4 mb-3">
-                <div className="font-medium">
-                  {m.sides.join(" vs ")} ({m.mode})
-                </div>
-                <div className="text-sm text-zinc-500">
-                  Winner: {m.winner || "-"} • Score: {m.score || "-"}
-                </div>
-              </Card>
-            ))
-          )}
+          <Card className="mt-6 p-4">
+            <div className="text-sm text-zinc-700 mb-2 font-semibold">Debug (raw)</div>
+            <pre style={{whiteSpace:'pre-wrap', maxHeight:300, overflow:'auto', fontSize:12}}>{JSON.stringify({ fixtures: debugFixtures, matches: debugMatches }, null, 2)}</pre>
+          </Card>
         </>
       )}
     </div>
   );
-};
+}
 
 /* ----------------- App shell ----------------- */
 export default function App() {
