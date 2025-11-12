@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
+import jsPDF from "jspdf";
 
 // ✅ Images live in src/ (same folder as this file or adjust paths accordingly)
 import imgStart from "./StartMatch.jpg";
@@ -645,68 +646,206 @@ const Results = ({ onBack }) => {
   const [fixtures, setFixtures] = useState([]);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      const fx = await apiFixturesList();
-      const ms = await apiMatchesList();
-      if (alive) { setFixtures(fx); setMatches(ms); setLoading(false); }
+      try {
+        const fx = await apiFixturesList();
+        const ms = await apiMatchesList();
+        if (alive) {
+          setFixtures(fx);
+          setMatches(ms);
+          setLoading(false);
+        }
+      } catch (e) {
+        if (alive) setLoading(false);
+      }
     })();
+
     const iv = setInterval(async () => {
-      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch {}
+      try {
+        setFixtures(await apiFixturesList());
+        setMatches(await apiMatchesList());
+      } catch {}
     }, 8000);
-    return () => { alive = false; clearInterval(iv); };
+
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
   }, []);
 
-  const active = fixtures.filter(f => f.status === "active");
-  const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
-  const completedFixtures = fixtures.filter(f => f.status === "completed");
-  const completed = [...completedFixtures, ...matches.map(m => ({
-    id: m.id, sides: m.sides, finishedAt: m.finishedAt, scoreline: m.scoreline, winner: m.winner, mode: m.mode || "singles"
-  }))].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+  const active = fixtures.filter((f) => f.status === "active");
+  const upcoming = fixtures.filter((f) => !f.status || f.status === "upcoming");
+  const completedFixtures = fixtures.filter((f) => f.status === "completed");
+  const completed = [
+    ...completedFixtures,
+    ...matches.map((m) => ({
+      id: m.id,
+      sides: m.sides,
+      finishedAt: m.finishedAt,
+      scoreline: m.scoreline,
+      winner: m.winner,
+      mode: m.mode || "singles",
+    })),
+  ].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+
+  // Build and download PDF of results
+  const exportResultsPDF = async () => {
+    try {
+      setExporting(true);
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const margin = 40;
+      let y = 60;
+
+      doc.setFontSize(18);
+      doc.text("Lawn Tennis Scoring — Results", margin, y);
+      y += 28;
+
+      doc.setFontSize(11);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
+      y += 20;
+
+      const writeSection = (title, items, renderItem) => {
+        if (y > 720) { doc.addPage(); y = 60; } // simple page break handling
+        doc.setFontSize(14);
+        doc.text(title, margin, y);
+        y += 18;
+        doc.setFontSize(11);
+        if (!items || items.length === 0) {
+          doc.text("- none -", margin + 6, y);
+          y += 16;
+        } else {
+          items.forEach((it, idx) => {
+            const lines = doc.splitTextToSize(renderItem(it), 500);
+            lines.forEach((ln) => {
+              if (y > 760) { doc.addPage(); y = 60; }
+              doc.text(ln, margin + 6, y);
+              y += 14;
+            });
+            y += 6;
+          });
+        }
+        y += 8;
+      };
+
+      writeSection(
+        "Active Match(es)",
+        active,
+        (f) =>
+          `${f.sides?.[0] || "??"} vs ${f.sides?.[1] || "??"}    •    ${new Date(
+            f.start
+          ).toLocaleString()}`
+      );
+
+      writeSection(
+        "Upcoming Fixtures",
+        upcoming,
+        (f) =>
+          `${f.sides?.[0] || "??"} vs ${f.sides?.[1] || "??"}    •    ${new Date(
+            f.start
+          ).toLocaleString()}    •    ${f.mode || "singles"}`
+      );
+
+      writeSection(
+        "Completed Matches",
+        completed,
+        (m) =>
+          `${m.sides?.[0] || "??"} vs ${m.sides?.[1] || "??"}    •    ${
+            m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""
+          }    •    Winner: ${m.winner || ""}    •    Score: ${m.scoreline || ""}`
+      );
+
+      // Footer
+      doc.setFontSize(9);
+      doc.text(
+        "Exported from Lawn Tennis Scoring",
+        margin,
+        doc.internal.pageSize.height - 30
+      );
+
+      // Save file
+      const filename = `tennis-results-${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")}.pdf`;
+      doc.save(filename);
+    } catch (err) {
+      console.error("PDF export failed", err);
+      alert("Failed to export PDF. See console for details.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <Button variant="ghost" onClick={onBack}>
+          <ChevronLeft className="w-5 h-5" /> Back
+        </Button>
         <h2 className="text-xl font-bold">Results</h2>
+
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" onClick={exportResultsPDF} disabled={exporting}>
+            {exporting ? "Preparing PDF…" : "Download PDF"}
+          </Button>
+        </div>
       </div>
+
       {loading ? (
         <Card className="p-6 text-center text-zinc-500">Loading…</Card>
       ) : (
         <div className="grid md:grid-cols-2 gap-6">
           <Card className="p-5">
             <div className="text-lg font-semibold mb-3">Active</div>
-            {active.length ? active.map(f => (
-              <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
-                <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
-              </div>
-            )) : <div className="text-zinc-500">No active match.</div>}
+            {active.length ? (
+              active.map((f) => (
+                <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <div className="font-medium">
+                    {f.sides?.[0]} vs {f.sides?.[1]}
+                  </div>
+                  <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                </div>
+              ))
+            ) : (
+              <div className="text-zinc-500">No active match.</div>
+            )}
 
             <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
-            {upcoming.length ? upcoming.map(f => (
-              <div key={f.id} className="py-2 border-b last:border-0">
-                <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div>
-                <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
-              </div>
-            )) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+            {upcoming.length ? (
+              upcoming.map((f) => (
+                <div key={f.id} className="py-2 border-b last:border-0">
+                  <div className="font-medium">
+                    {f.sides?.[0]} vs {f.sides?.[1]}{" "}
+                    <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>
+                  </div>
+                  <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                </div>
+              ))
+            ) : (
+              <div className="text-zinc-500">No upcoming fixtures.</div>
+            )}
           </Card>
 
           <Card className="p-5">
             <div className="text-lg font-semibold mb-3">Completed</div>
-            {completed.length ? completed.map(m => (
-              <div key={m.id + String(m.finishedAt)} className="py-2 border-b last:border-0">
-                <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
-                <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
-                <div className="mt-1 text-sm">
-                  <span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner || ""}</span>
-                  <span className="ml-3 font-mono">{m.scoreline || ""}</span>
+            {completed.length ? (
+              completed.map((m) => (
+                <div key={m.id + String(m.finishedAt)} className="py-2 border-b last:border-0">
+                  <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
+                  <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
+                  <div className="mt-1 text-sm">
+                    <span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner || ""}</span>{" "}
+                    <span className="ml-3 font-mono">{m.scoreline || ""}</span>
+                  </div>
                 </div>
-              </div>
-            )) : <div className="text-zinc-500">No results yet.</div>}
+              ))
+            ) : (
+              <div className="text-zinc-500">No results yet.</div>
+            )}
           </Card>
         </div>
       )}
