@@ -699,94 +699,81 @@ const Results = ({ onBack }) => {
 
   // PDF export function - only completed matches are written
   const exportCompletedPdf = () => {
-    if (!completed || completed.length === 0) {
-      alert("No completed matches to export.");
-      return;
-    }
+  // create landscape A4 in pt units (pt makes sizing intuitive)
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const margin = 40;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const usableWidth = pageWidth - margin * 2;
+  // margins and header
+  const margin = { top: 40, left: 40, right: 40, bottom: 40 };
+  const headerY = 28;
 
-    // header
-    doc.setFontSize(16);
-    doc.text("Completed Matches", margin, 50);
-    doc.setFontSize(10);
-    doc.text(`Exported: ${new Date().toLocaleString()}`, margin, 68);
+  // calculate usable width
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const usableWidth = pageWidth - margin.left - margin.right;
 
-    // Table columns
-    const headers = ["Date / Time", "Player A", "Player B", "Winner", "Score"];
-    // define column widths (must sum <= usableWidth)
-    const colWidths = [120, 150, 150, 100, usableWidth - (120 + 150 + 150 + 100)];
-    const rowHeight = 18;
-    const startY = 90;
+  // choose font size and padding (reduce if lots of columns)
+  const fontSize = 10;
+  const cellPadding = 6;
 
-    // draw table header
-    let x = margin;
-    let y = startY;
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    for (let i = 0; i < headers.length; i++) {
-      doc.text(String(headers[i]), x + 4, y + 12, { maxWidth: colWidths[i] - 8 });
-      x += colWidths[i];
-    }
+  // column width allocation (adjust weights to taste)
+  // here: Date = 18%, Match = 42%, Score = 20%, Winner = 20%
+  const colDate = Math.round(usableWidth * 0.18);
+  const colMatch = Math.round(usableWidth * 0.42);
+  const colScore = Math.round(usableWidth * 0.20);
+  const colWinner = usableWidth - colDate - colMatch - colScore; // remaining
 
-    doc.setFont("helvetica", "normal");
-    y += rowHeight;
+  // prepare head & body
+  const head = [["Date / Time", "Match", "Score", "Winner"]];
+  const body = completedMatches.map((m) => {
+    const date = m.finishedAt ? new Date(m.finishedAt).toLocaleString() : "";
+    const match = `${m.sides?.[0] ?? ""} vs ${m.sides?.[1] ?? ""}`;
+    const score = m.scoreline ?? "";
+    const winner = m.winner ?? "";
+    return [date, match, score, winner];
+  });
 
-    // rows per page calculation
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const footerSpace = 40;
-    const rowsPerPage = Math.floor((pageHeight - y - footerSpace) / rowHeight);
+  // title
+  doc.setFontSize(14);
+  doc.text("Completed Matches", margin.left, headerY);
 
-    let rowCount = 0;
-    for (let idx = 0; idx < completed.length; idx++) {
-      const m = completed[idx];
-      // prepare cell values
-      const dt = m.finishedAt ? new Date(m.finishedAt).toLocaleString() : "";
-      const a = (m.sides && m.sides[0]) || "";
-      const b = (m.sides && m.sides[1]) || "";
-      const winner = m.winner || "";
-      const score = m.scoreline || "";
+  // autoTable options tuned to wrap and avoid cutting columns
+  doc.autoTable({
+    head,
+    body,
+    startY: headerY + 8,
+    margin,
+    styles: {
+      fontSize,
+      cellPadding,
+      overflow: "linebreak",    // critical: wrap long text into multiple lines
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: [30, 78, 26],
+      textColor: 255,
+      halign: "left",
+    },
+    columnStyles: {
+      0: { cellWidth: colDate },   // Date
+      1: { cellWidth: colMatch },  // Match (bigger, can wrap)
+      2: { cellWidth: colScore },  // Score
+      3: { cellWidth: colWinner }  // Winner
+    },
+    // allow page breaks and split rows
+    willDrawCell: (data) => {
+      // optional: you could add custom cell drawing logic here
+    },
+    didDrawPage: (data) => {
+      // add a footer with page number
+      const pageCount = doc.internal.getNumberOfPages();
+      doc.setFontSize(9);
+      doc.text(`Page ${doc.internal.getCurrentPageInfo().pageNumber} / ${pageCount}`, pageWidth - margin.right - 60, doc.internal.pageSize.getHeight() - 12);
+    },
+    // reduce row height when needed
+    theme: "striped",
+  });
 
-      x = margin;
-      const cells = [dt, a, b, winner, score];
-
-      // Page break if needed
-      if (rowCount >= rowsPerPage) {
-        doc.addPage();
-        rowCount = 0;
-        // redraw header on new page
-        doc.setFontSize(11);
-        doc.setFont("helvetica", "bold");
-        let hx = margin;
-        let hy = margin + 20;
-        for (let i = 0; i < headers.length; i++) {
-          doc.text(String(headers[i]), hx + 4, hy + 12, { maxWidth: colWidths[i] - 8 });
-          hx += colWidths[i];
-        }
-        doc.setFont("helvetica", "normal");
-        y = hy + rowHeight;
-      }
-
-      // draw the row
-      for (let c = 0; c < cells.length; c++) {
-        const text = String(cells[c] ?? "");
-        // wrap long text within column width if necessary
-        doc.text(text, x + 4, y + 12, { maxWidth: colWidths[c] - 8 });
-        x += colWidths[c];
-      }
-
-      // border lines (light)
-      doc.setDrawColor(220);
-      doc.setLineWidth(0.3);
-      doc.line(margin, y + 2, margin + usableWidth, y + 2);
-      y += rowHeight;
-      rowCount++;
-    }
-
-    doc.save("completed-matches.pdf");
+  // Save file
+  doc.save("completed-matches.pdf");
   };
 
   return (
