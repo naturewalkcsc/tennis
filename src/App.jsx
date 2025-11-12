@@ -720,6 +720,7 @@ export default function App() {
   if (path.startsWith('/viewer')) {
     return <Viewer />; // public viewer, no login
   }
+  cosole.log("Somesh --------> admin login");
   const [view, setView] = useState("landing");
   const [cfg, setCfg] = useState(null);
   const logged = localStorage.getItem("lt_admin") === "1";
