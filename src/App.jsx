@@ -644,136 +644,71 @@ function Scoring({ config, onAbort, onComplete }) {
 }
 
 /* ----------------- Results ----------------- */
-const Results = ({ onBack }) => {
-  const [fixtures, setFixtures] = useState([]);
+function Results({ onBack }) {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      const fx = await apiFixturesList().catch(() => []);
-      const ms = await apiMatchesList().catch(() => []);
-      if (alive) {
-        setFixtures(fx);
-        setMatches(ms);
-        setLoading(false);
+      try {
+        const list = await apiMatchesList();
+        if (alive) setMatches(list);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (alive) setLoading(false);
       }
     })();
-    const iv = setInterval(async () => {
-      try {
-        setFixtures(await apiFixturesList());
-        setMatches(await apiMatchesList());
-      } catch {}
-    }, 8000);
     return () => {
       alive = false;
-      clearInterval(iv);
     };
   }, []);
 
-  // Active / Upcoming / Completed grouping
-  const active = fixtures.filter((f) => f.status === "active");
-  const upcoming = fixtures.filter((f) => !f.status || f.status === "upcoming");
-  const completedFixtures = fixtures.filter((f) => f.status === "completed");
+  const completedMatches = matches.filter((m) => m.status === "completed");
+  const upcomingMatches = matches.filter((m) => m.status === "upcoming");
+  const activeMatch = matches.find((m) => m.status === "active");
 
-  // Combine completed fixtures and historical matches into one completed list for display/export
-  const completed = [
-    ...completedFixtures.map((f) => ({
-      id: f.id,
-      sides: f.sides,
-      finishedAt: f.finishedAt || f.start,
-      scoreline: f.scoreline || "",
-      winner: f.winner || "",
-      mode: f.mode || "singles",
-    })),
-    ...matches.map((m) => ({
-      id: m.id,
-      sides: m.sides,
-      finishedAt: m.finishedAt,
-      scoreline: m.scoreline,
-      winner: m.winner,
-      mode: m.mode || "singles",
-    })),
-  ].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+  const downloadPDF = () => {
+    if (completedMatches.length === 0) {
+      alert("No completed matches to export.");
+      return;
+    }
 
-  // PDF export function - only completed matches are written
-  const exportCompletedPdf = () => {
-  // create landscape A4 in pt units (pt makes sizing intuitive)
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const doc = new jsPDF({ orientation: "landscape" });
+    doc.setFontSize(16);
+    doc.text("🏆 Completed Match Results", 14, 15);
 
-  // margins and header
-  const margin = { top: 40, left: 40, right: 40, bottom: 40 };
-  const headerY = 28;
+    const tableData = completedMatches.map((m, i) => [
+      i + 1,
+      m.mode || "Singles",
+      m.sides ? `${m.sides[0]} vs ${m.sides[1]}` : "-",
+      new Date(m.start).toLocaleString(),
+      m.winner || "-",
+      m.score || "-",
+    ]);
 
-  // calculate usable width
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const usableWidth = pageWidth - margin.left - margin.right;
+    doc.autoTable({
+      head: [["#", "Type", "Match", "Date", "Winner", "Score"]],
+      body: tableData,
+      startY: 25,
+      styles: {
+        cellPadding: 3,
+        fontSize: 11,
+        halign: "center",
+      },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 65 },
+        3: { cellWidth: 40 },
+        4: { cellWidth: 40 },
+        5: { cellWidth: 35 },
+      },
+      tableWidth: "auto",
+    });
 
-  // choose font size and padding (reduce if lots of columns)
-  const fontSize = 10;
-  const cellPadding = 6;
-
-  // column width allocation (adjust weights to taste)
-  // here: Date = 18%, Match = 42%, Score = 20%, Winner = 20%
-  const colDate = Math.round(usableWidth * 0.18);
-  const colMatch = Math.round(usableWidth * 0.42);
-  const colScore = Math.round(usableWidth * 0.20);
-  const colWinner = usableWidth - colDate - colMatch - colScore; // remaining
-
-  // prepare head & body
-  const head = [["Date / Time", "Match", "Score", "Winner"]];
-  const body = completedMatches.map((m) => {
-    const date = m.finishedAt ? new Date(m.finishedAt).toLocaleString() : "";
-    const match = `${m.sides?.[0] ?? ""} vs ${m.sides?.[1] ?? ""}`;
-    const score = m.scoreline ?? "";
-    const winner = m.winner ?? "";
-    return [date, match, score, winner];
-  });
-
-  // title
-  doc.setFontSize(14);
-  doc.text("Completed Matches", margin.left, headerY);
-
-  // autoTable options tuned to wrap and avoid cutting columns
-  doc.autoTable({
-    head,
-    body,
-    startY: headerY + 8,
-    margin,
-    styles: {
-      fontSize,
-      cellPadding,
-      overflow: "linebreak",    // critical: wrap long text into multiple lines
-      valign: "middle",
-    },
-    headStyles: {
-      fillColor: [30, 78, 26],
-      textColor: 255,
-      halign: "left",
-    },
-    columnStyles: {
-      0: { cellWidth: colDate },   // Date
-      1: { cellWidth: colMatch },  // Match (bigger, can wrap)
-      2: { cellWidth: colScore },  // Score
-      3: { cellWidth: colWinner }  // Winner
-    },
-    // allow page breaks and split rows
-    willDrawCell: (data) => {
-      // optional: you could add custom cell drawing logic here
-    },
-    didDrawPage: (data) => {
-      // add a footer with page number
-      const pageCount = doc.internal.getNumberOfPages();
-      doc.setFontSize(9);
-      doc.text(`Page ${doc.internal.getCurrentPageInfo().pageNumber} / ${pageCount}`, pageWidth - margin.right - 60, doc.internal.pageSize.getHeight() - 12);
-    },
-    // reduce row height when needed
-    theme: "striped",
-  });
-
-  // Save file
-  doc.save("completed-matches.pdf");
+    doc.save("Completed_Matches.pdf");
   };
 
   return (
@@ -783,61 +718,57 @@ const Results = ({ onBack }) => {
           <ChevronLeft className="w-5 h-5" /> Back
         </Button>
         <h2 className="text-xl font-bold">Results</h2>
-
-        <div className="ml-auto flex items-center gap-2">
-          {/* Export PDF button - only exports completed matches */}
-          <Button variant="secondary" onClick={exportCompletedPdf}>
-            <Download className="w-4 h-4" /> Export PDF
+        <div className="ml-auto">
+          <Button variant="secondary" onClick={downloadPDF}>
+            📄 Download PDF
           </Button>
         </div>
       </div>
 
       {loading ? (
-        <Card className="p-6 text-center text-zinc-500">Loading…</Card>
+        <Card className="p-5 text-zinc-500 text-center">Loading...</Card>
       ) : (
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <div className="text-lg font-semibold mb-3">Active</div>
-            {active.length ? (
-              active.map((f) => (
-                <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
-                  <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
-                </div>
-              ))
-            ) : (
-              <div className="text-zinc-500">No active match.</div>
-            )}
+        <>
+          {activeMatch && (
+            <Card className="p-4 mb-4 border-green-500 border-2 animate-pulse">
+              <div className="font-semibold">
+                🔥 Active Match: {activeMatch.sides.join(" vs ")}
+              </div>
+            </Card>
+          )}
 
-            <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
-            {upcoming.length ? (
-              upcoming.map((f) => (
-                <div key={f.id} className="py-2 border-b last:border-0">
-                  <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div>
-                  <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+          <h3 className="text-lg font-semibold mt-4 mb-2">Upcoming Matches</h3>
+          {upcomingMatches.length === 0 ? (
+            <div className="text-zinc-500 text-sm mb-4">None</div>
+          ) : (
+            upcomingMatches.map((m) => (
+              <Card key={m.id} className="p-4 mb-3">
+                <div className="font-medium">
+                  {m.sides.join(" vs ")} ({m.mode})
                 </div>
-              ))
-            ) : (
-              <div className="text-zinc-500">No upcoming fixtures.</div>
-            )}
-          </Card>
+                <div className="text-sm text-zinc-500">
+                  {new Date(m.start).toLocaleString()}
+                </div>
+              </Card>
+            ))
+          )}
 
-          <Card className="p-5">
-            <div className="text-lg font-semibold mb-3">Completed</div>
-            {completed.length ? (
-              completed.map((m) => (
-                <div key={m.id + String(m.finishedAt)} className="py-2 border-b last:border-0">
-                  <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
-                  <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
-                  <div className="mt-1 text-sm"><span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner || ''}</span> <span className="ml-3 font-mono">{m.scoreline || ''}</span></div>
+          <h3 className="text-lg font-semibold mt-6 mb-2">Completed Matches</h3>
+          {completedMatches.length === 0 ? (
+            <div className="text-zinc-500 text-sm">No completed matches.</div>
+          ) : (
+            completedMatches.map((m) => (
+              <Card key={m.id} className="p-4 mb-3">
+                <div className="font-medium">
+                  {m.sides.join(" vs ")} ({m.mode})
                 </div>
-              ))
-            ) : (
-              <div className="text-zinc-500">No results yet.</div>
-            )}
-          </Card>
-        </div>
+                <div className="text-sm text-zinc-500">
+                  Winner: {m.winner || "-"} • Score: {m.score || "-"}
+                </div>
+              </Card>
+            ))
+          )}
+        </>
       )}
     </div>
   );
