@@ -1,3 +1,4 @@
+// App.jsx
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
@@ -303,6 +304,18 @@ const Settings = ({ onBack }) => {
   );
 };
 
+/* ----------------- Categories ----------------- */
+const CATEGORIES = [
+  "Men's(A) Singles",
+  "Men's(A) Doubles",
+  "Men's(B) Doubles",
+  "Women's Singles",
+  "Women's Doubles",
+  "Mixed Doubles",
+  "Kid's Singles",
+  "Kid's Doubles"
+];
+
 /* ----------------- Fixtures (create/list/remove) ----------------- */
 const Fixtures = ({ onBack }) => {
   const [players, setPlayers] = useState({ singles: [], doubles: [] });
@@ -311,6 +324,7 @@ const Fixtures = ({ onBack }) => {
   const [b, setB] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [category, setCategory] = useState(CATEGORIES[0]);
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -324,13 +338,27 @@ const Fixtures = ({ onBack }) => {
     return () => { alive = false; };
   }, []);
 
+  // update default category when mode changes (optional heuristic)
+  useEffect(() => {
+    // pick a default category appropriate for mode
+    if (mode === "singles") {
+      // prefer Men's(A) Singles if present
+      const def = CATEGORIES.find(c => c.toLowerCase().includes("singles")) || CATEGORIES[0];
+      setCategory(def);
+    } else {
+      // doubles default
+      const def = CATEGORIES.find(c => c.toLowerCase().includes("doubles")) || CATEGORIES[0];
+      setCategory(def);
+    }
+  }, [mode]);
+
   const options = mode === "singles" ? players.singles : players.doubles;
-  const canAdd = a && b && a !== b && date && time;
+  const canAdd = a && b && a !== b && date && time && category;
 
   const add = async (e) => {
     e.preventDefault();
     const start = new Date(`${date}T${time}:00`).getTime();
-    const payload = { id: crypto.randomUUID(), mode, sides: [a, b], start, status: "upcoming" };
+    const payload = { id: crypto.randomUUID(), mode, sides: [a, b], start, status: "upcoming", category };
     await apiFixturesAdd(payload);
     setList(prev => [...prev, payload].sort((x, y) => x.start - y.start));
     setA(""); setB(""); setDate(""); setTime("");
@@ -370,6 +398,7 @@ const Fixtures = ({ onBack }) => {
                   <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
                 </div>
               </div>
+
               <div>
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
                 <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
@@ -377,6 +406,7 @@ const Fixtures = ({ onBack }) => {
                   {options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
+
               <div>
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
                 <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
@@ -384,11 +414,24 @@ const Fixtures = ({ onBack }) => {
                   {options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
+
               <div className="grid grid-cols-2 gap-2">
-                <div><div className="text-sm mb-1">Date</div><input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} /></div>
-                <div><div className="text-sm mb-1">Time</div><input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} /></div>
+                <div>
+                  <div className="text-sm mb-1">Date</div>
+                  <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} />
+                </div>
+                <div>
+                  <div className="text-sm mb-1">Time</div>
+                  <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} />
+                </div>
               </div>
+
+              {/* Category selector - spans full width */}
               <div className="md:col-span-4">
+                <div className="text-sm mb-1">Category</div>
+                <select className="w-full rounded-xl border px-3 py-2 mb-3" value={category} onChange={e => setCategory(e.target.value)}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
                 <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
               </div>
             </form>
@@ -404,6 +447,7 @@ const Fixtures = ({ onBack }) => {
                     <div className="font-semibold">
                       {f.sides?.[0]} vs {f.sides?.[1]}{" "}
                       <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>
+                      {f.category && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{f.category}</span>}
                     </div>
                     <div className="text-sm text-zinc-500">
                       {new Date(f.start).toLocaleString()}{" "}
@@ -486,7 +530,7 @@ function StartFromFixtures({ onBack, onStartScoring }) {
               <Card key={f.id} className="p-4 flex items-center gap-4">
                 <div className="flex-1">
                   <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}</div>
-                  <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                  <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()} {f.category && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{f.category}</span>}</div>
                 </div>
                 <Button onClick={() => startFixture(f)}><Play className="w-4 h-4" /> Start Now</Button>
               </Card>
@@ -513,7 +557,7 @@ function makeEmptySet() {
 // Set is done when a side reaches 4 games, except at 3-3 → tiebreak to 5 (4-4 next point wins)
 function setOverFast4(s) {
   if (s.tie) {
-    // first to 5, no win-by-2 (4-4 => next point wins)
+    // tiebreak to 5; if 4-4 next point wins (we treat >=5 with difference >=1 as finished)
     if ((s.tieA >= 5 || s.tieB >= 5) && Math.abs(s.tieA - s.tieB) >= 1) return true;
     return false;
   } else {
@@ -708,33 +752,53 @@ function Results({ onBack }) {
 
   const downloadCompletedPDF = () => {
     const allCompleted = [...completedFixtures.map(f => ({
-      id: f.id, sides: f.sides, mode: f.mode, finishedAt: f.finishedAt || f.start, winner: f.winner || '', score: f.scoreline || f.score || ''
+      id: f.id, sides: f.sides, mode: f.mode, finishedAt: f.finishedAt || f.start, winner: f.winner || '', score: f.scoreline || f.score || '', category: f.category || ''
     })), ...completedMatches.map(m => ({
-      id: m.id, sides: m.sides, mode: m.mode || 'singles', finishedAt: m.finishedAt, winner: m.winner || '', score: m.scoreline || m.score || ''
+      id: m.id, sides: m.sides, mode: m.mode || 'singles', finishedAt: m.finishedAt, winner: m.winner || '', score: m.scoreline || m.score || '', category: m.category || ''
     }))];
 
     if (allCompleted.length === 0) { alert('No completed matches to export.'); return; }
 
-    const doc = new jsPDF({ orientation: 'landscape' });
-    doc.setFontSize(14);
-    doc.text('Completed Matches', 14, 16);
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    doc.setFontSize(12);
+    doc.text('Completed Matches', 14, 18);
 
     const body = allCompleted.map((r, i) => ([
       i+1,
       r.mode,
       (r.sides || []).join(' vs '),
+      r.category || '',
       r.finishedAt ? new Date(r.finishedAt).toLocaleString() : '',
       r.winner || '',
       r.score || ''
     ]));
 
+    // columns: #, Type, Match, Category, Finished, Winner, Score
     doc.autoTable({
-      head: [['#','Type','Match','Finished','Winner','Score']],
+      head: [['#','Type','Match','Category','Finished','Winner','Score']],
       body,
-      startY: 22,
+      startY: 32,
+      margin: { left: 18, right: 18 },
       styles: { fontSize: 10 },
-      columnStyles: { 0: {cellWidth: 10}, 1:{cellWidth:30}, 2:{cellWidth:120}, 3:{cellWidth:50}, 4:{cellWidth:60}, 5:{cellWidth:50} },
-      tableWidth: 'auto'
+      // tune column widths to avoid last column clipping on A4-landscape
+      columnStyles: {
+        0: { cellWidth: 18 },   // #
+        1: { cellWidth: 60 },   // Type
+        2: { cellWidth: 200 },  // Match
+        3: { cellWidth: 120 },  // Category
+        4: { cellWidth: 120 },  // Finished
+        5: { cellWidth: 100 },  // Winner
+        6: { cellWidth: 100 }   // Score
+      },
+      tableWidth: 'wrap',
+      didDrawPage: (data) => {
+        const page = doc.internal.getCurrentPageInfo().pageNumber;
+        const pageCount = doc.internal.getNumberOfPages();
+        const pageSize = doc.internal.pageSize;
+        const height = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.setFontSize(9);
+        doc.text(`Page ${page} / ${pageCount}`, (pageSize.width ? pageSize.width : pageSize.getWidth()) - 80, height - 10);
+      }
     });
 
     doc.save('Completed_Matches.pdf');
@@ -757,18 +821,18 @@ function Results({ onBack }) {
           <div className="grid md:grid-cols-2 gap-6">
             <Card className="p-5">
               <div className="text-lg font-semibold mb-3">Active</div>
-              {active.length ? active.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No active match.</div>}
+              {active.length ? active.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')} {f.category && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{f.category}</span>}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No active match.</div>}
 
               <div className="text-lg font-semibold mt-4 mb-2">Upcoming</div>
-              {upcoming.length ? upcoming.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+              {upcoming.length ? upcoming.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')} {f.category && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{f.category}</span>}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
             </Card>
 
             <Card className="p-5">
               <div className="text-lg font-semibold mb-3">Completed</div>
               {(completedFixtures.length || completedMatches.length) ? (
                 <>
-                  {completedFixtures.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">Winner: {f.winner || '-'} • Score: {f.scoreline || f.score || '-'}</div></div>))}
-                  {completedMatches.map(m => (<div key={m.id} className="py-2 border-b last:border-0"><div className="font-medium">{(m.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">Winner: {m.winner || '-'} • Score: {m.scoreline || m.score || '-'}</div></div>))}
+                  {completedFixtures.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')} {f.category && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{f.category}</span>}</div><div className="text-sm text-zinc-500">Winner: {f.winner || '-'} • Score: {f.scoreline || f.score || '-'}</div></div>))}
+                  {completedMatches.map(m => (<div key={m.id} className="py-2 border-b last:border-0"><div className="font-medium">{(m.sides||[]).join(' vs ')} {m.category && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{m.category}</span>}</div><div className="text-sm text-zinc-500">Winner: {m.winner || '-'} • Score: {m.scoreline || m.score || '-'}</div></div>))}
                 </>
               ) : <div className="text-zinc-500">No results yet.</div>}
             </Card>
@@ -911,7 +975,8 @@ function Viewer(){
       finishedAt: m.finishedAt,
       scoreline: m.scoreline,
       winner: m.winner,
-      mode: m.mode || 'singles'
+      mode: m.mode || 'singles',
+      category: m.category || ''
     }))
   ].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
 
@@ -947,6 +1012,7 @@ function Viewer(){
                   <div className="font-medium">
                     {f.sides?.[0]} vs {f.sides?.[1]}
                     <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>
+                    {f.category && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{f.category}</span>}
                   </div>
                   <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
                 </div>
@@ -957,7 +1023,7 @@ function Viewer(){
               <div className="text-lg font-semibold mb-3">Completed</div>
               {completed.length ? completed.map(m=>(
                 <div key={(m.id||'')+String(m.finishedAt||'')} className="py-2 border-b last:border-0">
-                  <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
+                  <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]} {m.category && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{m.category}</span>}</div>
                   <div className="text-sm text-zinc-500">
                     {m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}
                   </div>
@@ -975,3 +1041,4 @@ function Viewer(){
     </div>
   );
 }
+
