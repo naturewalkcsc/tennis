@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
+import { jsPDF } from "jspdf";
+import { Download } from "lucide-react"; // keep other imports you already use
+import "jspdf-autotable";
 
 // ✅ Images live in src/ (same folder as this file or adjust paths accordingly)
 import imgStart from "./StartMatch.jpg";
@@ -641,78 +644,145 @@ function Scoring({ config, onAbort, onComplete }) {
 }
 
 /* ----------------- Results ----------------- */
-const Results = ({ onBack }) => {
-  const [fixtures, setFixtures] = useState([]);
-  const [matches, setMatches] = useState([]);
-  const [loading, setLoading] = useState(true);
+function Results({ onBack }) {
+  const [fixtures, setFixtures] = React.useState(null);
+  const [matches, setMatches] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
 
-  useEffect(() => {
+  React.useEffect(() => {
     let alive = true;
     (async () => {
-      const fx = await apiFixturesList();
-      const ms = await apiMatchesList();
-      if (alive) { setFixtures(fx); setMatches(ms); setLoading(false); }
+      try {
+        const [fxRes, mRes] = await Promise.all([
+          fetch('/api/fixtures?t=' + Date.now(), { cache: 'no-store' }),
+          fetch('/api/matches?t=' + Date.now(), { cache: 'no-store' })
+        ]);
+
+        // parse safely
+        const fxJson = fxRes.ok ? await safeJson(fxRes) : { _httpStatus: fxRes.status, _text: await fxRes.text() };
+        const mJson = mRes.ok ? await safeJson(mRes) : { _httpStatus: mRes.status, _text: await mRes.text() };
+
+        if (!alive) return;
+        setFixtures(fxJson);
+        setMatches(mJson);
+
+        // fallback to localStorage if empty
+        if ((!fxJson || (Array.isArray(fxJson) && fxJson.length === 0)) && localStorage.getItem('lt_fixtures_fallback')) {
+          try { setFixtures(JSON.parse(localStorage.getItem('lt_fixtures_fallback'))); } catch(e) {}
+        }
+        if ((!mJson || (Array.isArray(mJson) && mJson.length === 0)) && localStorage.getItem('lt_matches_fallback')) {
+          try { setMatches(JSON.parse(localStorage.getItem('lt_matches_fallback'))); } catch(e) {}
+        }
+      } catch (e) {
+        console.error('Results fetch error', e);
+        setError(String(e));
+        // fallback
+        try {
+          const fx = JSON.parse(localStorage.getItem('lt_fixtures_fallback') || 'null');
+          const ms = JSON.parse(localStorage.getItem('lt_matches_fallback') || 'null');
+          setFixtures(fx);
+          setMatches(ms);
+        } catch {}
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
-    const iv = setInterval(async () => {
-      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch {}
-    }, 8000);
-    return () => { alive = false; clearInterval(iv); };
+    return () => { alive = false; };
+
+    async function safeJson(res){
+      try { return await res.json(); }
+      catch(e){ return { _httpStatus: res.status, _text: await res.text() }; }
+    }
   }, []);
 
-  const active = fixtures.filter(f => f.status === "active");
-  const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
-  const completedFixtures = fixtures.filter(f => f.status === "completed");
-  const completed = [...completedFixtures, ...matches.map(m => ({
-    id: m.id, sides: m.sides, finishedAt: m.finishedAt, scoreline: m.scoreline, winner: m.winner, mode: m.mode || "singles"
-  }))].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+  // If server returned object with error status, show raw JSON so you can inspect it:
+  const debugFixtures = fixtures;
+  const debugMatches = matches;
+
+  // compute what to show
+  const active = Array.isArray(debugFixtures) ? debugFixtures.filter(f => f.status === 'active') : [];
+  const upcoming = Array.isArray(debugFixtures) ? debugFixtures.filter(f => !f.status || f.status === 'upcoming') : [];
+  const completedFixtures = Array.isArray(debugFixtures) ? debugFixtures.filter(f => f.status === 'completed') : [];
+  const completedMatches = Array.isArray(debugMatches) ? debugMatches : [];
+
+  const downloadCompletedPDF = () => {
+    const allCompleted = [...completedFixtures.map(f => ({
+      id: f.id, sides: f.sides, mode: f.mode, finishedAt: f.finishedAt || f.start, winner: f.winner || '', score: f.scoreline || f.score || ''
+    })), ...completedMatches.map(m => ({
+      id: m.id, sides: m.sides, mode: m.mode || 'singles', finishedAt: m.finishedAt, winner: m.winner || '', score: m.scoreline || m.score || ''
+    }))];
+
+    if (allCompleted.length === 0) { alert('No completed matches to export.'); return; }
+
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(14);
+    doc.text('Completed Matches', 14, 16);
+
+    const body = allCompleted.map((r, i) => ([
+      i+1,
+      r.mode,
+      (r.sides || []).join(' vs '),
+      r.finishedAt ? new Date(r.finishedAt).toLocaleString() : '',
+      r.winner || '',
+      r.score || ''
+    ]));
+
+    doc.autoTable({
+      head: [['#','Type','Match','Finished','Winner','Score']],
+      body,
+      startY: 22,
+      styles: { fontSize: 10 },
+      columnStyles: { 0: {cellWidth: 10}, 1:{cellWidth:30}, 2:{cellWidth:120}, 3:{cellWidth:50}, 4:{cellWidth:60}, 5:{cellWidth:50} },
+      tableWidth: 'auto'
+    });
+
+    doc.save('Completed_Matches.pdf');
+  };
 
   return (
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
         <h2 className="text-xl font-bold">Results</h2>
-      </div>
-      {loading ? (
-        <Card className="p-6 text-center text-zinc-500">Loading…</Card>
-      ) : (
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <div className="text-lg font-semibold mb-3">Active</div>
-            {active.length ? active.map(f => (
-              <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
-                <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
-              </div>
-            )) : <div className="text-zinc-500">No active match.</div>}
-
-            <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
-            {upcoming.length ? upcoming.map(f => (
-              <div key={f.id} className="py-2 border-b last:border-0">
-                <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div>
-                <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
-              </div>
-            )) : <div className="text-zinc-500">No upcoming fixtures.</div>}
-          </Card>
-
-          <Card className="p-5">
-            <div className="text-lg font-semibold mb-3">Completed</div>
-            {completed.length ? completed.map(m => (
-              <div key={m.id + String(m.finishedAt)} className="py-2 border-b last:border-0">
-                <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
-                <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
-                <div className="mt-1 text-sm">
-                  <span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner || ""}</span>
-                  <span className="ml-3 font-mono">{m.scoreline || ""}</span>
-                </div>
-              </div>
-            )) : <div className="text-zinc-500">No results yet.</div>}
-          </Card>
+        <div className="ml-auto">
+          <Button variant="secondary" onClick={downloadCompletedPDF}>📄 Download Completed PDF</Button>
         </div>
+      </div>
+
+      {loading ? (<Card className="p-5 text-center">Loading…</Card>) : (
+        <>
+          {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200 rounded-xl">Error: {error}</Card>}
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="p-5">
+              <div className="text-lg font-semibold mb-3">Active</div>
+              {active.length ? active.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No active match.</div>}
+
+              <div className="text-lg font-semibold mt-4 mb-2">Upcoming</div>
+              {upcoming.length ? upcoming.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+            </Card>
+
+            <Card className="p-5">
+              <div className="text-lg font-semibold mb-3">Completed</div>
+              {(completedFixtures.length || completedMatches.length) ? (
+                <>
+                  {completedFixtures.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{(f.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">Winner: {f.winner || '-'} • Score: {f.scoreline || f.score || '-'}</div></div>))}
+                  {completedMatches.map(m => (<div key={m.id} className="py-2 border-b last:border-0"><div className="font-medium">{(m.sides||[]).join(' vs ')}</div><div className="text-sm text-zinc-500">Winner: {m.winner || '-'} • Score: {m.scoreline || m.score || '-'}</div></div>))}
+                </>
+              ) : <div className="text-zinc-500">No results yet.</div>}
+            </Card>
+          </div>
+
+          <Card className="mt-6 p-4">
+            <div className="text-sm text-zinc-700 mb-2 font-semibold">Debug (raw)</div>
+            <pre style={{whiteSpace:'pre-wrap', maxHeight:300, overflow:'auto', fontSize:12}}>{JSON.stringify({ fixtures: debugFixtures, matches: debugMatches }, null, 2)}</pre>
+          </Card>
+        </>
       )}
     </div>
   );
-};
+}
 
 /* ----------------- App shell ----------------- */
 export default function App() {
@@ -723,6 +793,7 @@ export default function App() {
   const [view, setView] = useState("landing");
   const [cfg, setCfg] = useState(null);
   const logged = localStorage.getItem("lt_admin") === "1";
+  console.log("SOMESH ---> logged=" + logged);
   if (!logged) return <AdminLogin onOk={() => window.location.reload()} />;
 
   const to = (v) => setView(v);
