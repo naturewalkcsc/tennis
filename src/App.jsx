@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
-import imgStart from "./assets/StartMatch.jpg";
-import imgScore from "./assets/Score.jpg";
-import imgSettings from "./assets/Settings.jpg";
+
+import imgStart from "./StartMatch.jpg";
+import imgScore from "./Score.jpg";
+import imgSettings from "./Settings.jpg";
 
 // ------------------ Constants ------------------
 // The categories you gave, in the order to combine/sort by:
