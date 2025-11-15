@@ -241,7 +241,7 @@ function RulesPanel() {
       <h2 className="text-xl font-bold mb-4">Match Formats & Rules</h2>
 
       <div className="mb-4">
-        <h3 className="font-semibold">Qualifiers and Semifinal Matches Format: Fast4(chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https://www.tennis.com.au/wp-content/uploads/2016/12/FAST4-Tennis-Information-Sheet.pdf) will be followed.</h3>
+        <h3 className="font-semibold">Qualifiers and Semifinal Matches Format: Fast4(https://www.tennis.com.au/wp-content/uploads/2016/12/FAST4-Tennis-Information-Sheet.pdf) will be followed.</h3>
         <ol className="list-decimal ml-6 mt-2 space-y-2 text-sm">
           <li>
             <strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.
