@@ -96,7 +96,7 @@ const apiFixturesUpdate = async (id, patch) => {
 
 /* ----------------- UI primitives ----------------- */
 const Card = ({ className = "", children }) => (
-  <div className={bg-white rounded-2xl shadow border border-zinc-200 ${className}}>{children}</div>
+  <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>{children}</div>
 );
 const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled }) => {
   const base = "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium";
@@ -110,7 +110,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", type =
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={${base} ${styles} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}}
+      className={`${base} ${styles} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
     >
       {children}
     </button>
@@ -480,7 +480,7 @@ const Fixtures = ({ onBack }) => {
 
   const add = async (e) => {
     e.preventDefault();
-    const start = new Date(${date}T${time}:00).getTime();
+    const start = new Date(`${date}T${time}:00`).getTime();
     const payload = { id: crypto.randomUUID(), mode, sides: [a, b], start, status: "upcoming" };
     await apiFixturesAdd(payload);
     setList(prev => [...prev, payload].sort((x, y) => x.start - y.start));
@@ -723,8 +723,8 @@ function Scoring({ config, onAbort, onComplete }) {
 
   const recordResult = async (setObj) => {
     const scoreline = setObj.tie
-      ? 4-3(${Math.max(setObj.tieA, setObj.tieB)}-${Math.min(setObj.tieA, setObj.tieB)})
-      : ${setObj.gamesA}-${setObj.gamesB};
+      ? `4-3(${Math.max(setObj.tieA, setObj.tieB)}-${Math.min(setObj.tieA, setObj.tieB)})`
+      : `${setObj.gamesA}-${setObj.gamesB}`;
     const winner = setObj.gamesA > setObj.gamesB ? sides[0] : sides[1];
     const payload = {
       id: crypto.randomUUID(),
@@ -918,7 +918,7 @@ function Viewer(){
   ].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
 
   const CardLocal = ({className="", children}) =>
-    <div className={bg-white rounded-2xl shadow border border-zinc-200 ${className}}>{children}</div>;
+    <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>{children}</div>;
 
   return (
     <div className="app-bg">
@@ -1040,3 +1040,4 @@ export default function App() {
     </div>
   );
 }
+
