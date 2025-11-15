@@ -348,7 +348,6 @@ function Settings({ onBack }) {
       setDirty(false);
       localStorage.removeItem(LS_PLAYERS_DRAFT);
       // show success small toast (simple)
-      alert("Players saved");
     } catch (err) {
       console.error(err);
       setError("Save failed. Make sure KV is configured. Draft saved locally.");
