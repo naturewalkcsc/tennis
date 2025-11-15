@@ -218,22 +218,20 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
 /* -----------------------------
    Manage Players (with categories)
    - Categories order requested by you:
-     Singles: Women's Singles, Kid's Singles, Kid's Singles, Men's (A) Singles, Men's (B) Singles
-     Doubles: Women's Doubles, Kid's Doubles, Kid's Doubles, Men's (A) Doubles, Men's (B) Doubles, Mixed Doubles
+     Singles: Women's Singles, Kid's Singles, Men's (A) Singles, Men's (B) Singles
+     Doubles: Women's Doubles, Kid's Doubles, Men's (A) Doubles, Men's (B) Doubles, Mixed Doubles
    - Data model saved to KV: { singles: {category: [names]}, doubles: {category: [pair labels]} }
    ----------------------------- */
 
 const DEFAULT_SINGLES_CATEGORIES = [
   "Women's Singles",
   "Kid's Singles",
-  "Kid's Singles (2)",
   "Men's (A) Singles",
   "Men's (B) Singles",
 ];
 const DEFAULT_DOUBLES_CATEGORIES = [
   "Women's Doubles",
   "Kid's Doubles",
-  "Kid's Doubles (2)",
   "Men's (A) Doubles",
   "Men's (B) Doubles",
   "Mixed Doubles",
