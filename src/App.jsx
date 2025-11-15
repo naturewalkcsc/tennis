@@ -241,7 +241,7 @@ function RulesPanel() {
       <h2 className="text-xl font-bold mb-4">Match Formats & Rules</h2>
 
       <div className="mb-4">
-        <h3 className="font-semibold">Qualifiers and Semifinal Matches Format:</h3>
+        <h3 className="font-semibold">Qualifiers and Semifinal Matches Format: Fast4(chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https://www.tennis.com.au/wp-content/uploads/2016/12/FAST4-Tennis-Information-Sheet.pdf) will be followed.</h3>
         <ol className="list-decimal ml-6 mt-2 space-y-2 text-sm">
           <li>
             <strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.
@@ -262,7 +262,21 @@ function RulesPanel() {
             <strong>One full set</strong> — Standard set rule of 6 games and Tie break will be followed.
           </li>
           <li>
-            <strong>Limited Deuce Points</strong> — As a deviation max 3 deuce points will be allowed. At 4th deuce point the next point decides the game.
+            <strong>Limited Deuce Points</strong> — As a deviation max 3 deuce points will be allowed. At 4th deuce the next point decides the game.
+          </li>
+        </ol>
+      </div>
+      <div>
+        <h3 className="font-semibold">Other Rules</h3>
+        <ol className="list-decimal ml-6 mt-2 space-y-2 text-sm">
+          <li>
+            <strong>Water break between games</strong> — Each team/player can take maximum of 1 break of 1 minute (so maximum 2 breaks) each whenever they prefer.
+          </li>
+          <li>
+            <strong>Warmn up break</strong> — Each team/player will be given maximum 3 minutes of warm up time before the match.
+          </li>
+          <li>
+            <strong>Warmn up break</strong> — During tournament if anhy player is not available the opponent will be given walk-over, but organizing committee's decision will be final.
           </li>
         </ol>
       </div>
