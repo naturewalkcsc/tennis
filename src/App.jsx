@@ -248,13 +248,27 @@ const Settings = ({ onBack }) => {
 
   // helpers to edit a specific category array
   const updateCategory = (type, category, updater) => {
-    setPlayers(prev => {
-      const copy = { singles: { ...prev.singles }, doubles: { ...prev.doubles } };
-      const arr = (type === "singles" ? copy.singles[category] : copy.doubles[category]) || [];
-      (type === "singles" ? copy.singles[category] : copy.doubles[category]) = updater(arr.slice());
-      markDirty(copy);
-      return copy;
-    });
+  setPlayers(prev => {
+  const copy = {
+    singles: { ...prev.singles },
+    doubles: { ...prev.doubles }
+  };
+
+  const current = type === "singles"
+    ? (copy.singles[category] || [])
+    : (copy.doubles[category] || []);
+
+  const updated = updater([...current]); // updater receives an array copy
+
+  if (type === "singles") {
+    copy.singles[category] = updated;
+  } else {
+    copy.doubles[category] = updated;
+  }
+
+  markDirty(copy);
+  return copy;
+  });
   };
 
   const addEntry = (type, category) => updateCategory(type, category, arr => { arr.push(type === "singles" ? "New Player" : "Team X/Team Y"); return arr; });
