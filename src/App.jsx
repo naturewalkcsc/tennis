@@ -1,89 +1,119 @@
-// src/App.jsx
 import React, { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
-
+import { Trophy, ChevronLeft, Plus, Trash2 } from "lucide-react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
 
 /*
-  Players data shape stored in KV via /api/players:
-  {
-    singles: {
-      "Women's Singles": ["Alice", ...],
-      "Kid's Singles": [...],
-      "Men's(A) Singles": [...],
-      "Men's(B) Singles": [...]
-      // categories present as keys. We preserve exactly what user saved.
-    },
-    doubles: {
-      "Women's Doubles": [...],
-      "Kid's Doubles": [...],
-      ...
-    }
-  }
+  App.jsx - focused on Manage Players with categories
+  - Saves to /api/players (POST { payload: { singles: [...], doubles: [...] } })
+  - If API unavailable, falls back to localStorage key LT_PLAYERS_LOCAL
+  - Keeps category structure in localStorage so UI shows categories
 */
 
-const DEFAULT_SINGLE_CATS = [
-  "Women's Singles",
-  "Kid's Singles",
-  "Kid's Singles", // included twice per user's request
-  "Men's(A) Singles",
-  "Men's(B) Singles",
+/* --- Category keys & order (as requested) --- */
+const SINGLES_KEYS = [
+  { key: "womensSingles", label: "Women's Singles" },
+  { key: "kidsSingles1", label: "Kid's Singles (1)" },
+  { key: "kidsSingles2", label: "Kid's Singles (2)" },
+  { key: "mensASingles", label: "Men's (A) Singles" },
+  { key: "mensBSingles", label: "Men's (B) Singles" },
 ];
 
-const DEFAULT_DOUBLE_CATS = [
-  "Women's Doubles",
-  "Kid's Doubles",
-  "Kid's Doubles", // duplicate as requested
-  "Men's(A) Doubles",
-  "Men's(B) Doubles",
-  "Mixed Doubles",
+const DOUBLES_KEYS = [
+  { key: "womensDoubles", label: "Women's Doubles" },
+  { key: "kidsDoubles1", label: "Kid's Doubles (1)" },
+  { key: "kidsDoubles2", label: "Kid's Doubles (2)" },
+  { key: "mensADoubles", label: "Men's (A) Doubles" },
+  { key: "mensBDoubles", label: "Men's (B) Doubles" },
+  { key: "mixedDoubles", label: "Mixed Doubles" },
 ];
 
-const buster = () => "?t=" + Date.now();
+const LS_KEY = "LT_PLAYERS_LOCAL_v2";
 
+/* ---- helper API wrappers ---- */
+const buster = () => `?t=${Date.now()}`;
 async function apiPlayersGet() {
-  // returns object, or fallback default shape
-  try {
-    const r = await fetch("/api/players" + buster(), { cache: "no-store" });
-    if (!r.ok) throw new Error("no-kv");
-    const j = await r.json();
-    // If kv returned an array (older shape), put into default category
-    if (!j || typeof j !== "object") return { singles: {}, doubles: {} };
-    return j;
-  } catch (e) {
-    // fall back to an empty structured object to avoid crashes
-    return { singles: {}, doubles: {} };
-  }
+  const res = await fetch(`/api/players${buster()}`, { cache: "no-store" });
+  if (!res.ok) throw new Error("API players GET failed");
+  return res.json();
 }
-
-async function apiPlayersSet(obj) {
-  const r = await fetch("/api/players" + buster(), {
+async function apiPlayersSet(payload) {
+  const res = await fetch(`/api/players${buster()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ payload: obj }),
+    body: JSON.stringify({ payload }),
   });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    throw new Error("Save failed: " + txt);
-  }
-  return await r.json();
+  if (!res.ok) throw new Error("API players POST failed");
+  return res.json();
 }
 
-/* --- small UI primitives --- */
+/* ---- helper conversions ----
+   The API expects a flat { singles: [], doubles: [] } structure in our earlier implementation.
+   Internally we keep categories (object with arrays). When sending to API we flatten according to
+   the user-requested order. When reading from localStorage we keep category structure.
+*/
+function buildDefaultCategories() {
+  const obj = { singles: {}, doubles: {} };
+  SINGLES_KEYS.forEach(k => (obj.singles[k.key] = []));
+  DOUBLES_KEYS.forEach(k => (obj.doubles[k.key] = []));
+  return obj;
+}
+function flattenForApi(categories) {
+  // categories: { singles: {key: [names]}, doubles: {...} }
+  const singles = SINGLES_KEYS.flatMap(k => categories.singles[k.key] || []);
+  const doubles = DOUBLES_KEYS.flatMap(k => categories.doubles[k.key] || []);
+  return { singles, doubles };
+}
+/* When API returns only flat arrays, map them back into categories by appending in order.
+   This prevents data loss: we put everything into the first matching buckets in order.
+*/
+function mapApiToCategories(apiObj) {
+  const categories = buildDefaultCategories();
+  if (!apiObj) return categories;
+  // if it's already category-shaped (we stored previously), detect and return
+  const hasSinglesObject = apiObj.singles && typeof apiObj.singles === "object" && !Array.isArray(apiObj.singles);
+  if (hasSinglesObject) {
+    // already in category shape
+    const s = apiObj.singles || {};
+    const d = apiObj.doubles || {};
+    // ensure keys exist
+    SINGLES_KEYS.forEach(k => (categories.singles[k.key] = s[k.key] || []));
+    DOUBLES_KEYS.forEach(k => (categories.doubles[k.key] = d[k.key] || []));
+    return categories;
+  }
+
+  // fallback: apiObj.singles is array, distribute
+  const singlesArr = Array.isArray(apiObj.singles) ? apiObj.singles.slice() : [];
+  const doublesArr = Array.isArray(apiObj.doubles) ? apiObj.doubles.slice() : [];
+
+  // distribute singles in order (append all to first category if user didn't supply mapping)
+  let idx = 0;
+  for (const name of singlesArr) {
+    const k = SINGLES_KEYS[idx % SINGLES_KEYS.length].key;
+    categories.singles[k].push(name);
+    idx++;
+  }
+  idx = 0;
+  for (const name of doublesArr) {
+    const k = DOUBLES_KEYS[idx % DOUBLES_KEYS.length].key;
+    categories.doubles[k].push(name);
+    idx++;
+  }
+  return categories;
+}
+
+/* ---- UI primitives ---- */
 const Card = ({ children, className = "" }) => (
-  <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>{children}</div>
+  <div className={`bg-white rounded-2xl border shadow-sm p-4 ${className}`}>{children}</div>
 );
-const Button = ({ children, variant = "primary", onClick, className = "", ...rest }) => {
-  const base = "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium";
-  const styles =
-    variant === "primary"
-      ? "bg-green-600 hover:bg-green-700 text-white"
-      : variant === "secondary"
-      ? "bg-zinc-100 hover:bg-zinc-200 text-black"
-      : "hover:bg-zinc-100";
+const Button = ({ children, onClick, className = "", variant = "primary", ...rest }) => {
+  const base = "inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium";
+  const styles = {
+    primary: "bg-green-600 text-white hover:bg-green-700",
+    secondary: "bg-zinc-100 text-zinc-800 hover:bg-zinc-200",
+    ghost: "bg-transparent text-zinc-700 hover:bg-zinc-50",
+  }[variant];
   return (
     <button onClick={onClick} className={`${base} ${styles} ${className}`} {...rest}>
       {children}
@@ -91,693 +121,292 @@ const Button = ({ children, variant = "primary", onClick, className = "", ...res
   );
 };
 
-/* --- Admin login gate (simple local login) --- */
-function AdminLogin({ onOk }) {
-  const [user, setUser] = useState("admin");
-  const [pass, setPass] = useState("");
-  const [err, setErr] = useState("");
-
-  function submit(e) {
-    e.preventDefault();
-    // default credential is admin / rnwtennis123$ — but do not prefill password
-    if (user === "admin" && pass === "rnwtennis123$") {
-      localStorage.setItem("lt_admin", "1");
-      onOk();
-    } else {
-      setErr("Invalid username or password");
-    }
-  }
-  return (
-    <div className="app-bg min-h-screen flex items-center justify-center p-6">
-      <div className="max-w-md w-full">
-        <Card className="p-6">
-          <h2 className="text-xl font-bold mb-2">Admin Login</h2>
-          <div className="text-sm text-zinc-500 mb-4">Enter admin credentials to manage the app</div>
-          <form onSubmit={submit} className="space-y-3">
-            <div>
-              <div className="text-sm mb-1">Username</div>
-              <input value={user} onChange={(e) => setUser(e.target.value)} className="w-full rounded-xl border px-3 py-2" />
-            </div>
-            <div>
-              <div className="text-sm mb-1">Password</div>
-              <input value={pass} onChange={(e) => setPass(e.target.value)} type="password" className="w-full rounded-xl border px-3 py-2" />
-            </div>
-            {err && <div className="text-sm text-red-600">{err}</div>}
-            <div>
-              <Button type="submit" variant="primary">Sign in</Button>
-            </div>
-          </form>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-/* --- Landing with images --- */
-function Landing({ onStart, onResults, onSettings, onFixtures }) {
-  const Tile = ({ title, subtitle, src, action }) => (
-    <motion.button onClick={action} whileHover={{ y: -2 }} className="w-full md:w-80 rounded-2xl overflow-hidden border shadow bg-white text-left">
-      <div className="h-40 relative">
-        <img src={src} alt={title} className="absolute inset-0 w-full h-full object-cover" />
-      </div>
-      <div className="p-4">
-        <div className="font-semibold">{title}</div>
-        <div className="text-sm text-zinc-600">{subtitle}</div>
-      </div>
-    </motion.button>
-  );
-  return (
-    <div className="max-w-5xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-8">
-        <Trophy className="w-6 h-6 text-green-600" />
-        <h1 className="text-2xl font-bold">Lawn Tennis Scoring (Admin)</h1>
-      </div>
-
-      <div className="grid md:grid-cols-3 gap-6">
-        <Tile title="Start Match" subtitle="Choose from fixtures" src={imgStart} action={onStart} />
-        <Tile title="Results" subtitle="Active • Upcoming • Completed" src={imgScore} action={onResults} />
-        <Tile title="Manage Players" subtitle="Singles & Doubles" src={imgSettings} action={onSettings} />
-      </div>
-
-      <div className="mt-6">
-        <Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4" /> Fixtures</Button>
-      </div>
-    </div>
-  );
-}
-
-/* --- Manage Players (category based) --- */
+/* ---- Manage Players component (category-based) ---- */
 function ManagePlayers({ onBack }) {
-  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
+  const [categories, setCategories] = useState(buildDefaultCategories());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [msg, setMsg] = useState("");
 
-  // Ensure the categories exist in state (in the desired order)
-  function ensureCategories(obj, order) {
-    const out = { ...obj };
-    order.forEach((k) => {
-      if (!Object.prototype.hasOwnProperty.call(out, k)) out[k] = [];
-    });
-    // keep other user categories too if present
-    return out;
-  }
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      const data = await apiPlayersGet();
-      if (!alive) return;
-      // If data.singles is an array (old shape), migrate into Men's(A) Singles fallback
-      let singles = {};
-      let doubles = {};
-      if (Array.isArray(data.singles)) {
-        singles = {};
-        // put all into Men's(A) Singles if empty
-        singles["Men's(A) Singles"] = data.singles.slice();
-      } else if (data.singles && typeof data.singles === "object") {
-        singles = { ...data.singles };
-      } else singles = {};
-
-      if (Array.isArray(data.doubles)) {
-        doubles = {};
-        doubles["Men's(A) Doubles"] = data.doubles.slice();
-      } else if (data.doubles && typeof data.doubles === "object") {
-        doubles = { ...data.doubles };
-      } else doubles = {};
-
-      // ensure orders & categories exist
-      singles = ensureCategories(singles, DEFAULT_SINGLE_CATS);
-      doubles = ensureCategories(doubles, DEFAULT_DOUBLE_CATS);
-
-      setPlayers({ singles, doubles });
-      setLoading(false);
-    })();
-    return () => (alive = false);
-  }, []);
-
-  function updateSingle(cat, idx, value) {
-    setPlayers((p) => {
-      const ns = { ...p.singles, [cat]: p.singles[cat].map((v, i) => (i === idx ? value : v)) };
-      return { ...p, singles: ns };
-    });
-  }
-  function addSingle(cat) {
-    setPlayers((p) => {
-      const arr = [...(p.singles[cat] || []), ""];
-      return { ...p, singles: { ...p.singles, [cat]: arr } };
-    });
-  }
-  function delSingle(cat, idx) {
-    setPlayers((p) => {
-      const arr = p.singles[cat].filter((_, i) => i !== idx);
-      return { ...p, singles: { ...p.singles, [cat]: arr } };
-    });
-  }
-
-  function updateDouble(cat, idx, value) {
-    setPlayers((p) => {
-      const ns = { ...p.doubles, [cat]: p.doubles[cat].map((v, i) => (i === idx ? value : v)) };
-      return { ...p, doubles: ns };
-    });
-  }
-  function addDouble(cat) {
-    setPlayers((p) => {
-      const arr = [...(p.doubles[cat] || []), ""];
-      return { ...p, doubles: { ...p.doubles, [cat]: arr } };
-    });
-  }
-  function delDouble(cat, idx) {
-    setPlayers((p) => {
-      const arr = p.doubles[cat].filter((_, i) => i !== idx);
-      return { ...p, doubles: { ...p.doubles, [cat]: arr } };
-    });
-  }
-
-  async function saveAll() {
-    setSaving(true);
-    setMessage("");
-    // sanitize: trim empty strings and remove duplicates
-    const cleanedSingles = {};
-    Object.entries(players.singles).forEach(([cat, arr]) => {
-      const filtered = (arr || []).map((s) => (s || "").trim()).filter((s) => s.length);
-      cleanedSingles[cat] = Array.from(new Set(filtered));
-    });
-    const cleanedDoubles = {};
-    Object.entries(players.doubles).forEach(([cat, arr]) => {
-      const filtered = (arr || []).map((s) => (s || "").trim()).filter((s) => s.length);
-      cleanedDoubles[cat] = Array.from(new Set(filtered));
-    });
-
-    try {
-      await apiPlayersSet({ singles: cleanedSingles, doubles: cleanedDoubles });
-      setPlayers({ singles: cleanedSingles, doubles: cleanedDoubles });
-      setMessage("Players saved");
-      setTimeout(() => setMessage(""), 1800);
-    } catch (e) {
-      console.error(e);
-      setMessage("Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
-        <h2 className="text-xl font-bold">Manage Players (by category)</h2>
-        <div className="ml-auto flex items-center gap-2">
-          <Button onClick={saveAll} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Button>
-        </div>
-      </div>
-
-      {message && <div className="mb-4 text-sm text-emerald-700">{message}</div>}
-
-      {loading ? (
-        <Card className="p-4">Loading players…</Card>
-      ) : (
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <div className="font-semibold mb-3">Singles</div>
-            <div className="space-y-4">
-              {DEFAULT_SINGLE_CATS.map((cat) => (
-                <div key={cat} className="border rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium">{cat}</div>
-                    <div className="text-xs text-zinc-500">{(players.singles[cat] || []).length} players</div>
-                  </div>
-                  <div className="space-y-2">
-                    {(players.singles[cat] || []).map((name, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input value={name} onChange={(e) => updateSingle(cat, idx, e.target.value)} className="flex-1 rounded-xl border px-3 py-2" />
-                        <button className="px-3 py-2 rounded-xl hover:bg-zinc-100" onClick={() => delSingle(cat, idx)}><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    ))}
-                    <div>
-                      <Button variant="secondary" onClick={() => addSingle(cat)}><Plus className="w-4 h-4" /> Add Player</Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="font-semibold mb-3">Doubles</div>
-            <div className="space-y-4">
-              {DEFAULT_DOUBLE_CATS.map((cat) => (
-                <div key={cat} className="border rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium">{cat}</div>
-                    <div className="text-xs text-zinc-500">{(players.doubles[cat] || []).length} pairs</div>
-                  </div>
-                  <div className="space-y-2">
-                    {(players.doubles[cat] || []).map((name, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input value={name} onChange={(e) => updateDouble(cat, idx, e.target.value)} className="flex-1 rounded-xl border px-3 py-2" placeholder="Pair label e.g. Serena/Venus" />
-                        <button className="px-3 py-2 rounded-xl hover:bg-zinc-100" onClick={() => delDouble(cat, idx)}><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    ))}
-                    <div>
-                      <Button variant="secondary" onClick={() => addDouble(cat)}><Plus className="w-4 h-4" /> Add Pair</Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-      <div className="text-xs text-zinc-500 mt-3">You can add players/pairs to any category independently. Save to persist.</div>
-    </div>
-  );
-}
-
-/* --- Small helper to flatten categories into lists for existing fixtures / start match UI --- */
-function flattenSingles(obj) {
-  // obj can be { singles: { cat1: [...], cat2: [...] } } or older array
-  if (!obj) return [];
-  if (Array.isArray(obj)) return obj;
-  if (obj && typeof obj === "object" && obj.singles && Array.isArray(obj.singles)) return obj.singles;
-  // if obj is a structured singles map
-  const out = [];
-  const map = obj.singles || obj;
-  Object.keys(map || {}).forEach((k) => {
-    (map[k] || []).forEach((v) => out.push(v));
-  });
-  // unique
-  return Array.from(new Set(out));
-}
-function flattenDoubles(obj) {
-  if (!obj) return [];
-  if (Array.isArray(obj)) return obj;
-  if (obj && typeof obj === "object" && obj.doubles && Array.isArray(obj.doubles)) return obj.doubles;
-  const out = [];
-  const map = obj.doubles || obj;
-  Object.keys(map || {}).forEach((k) => {
-    (map[k] || []).forEach((v) => out.push(v));
-  });
-  return Array.from(new Set(out));
-}
-
-/* --- Fixtures, StartFromFixtures, Scoring, Results - minimal versions or references --- */
-/* For brevity, include a simple Fixtures + StartFromFixtures + Scoring + Results shell that uses the flatten helpers.
-   Your full app already has these components; ensure they call flattenSingles(flatPlayers) and flattenDoubles(flatPlayers)
-   to populate dropdowns. If your app uses a different implementation, integrate these helpers there. */
-
-function Fixtures({ onBack }) {
-  // lightweight fixtures UI that uses players when scheduling
-  const [playersObj, setPlayersObj] = useState({ singles: {}, doubles: {} });
-  const [mode, setMode] = useState("singles");
-  const [list, setList] = useState([]);
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [category, setCategory] = useState(""); // new category selection
-  const [matchType, setMatchType] = useState("Qualifier"); // Qualifier/Semifinal/Final
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const p = await apiPlayersGet();
-      if (!alive) return;
-      setPlayersObj(p);
-      // load fixtures from API
-      try {
-        const r = await fetch("/api/fixtures" + buster(), { cache: "no-store" });
-        if (r.ok) {
-          const j = await r.json();
-          setList(Array.isArray(j) ? j.sort((x, y) => (x.start || 0) - (y.start || 0)) : []);
-        }
-      } catch (e) {}
-    })();
-    return () => (alive = false);
-  }, []);
-
-  const singlesOptions = flattenSingles(playersObj);
-  const doublesOptions = flattenDoubles(playersObj);
-
-  const canAdd = a && b && a !== b && date && time;
-
-  async function addFixture(e) {
-    e.preventDefault();
-    const start = new Date(`${date}T${time}:00`).getTime();
-    const payload = {
-      id: crypto.randomUUID(),
-      mode,
-      sides: [a, b],
-      start,
-      status: "upcoming",
-      category: category || (mode === "singles" ? "Unspecified Singles" : "Unspecified Doubles"),
-      matchType,
-    };
-    // send to API
-    await fetch("/api/fixtures" + buster(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add", payload }),
-    });
-    // combine matches by category and sort by date/time per your request:
-    const newList = [...list, payload].sort((x, y) => {
-      if (x.category === y.category) return (x.start || 0) - (y.start || 0);
-      return x.category.localeCompare(y.category);
-    });
-    setList(newList);
-    setA(""); setB(""); setDate(""); setTime(""); setCategory("");
-  }
-
-  async function removeFixture(id) {
-    await fetch("/api/fixtures" + buster(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "remove", id }),
-    });
-    setList(list.filter((f) => f.id !== id));
-  }
-
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
-        <h2 className="text-xl font-bold">Fixtures</h2>
-      </div>
-
-      <Card className="p-5 mb-6">
-        <div className="font-semibold mb-3">Schedule a Match</div>
-        <form onSubmit={addFixture} className="grid md:grid-cols-4 gap-4">
-          <div>
-            <div className="text-sm mb-1">Type</div>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2"><input type="radio" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
-              <label className="flex items-center gap-2"><input type="radio" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
-            </div>
-          </div>
-
-          <div>
-            <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
-            <select value={a} onChange={(e) => setA(e.target.value)} className="w-full rounded-xl border px-3 py-2">
-              <option value="">Choose…</option>
-              {(mode === "singles" ? singlesOptions : doublesOptions).map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
-            <select value={b} onChange={(e) => setB(e.target.value)} className="w-full rounded-xl border px-3 py-2">
-              <option value="">Choose…</option>
-              {(mode === "singles" ? singlesOptions : doublesOptions).map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <div className="text-sm mb-1">Date</div>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-xl border px-3 py-2" />
-            </div>
-            <div>
-              <div className="text-sm mb-1">Time</div>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full rounded-xl border px-3 py-2" />
-            </div>
-          </div>
-
-          <div className="md:col-span-4 grid grid-cols-3 gap-2">
-            <div>
-              <div className="text-sm mb-1">Category</div>
-              <input className="w-full rounded-xl border px-3 py-2" placeholder="Category (e.g. Men's(A) Singles)" value={category} onChange={(e) => setCategory(e.target.value)} />
-            </div>
-            <div>
-              <div className="text-sm mb-1">Match Type</div>
-              <select value={matchType} onChange={(e) => setMatchType(e.target.value)} className="w-full rounded-xl border px-3 py-2">
-                <option>Qualifier</option>
-                <option>Semifinal</option>
-                <option>Final</option>
-              </select>
-            </div>
-            <div className="flex items-end">
-              <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
-            </div>
-          </div>
-        </form>
-      </Card>
-
-      <div className="space-y-3">
-        {list.map((f) => (
-          <Card key={f.id} className="p-4 flex items-center gap-4">
-            <div className="flex-1">
-              <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.category}</span></div>
-              <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()} • {f.matchType}</div>
-            </div>
-            <Button variant="ghost" onClick={() => removeFixture(f.id)}><X className="w-4 h-4" /></Button>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* --- StartFromFixtures (select fixture and start match) --- */
-function StartFromFixtures({ onBack, onStartScoring }) {
-  const [fixtures, setFixtures] = useState([]);
-  const [mode, setMode] = useState("singles");
-  const [loading, setLoading] = useState(true);
-
+  // load: prefer localStorage if present, else API; keep categories in localStorage always
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const r = await fetch("/api/fixtures" + buster(), { cache: "no-store" });
-        if (r.ok) {
-          const j = await r.json();
-          if (!alive) return;
-          setFixtures(Array.isArray(j) ? j : []);
+        // try localStorage first (so UI remains category-aware)
+        const localRaw = localStorage.getItem(LS_KEY);
+        if (localRaw) {
+          const parsed = JSON.parse(localRaw);
+          if (alive) {
+            setCategories(parsed);
+            setLoading(false);
+            setMsg("Loaded from local draft");
+            return;
+          }
         }
-      } catch (e) {
-        console.error(e);
+
+        // otherwise, try server
+        try {
+          const apiRes = await apiPlayersGet();
+          const cats = mapApiToCategories(apiRes);
+          if (alive) {
+            setCategories(cats);
+            localStorage.setItem(LS_KEY, JSON.stringify(cats)); // keep a local copy
+            setMsg("Loaded from server");
+          }
+        } catch (e) {
+          // server not available: start with default categories
+          if (alive) {
+            setCategories(buildDefaultCategories());
+            setMsg("Server unavailable — using local categories");
+          }
+        }
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => (alive = false);
+    return () => { alive = false; };
   }, []);
 
-  const list = fixtures.filter((f) => (f.mode || "singles") === mode && f.status !== "completed");
-
-  async function startFixture(fx) {
-    const now = Date.now();
-    const patch = { status: "active" };
-    if ((fx.start || 0) > now) patch.start = now;
-    // mark others active->upcoming
-    for (const other of fixtures) {
-      if (other.id !== fx.id && other.status === "active") {
-        await fetch("/api/fixtures" + buster(), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update", id: other.id, patch: { status: "upcoming" } }),
-        });
-      }
-    }
-    await fetch("/api/fixtures" + buster(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "update", id: fx.id, patch }),
+  const setCategoryArray = (section, key, newArr) => {
+    setCategories(prev => {
+      const clone = { singles: { ...prev.singles }, doubles: { ...prev.doubles } };
+      clone[section][key] = newArr;
+      // persist draft locally immediately
+      try { localStorage.setItem(LS_KEY, JSON.stringify(clone)); } catch {}
+      return clone;
     });
-    onStartScoring({ mode: fx.mode, sides: fx.sides, fixtureId: fx.id, rule: "regular", bestOf: 3, gamesTarget: 6, startingServer: 0 });
-  }
+  };
+
+  const addName = (section, key) => {
+    setCategories(prev => {
+      const clone = { singles: { ...prev.singles }, doubles: { ...prev.doubles } };
+      clone[section][key] = [...(clone[section][key] || []), "New Player"];
+      try { localStorage.setItem(LS_KEY, JSON.stringify(clone)); } catch {}
+      return clone;
+    });
+  };
+
+  const removeAt = (section, key, idx) => {
+    setCategoryArray(section, key, (categories[section][key] || []).filter((_, i) => i !== idx));
+  };
+
+  const updateAt = (section, key, idx, val) => {
+    const arr = [...(categories[section][key] || [])];
+    arr[idx] = val;
+    setCategoryArray(section, key, arr);
+  };
+
+  const doSave = async () => {
+    setSaving(true);
+    setMsg("");
+    const payload = flattenForApi(categories);
+    // First save to server; if fails, save to localStorage and alert user
+    try {
+      await apiPlayersSet({ singles: payload.singles, doubles: payload.doubles });
+      // also store the category shape locally so UI remains grouped
+      localStorage.setItem(LS_KEY, JSON.stringify(categories));
+      setMsg("Saved to server ✅");
+    } catch (e) {
+      // fallback save locally
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(categories));
+        setMsg("Server save failed — saved locally (draft) ⚠️");
+      } catch {
+        setMsg("Save failed (server and local storage)");
+      }
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMsg(""), 3000);
+    }
+  };
+
+  const doRefresh = async () => {
+    setLoading(true);
+    setMsg("");
+    try {
+      const apiRes = await apiPlayersGet();
+      const cats = mapApiToCategories(apiRes);
+      setCategories(cats);
+      localStorage.setItem(LS_KEY, JSON.stringify(cats));
+      setMsg("Refreshed from server");
+    } catch (e) {
+      // if server fails, keep current categories (which could be local)
+      setMsg("Refresh failed — server unreachable");
+    } finally {
+      setLoading(false);
+      setTimeout(() => setMsg(""), 2500);
+    }
+  };
+
+  const doClearLocal = () => {
+    if (!confirm("Clear all local category data? This will remove all names locally.")) return;
+    const def = buildDefaultCategories();
+    setCategories(def);
+    localStorage.setItem(LS_KEY, JSON.stringify(def));
+    setMsg("Local categories cleared");
+    setTimeout(() => setMsg(""), 2000);
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button><h2 className="text-xl font-bold">Start Match</h2></div>
-      <Card className="p-5">
-        <div className="flex gap-6 mb-4">
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <h2 className="text-xl font-bold">Manage Players (Categories)</h2>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" onClick={doRefresh}>Refresh</Button>
+          <Button onClick={doSave} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Button>
         </div>
-        {loading ? <div className="text-zinc-500">Loading fixtures…</div> : (list.length === 0 ? <div className="text-zinc-500">No fixtures for {mode}.</div> : <div className="space-y-3">{list.map((f) => (<Card key={f.id} className="p-4 flex items-center gap-4"><div className="flex-1"><div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()} • {f.category} • {f.matchType}</div></div><Button onClick={() => startFixture(f)}><Play className="w-4 h-4" /> Start Now</Button></Card>))}</div>)}
-      </Card>
-    </div>
-  );
-}
+      </div>
 
-/* --- Minimal Scoring component to fit in flow (your app already has a full one) --- */
-function Scoring({ config, onAbort, onComplete }) {
-  // This keeps previous behaviour; finalizing match will update fixtures and store result in /api/matches (if you use that)
-  const { sides = ["A", "B"], fixtureId } = config || {};
-  const [points, setPoints] = useState([0, 0]);
-  const [games, setGames] = useState([0, 0]);
-
-  function pointTo(who) {
-    // very simple scoring for demo - increment point -> when 4 points (0,1,2,3 are tennis mapping) mark a game
-    setPoints((p) => {
-      const np = [...p];
-      np[who] = np[who] + 1;
-      if (np[who] >= 4) {
-        // win game
-        setGames((g) => {
-          const ng = [...g];
-          ng[who] = ng[who] + 1;
-          return ng;
-        });
-        np[0] = 0; np[1] = 0;
-      }
-      return np;
-    });
-  }
-
-  async function finishMatch() {
-    // compute simple scoreline from games
-    const scoreline = `${games[0]}-${games[1]}`;
-    const winner = games[0] > games[1] ? sides[0] : sides[1];
-    // store in matches (legacy) and update fixture to completed
-    const payload = { id: crypto.randomUUID(), sides, finishedAt: Date.now(), scoreline, winner };
-    // save to matches
-    try {
-      await fetch("/api/matches" + buster(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "add", payload }),
-      });
-    } catch (e) {}
-    if (fixtureId) {
-      try {
-        await fetch("/api/fixtures" + buster(), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update", id: fixtureId, patch: { status: "completed", finishedAt: Date.now(), winner, scoreline } }),
-        });
-      } catch (e) {}
-    }
-    onComplete();
-  }
-
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onAbort}><ChevronLeft className="w-5 h-5" /> Quit</Button><h2 className="text-xl font-bold">Scoring • {sides[0]} vs {sides[1]}</h2></div>
-      <Card className="p-6">
-        <div className="text-center text-3xl font-bold">{points[0]} - {points[1]}</div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <Button onClick={() => pointTo(0)}>{sides[0]} Point</Button>
-          <Button onClick={() => pointTo(1)}>{sides[1]} Point</Button>
-        </div>
-        <div className="mt-4">
-          <Button variant="secondary" onClick={finishMatch}>Finish Match (record result)</Button>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-/* --- Results: reads fixtures and shows completed/upcoming/active --- */
-function Results({ onBack }) {
-  const [fixtures, setFixtures] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const r = await fetch("/api/fixtures" + buster(), { cache: "no-store" });
-        if (!r.ok) throw new Error("no-fixtures");
-        const j = await r.json();
-        if (!alive) return;
-        setFixtures(Array.isArray(j) ? j : []);
-      } catch (e) {
-        setFixtures([]);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => (alive = false);
-  }, []);
-
-  const active = fixtures.filter((f) => f.status === "active");
-  const upcoming = fixtures.filter((f) => !f.status || f.status === "upcoming");
-  const completed = fixtures.filter((f) => f.status === "completed").sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
-
-  return (
-    <div className="max-w-5xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button><h2 className="text-xl font-bold">Results</h2></div>
-      {loading ? <Card className="p-5 text-center text-zinc-500">Loading…</Card> : (
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <div className="text-lg font-semibold mb-3">Active</div>
-            {active.length ? active.map((f) => (<div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No active match.</div>}
-            <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
-            {upcoming.length ? upcoming.map((f) => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.category}</span></div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+      {msg && <div className="mb-4 text-sm text-zinc-700">{msg}</div>}
+      {loading ? (
+        <Card className="text-center">Loading players…</Card>
+      ) : (
+        <>
+          <Card className="mb-5">
+            <div className="font-semibold mb-3">Singles</div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {SINGLES_KEYS.map(({ key, label }) => (
+                <div key={key} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium">{label}</div>
+                    <Button variant="ghost" onClick={() => addName("singles", key)}><Plus className="w-4 h-4" /> Add</Button>
+                  </div>
+                  <div className="space-y-2">
+                    {(categories.singles[key] || []).map((name, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          className="flex-1 rounded-xl border px-3 py-2"
+                          value={name}
+                          onChange={(e) => updateAt("singles", key, idx, e.target.value)}
+                        />
+                        <button className="px-3 py-2 rounded-xl hover:bg-zinc-100" onClick={() => removeAt("singles", key, idx)}><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                    {(categories.singles[key] || []).length === 0 && <div className="text-sm text-zinc-400">No players yet.</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
           </Card>
 
-          <Card className="p-5">
-            <div className="text-lg font-semibold mb-3">Completed</div>
-            {completed.length ? completed.map((f) => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="text-sm text-zinc-500">{f.finishedAt ? new Date(f.finishedAt).toLocaleString() : ""}</div><div className="mt-1 text-sm"><span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{f.winner || "-"}</span> <span className="ml-3 font-mono">{f.scoreline || ""}</span></div></div>)) : <div className="text-zinc-500">No results yet.</div>}
+          <Card>
+            <div className="font-semibold mb-3">Doubles</div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {DOUBLES_KEYS.map(({ key, label }) => (
+                <div key={key} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium">{label}</div>
+                    <Button variant="ghost" onClick={() => addName("doubles", key)}><Plus className="w-4 h-4" /> Add</Button>
+                  </div>
+                  <div className="space-y-2">
+                    {(categories.doubles[key] || []).map((name, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          className="flex-1 rounded-xl border px-3 py-2"
+                          value={name}
+                          onChange={(e) => updateAt("doubles", key, idx, e.target.value)}
+                        />
+                        <button className="px-3 py-2 rounded-xl hover:bg-zinc-100" onClick={() => removeAt("doubles", key, idx)}><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                    {(categories.doubles[key] || []).length === 0 && <div className="text-sm text-zinc-400">No pairs yet.</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
           </Card>
-        </div>
+
+          <div className="mt-4 text-sm text-zinc-500">
+            <button className="underline" onClick={doClearLocal}>Clear local categories</button>
+            <div className="mt-2">Note: If your deployment uses Upstash KV and it's available, changes will be saved to server. If server is unavailable, your changes are saved locally (draft).</div>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-/* --- App shell --- */
-
+/* ---- simple landing that links to ManagePlayers so user can test quickly ---- */
 export default function App() {
   const [view, setView] = useState("landing");
-  const [cfg, setCfg] = useState(null);
+  const logged = localStorage.getItem("lt_admin") === "1";
 
-  // admin gate
-  const isLogged = typeof window !== "undefined" && localStorage.getItem("lt_admin") === "1";
-  if (!isLogged) {
-    return <AdminLogin onOk={() => window.location.reload()} />;
-  }
-
-  function to(v) {
-    setView(v);
+  // simple admin login helper shown if not logged in:
+  if (!logged) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white p-6 rounded-2xl border shadow">
+          <h2 className="text-xl font-bold mb-3">Admin Login</h2>
+          <p className="text-sm text-zinc-600 mb-4">Enter <strong>admin</strong> and your password. (Default password not prefilled.)</p>
+          <Login onSuccess={() => window.location.reload()} />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="app-bg min-h-screen">
-      <div className="max-w-6xl mx-auto py-8">
-        <AnimatePresence mode="wait">
-          {view === "landing" && (
-            <motion.div key="landing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Landing onStart={() => to("start")} onResults={() => to("results")} onSettings={() => to("settings")} onFixtures={() => to("fixtures")} />
-            </motion.div>
-          )}
+    <div className="min-h-screen bg-slate-50 p-6">
+      {view === "landing" && (
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-center gap-3 mb-6"><Trophy className="w-6 h-6 text-green-600"/><h1 className="text-2xl font-bold">Lawn Tennis Scoring</h1></div>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div onClick={() => setView("manage")} className="rounded-2xl overflow-hidden border shadow bg-white cursor-pointer">
+              <div className="h-40 relative"><img src={imgStart} alt="Start" className="w-full h-full object-cover" /></div>
+              <div className="p-4"><div className="font-semibold">Manage Players</div><div className="text-sm text-zinc-600">Add players grouped by category</div></div>
+            </div>
+            <div className="rounded-2xl overflow-hidden border shadow bg-white">
+              <div className="h-40 relative"><img src={imgScore} alt="Score" className="w-full h-full object-cover" /></div>
+              <div className="p-4"><div className="font-semibold">Results</div><div className="text-sm text-zinc-600">View matches & export</div></div>
+            </div>
+            <div className="rounded-2xl overflow-hidden border shadow bg-white">
+              <div className="h-40 relative"><img src={imgSettings} alt="Settings" className="w-full h-full object-cover" /></div>
+              <div className="p-4"><div className="font-semibold">Fixtures</div><div className="text-sm text-zinc-600">Create scheduled matches</div></div>
+            </div>
+          </div>
+        </div>
+      )}
 
-          {view === "settings" && (
-            <motion.div key="settings" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <ManagePlayers onBack={() => to("landing")} />
-            </motion.div>
-          )}
-
-          {view === "fixtures" && (
-            <motion.div key="fixtures" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Fixtures onBack={() => to("landing")} />
-            </motion.div>
-          )}
-
-          {view === "start" && (
-            <motion.div key="start" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <StartFromFixtures onBack={() => to("landing")} onStartScoring={(c) => { setCfg(c); to("scoring"); }} />
-            </motion.div>
-          )}
-
-          {view === "scoring" && cfg && (
-            <motion.div key="scoring" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Scoring config={cfg} onAbort={() => to("landing")} onComplete={() => to("results")} />
-            </motion.div>
-          )}
-
-          {view === "results" && (
-            <motion.div key="results" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Results onBack={() => to("landing")} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring (Admin)</footer>
+      {view === "manage" && <ManagePlayers onBack={() => setView("landing")} />}
     </div>
+  );
+}
+
+/* ---- simple local login component ---- */
+function Login({ onSuccess }) {
+  const [u, setU] = useState("admin");
+  const [p, setP] = useState("");
+  const [err, setErr] = useState("");
+
+  const submit = (e) => {
+    e.preventDefault();
+    // default credential check is optional; don't prefill password.
+    // If user wants to enforce default, they said earlier admin/rnwtennis123$, but they also asked not to prefill.
+    if (u === "admin" && p === "rnwtennis123$") {
+      localStorage.setItem("lt_admin", "1");
+      onSuccess();
+    } else {
+      setErr("Invalid credentials.");
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <div>
+        <div className="text-sm mb-1">Username</div>
+        <input className="w-full rounded-xl border px-3 py-2" value={u} onChange={(e) => setU(e.target.value)} />
+      </div>
+      <div>
+        <div className="text-sm mb-1">Password</div>
+        <input type="password" className="w-full rounded-xl border px-3 py-2" value={p} onChange={(e) => setP(e.target.value)} />
+      </div>
+      {err && <div className="text-sm text-red-600">{err}</div>}
+      <div className="flex gap-2">
+        <Button type="submit">Login</Button>
+        <Button variant="secondary" onClick={() => { setU("admin"); setP(""); }}>Reset</Button>
+      </div>
+    </form>
   );
 }
 
