@@ -263,54 +263,114 @@ function normalizePlayersApi(obj) {
 }
 
 /* ----------------- Settings (players) with categories ----------------- */
-const Settings = ({ onBack }) => {
-  // store category objects locally
-  const [singlesByCat, setSinglesByCat] = useState(() => {
-    const obj = {};
-    SINGLES_CATS.forEach((c) => (obj[c] = []));
-    return obj;
-  });
-  const [doublesByCat, setDoublesByCat] = useState(() => {
-    const obj = {};
-    DOUBLES_CATS.forEach((c) => (obj[c] = []));
-    return obj;
-  });
+/* ---------- Manage Players (Settings) component ---------- */
+/* Requires: React hooks, Button, Card, ChevronLeft, Plus, Trash2, RefreshCw available in file scope.
+   Also uses apiPlayersGet() and apiPlayersSet() defined elsewhere in your app. */
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [error, setError] = useState("");
+function Settings({ onBack }) {
+  const CATEGORY_ORDER_SINGLES = [
+    "Women's Singles",
+    "Kid's Singles",
+    "Men's(A) Singles",
+    "Men's(B) Singles"
+  ];
+  const CATEGORY_ORDER_DOUBLES = [
+    "Women's Doubles",
+    "Kid's Doubles",
+    "Men's(A) Doubles",
+    "Men's(B) Doubles",
+    "Mixed Doubles"
+  ];
 
-  const saveDraft = (sObj, dObj) => {
-    try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify({ singles: sObj, doubles: dObj })); } catch {}
+  // Local storage keys for fallback & drafts
+  const LS_PLAYERS = "lt_players_v2";
+  const LS_PLAYERS_DRAFT = "lt_players_draft_v2";
+
+  // state
+  const [players, setPlayers] = React.useState({
+    singles: {}, // { category: [names] }
+    doubles: {}  // { category: [pair labels] }
+  });
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [dirty, setDirty] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [toast, setToast] = React.useState({ show: false, text: "" });
+
+  // Helpers: draft localStorage
+  const saveDraft = (obj) => {
+    try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify(obj)); } catch {}
   };
   const loadDraft = () => {
-    try { const r = localStorage.getItem(LS_PLAYERS_DRAFT); return r ? JSON.parse(r) : null; } catch { return null; }
+    try {
+      const s = localStorage.getItem(LS_PLAYERS_DRAFT);
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
   };
   const clearDraft = () => { try { localStorage.removeItem(LS_PLAYERS_DRAFT); } catch {} };
 
-  useEffect(() => {
+  // Normalize ensure categories exist in state (preserve any existing players)
+  const ensureCategories = (p) => {
+    const out = { singles: {}, doubles: {} };
+    for (const c of CATEGORY_ORDER_SINGLES) out.singles[c] = (p.singles && p.singles[c]) ? [...p.singles[c]] : [];
+    for (const c of CATEGORY_ORDER_DOUBLES) out.doubles[c] = (p.doubles && p.doubles[c]) ? [...p.doubles[c]] : [];
+    return out;
+  };
+
+  // Load players from API or fallback to LS
+  React.useEffect(() => {
     let alive = true;
     (async () => {
-      const d = loadDraft();
-      if (d) {
-        // d might be saved as category-objects already
-        const np = normalizePlayersApi({ singles: d.singles, doubles: d.doubles });
-        if (!alive) return;
-        setSinglesByCat(np.singlesByCat);
-        setDoublesByCat(np.doublesByCat);
+      setLoading(true);
+      // if draft exists, load draft to allow editing unsaved changes
+      const draft = loadDraft();
+      if (draft) {
+        setPlayers(ensureCategories(draft));
         setDirty(true);
         setLoading(false);
         return;
       }
       try {
-        const obj = await apiPlayersGet();
+        const remote = await apiPlayersGet(); // should return an object
         if (!alive) return;
-        const np = normalizePlayersApi(obj);
-        setSinglesByCat(np.singlesByCat);
-        setDoublesByCat(np.doublesByCat);
-      } catch {
-        setError("Could not load players");
+        // If remote is flat arrays, try to detect old format (previous app versions)
+        // If remote.singles is an array -> convert to category "Unassigned"
+        let normalized = { singles: {}, doubles: {} };
+        if (remote && Array.isArray(remote.singles)) {
+          // Put them into Men's(A) Singles by default if empty – but safer: "Unassigned"
+          normalized.singles = { ...ensureCategories({ singles: {}, doubles: {} }).singles, "Unassigned": remote.singles };
+        } else {
+          normalized.singles = remote.singles ? { ...ensureCategories(remote).singles, ...remote.singles } : ensureCategories(remote).singles;
+        }
+        if (remote && Array.isArray(remote.doubles)) {
+          normalized.doubles = { ...ensureCategories({ singles: {}, doubles: {} }).doubles, "Unassigned": remote.doubles };
+        } else {
+          normalized.doubles = remote.doubles ? { ...ensureCategories(remote).doubles, ...remote.doubles } : ensureCategories(remote).doubles;
+        }
+        // Finally ensure categories order and presence
+        const finalState = ensureCategories(normalized);
+        // merge in any "Unassigned" if present
+        if (normalized.singles["Unassigned"] && normalized.singles["Unassigned"].length) {
+          finalState.singles["Women's Singles"] = [...normalized.singles["Unassigned"], ...finalState.singles["Women's Singles"]];
+        }
+        if (normalized.doubles["Unassigned"] && normalized.doubles["Unassigned"].length) {
+          finalState.doubles["Mixed Doubles"] = [...normalized.doubles["Unassigned"], ...finalState.doubles["Mixed Doubles"]];
+        }
+        setPlayers(finalState);
+      } catch (e) {
+        // API failed — fall back to LS saved players
+        try {
+          const stored = localStorage.getItem(LS_PLAYERS);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setPlayers(ensureCategories(parsed));
+          } else {
+            setPlayers(ensureCategories({}));
+          }
+        } catch (ex) {
+          setPlayers(ensureCategories({}));
+        }
+        setError("Could not load players from remote (KV). Working locally.");
       } finally {
         if (alive) setLoading(false);
       }
@@ -318,116 +378,160 @@ const Settings = ({ onBack }) => {
     return () => { alive = false; };
   }, []);
 
-  const markDirty = (sObj, dObj) => { setDirty(true); saveDraft(sObj, dObj); };
-
-  // helpers to update category lists immutably
-  const addToCat = (isSingles, cat) => {
-    if (isSingles) {
-      const next = { ...singlesByCat, [cat]: [...(singlesByCat[cat] || []), "New Player"] };
-      setSinglesByCat(next); markDirty(next, doublesByCat);
-    } else {
-      const next = { ...doublesByCat, [cat]: [...(doublesByCat[cat] || []), "Team X/Team Y"] };
-      setDoublesByCat(next); markDirty(singlesByCat, next);
-    }
-  };
-  const updateCatItem = (isSingles, cat, idx, value) => {
-    if (isSingles) {
-      const arr = [...(singlesByCat[cat] || [])]; arr[idx] = value;
-      const next = { ...singlesByCat, [cat]: arr }; setSinglesByCat(next); markDirty(next, doublesByCat);
-    } else {
-      const arr = [...(doublesByCat[cat] || [])]; arr[idx] = value;
-      const next = { ...doublesByCat, [cat]: arr }; setDoublesByCat(next); markDirty(singlesByCat, next);
-    }
-  };
-  const removeCatItem = (isSingles, cat, idx) => {
-    if (isSingles) {
-      const arr = (singlesByCat[cat] || []).filter((_, i) => i !== idx);
-      const next = { ...singlesByCat, [cat]: arr }; setSinglesByCat(next); markDirty(next, doublesByCat);
-    } else {
-      const arr = (doublesByCat[cat] || []).filter((_, i) => i !== idx);
-      const next = { ...doublesByCat, [cat]: arr }; setDoublesByCat(next); markDirty(singlesByCat, next);
-    }
+  // mark dirty and save draft
+  const markDirty = (newPlayers) => {
+    setDirty(true);
+    saveDraft(newPlayers);
+    setPlayers(newPlayers);
   };
 
-  const doSave = async () => {
-    setSaving(true); setError("");
+  // per-category helpers to add/update/delete
+  const addPlayerTo = (group, category) => {
+    const newPlayers = JSON.parse(JSON.stringify(players));
+    newPlayers[group][category] = [...(newPlayers[group][category] || []), (group === "singles" ? "New Player" : "Team X/Team Y")];
+    markDirty(newPlayers);
+  };
+  const updatePlayerAt = (group, category, idx, value) => {
+    const newPlayers = JSON.parse(JSON.stringify(players));
+    newPlayers[group][category][idx] = value;
+    markDirty(newPlayers);
+  };
+  const deletePlayerAt = (group, category, idx) => {
+    const newPlayers = JSON.parse(JSON.stringify(players));
+    newPlayers[group][category] = newPlayers[group][category].filter((_, i) => i !== idx);
+    markDirty(newPlayers);
+  };
+
+  // Save to remote (apiPlayersSet) and fallback to localStorage
+  const saveAll = async () => {
+    setSaving(true);
+    setError("");
     try {
-      // Save structure as category objects so categories remain
-      await apiPlayersSet({ singles: singlesByCat, doubles: doublesByCat });
+      // Send entire structured object to API
+      await apiPlayersSet(players);
+      // store locally too as fallback
+      try { localStorage.setItem(LS_PLAYERS, JSON.stringify(players)); } catch {}
       setDirty(false);
       clearDraft();
+      setToast({ show: true, text: "Players saved" });
+      setTimeout(() => setToast({ show: false, text: "" }), 1500);
     } catch (e) {
-      console.error(e);
-      setError("Save failed. Keep editing and try again.");
-      saveDraft(singlesByCat, doublesByCat);
-      setDirty(true);
+      // fallback: save to localStorage and keep dirty true
+      try {
+        localStorage.setItem(LS_PLAYERS, JSON.stringify(players));
+        setError("Remote save failed — saved locally. Will retry when KV is available.");
+        setToast({ show: true, text: "Saved locally (remote failed)" });
+        setTimeout(() => setToast({ show: false, text: "" }), 2500);
+      } catch (ex) {
+        setError("Save failed (remote and local storage failed).");
+      }
     } finally {
       setSaving(false);
     }
   };
 
+  // Refresh: re-fetch remote and discard draft (confirm if dirty)
+  const refresh = async () => {
+    if (dirty && !confirm("You have unsaved changes. Refresh will discard them. Continue?")) return;
+    setLoading(true);
+    setError("");
+    try {
+      const remote = await apiPlayersGet();
+      if (remote && (remote.singles || remote.doubles)) {
+        setPlayers(ensureCategories(remote));
+        localStorage.setItem(LS_PLAYERS, JSON.stringify(ensureCategories(remote)));
+        clearDraft();
+        setDirty(false);
+      } else {
+        // if returned arrays handle gracefully
+        setPlayers(ensureCategories(remote || {}));
+      }
+    } catch (e) {
+      setError("Refresh failed (KV unreachable).");
+      // try local store
+      try {
+        const st = localStorage.getItem(LS_PLAYERS);
+        if (st) setPlayers(JSON.parse(st));
+      } catch {}
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // UI render helpers for grouped lists
+  const renderCategoryList = (group, category) => {
+    const list = (players[group] && players[group][category]) || [];
+    return (
+      <div key={category} className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-semibold">{category}</div>
+          <button className="text-sm text-zinc-500" onClick={() => addPlayerTo(group, category)}>+ Add</button>
+        </div>
+        <div className="space-y-2">
+          {list.map((name, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <input
+                className="flex-1 rounded-xl border px-3 py-2"
+                value={name}
+                onChange={(e) => updatePlayerAt(group, category, idx, e.target.value)}
+              />
+              <button
+                title="Delete"
+                onClick={() => deletePlayerAt(group, category, idx)}
+                className="px-3 py-2 rounded-xl hover:bg-zinc-100"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6">
+      {toast.show && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-emerald-600 text-white shadow-lg">
+          {toast.text}
+        </div>
+      )}
+
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
         <h2 className="text-xl font-bold">Manage Players</h2>
-        <div className="ml-auto"><Button onClick={doSave} disabled={!dirty || saving}>{saving ? "Saving…" : "Save Changes"}</Button></div>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" onClick={refresh}><RefreshCw className="w-4 h-4" /> Refresh</Button>
+          <Button onClick={saveAll} disabled={!dirty || saving}>{saving ? "Saving…" : "Save Changes"}</Button>
+        </div>
       </div>
+
       {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200 rounded-xl">{error}</Card>}
+
       {loading ? (
-        <Card className="p-5 text-center text-zinc-500">Loading…</Card>
+        <Card className="p-5 text-center text-zinc-500">Loading players…</Card>
       ) : (
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Singles column: iterate categories in requested order */}
           <Card className="p-5">
             <div className="font-semibold mb-3">Singles</div>
-            <div className="space-y-4">
-              {SINGLES_CATS.map((cat) => (
-                <div key={cat} className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium">{cat}</div>
-                    <Button variant="secondary" onClick={() => addToCat(true, cat)}><Plus className="w-4 h-4" /> Add</Button>
-                  </div>
-                  <div className="space-y-2">
-                    {(singlesByCat[cat] || []).map((name, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updateCatItem(true, cat, idx, e.target.value)} />
-                        <button onClick={() => removeCatItem(true, cat, idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div>
+              {CATEGORY_ORDER_SINGLES.map(cat => renderCategoryList("singles", cat))}
             </div>
           </Card>
 
-          {/* Doubles column */}
           <Card className="p-5">
             <div className="font-semibold mb-3">Doubles</div>
-            <div className="space-y-4">
-              {DOUBLES_CATS.map((cat) => (
-                <div key={cat} className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium">{cat}</div>
-                    <Button variant="secondary" onClick={() => addToCat(false, cat)}><Plus className="w-4 h-4" /> Add</Button>
-                  </div>
-                  <div className="space-y-2">
-                    {(doublesByCat[cat] || []).map((name, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updateCatItem(false, cat, idx, e.target.value)} />
-                        <button onClick={() => removeCatItem(false, cat, idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div>
+              {CATEGORY_ORDER_DOUBLES.map(cat => renderCategoryList("doubles", cat))}
             </div>
           </Card>
         </div>
       )}
+
+      <div className="text-xs text-zinc-500 mt-3">{dirty ? "You have unsaved changes." : "All changes saved."}</div>
     </div>
   );
-};
+}
 
 
 /* ----------------- Fixtures (create/list/remove) ----------------- */
