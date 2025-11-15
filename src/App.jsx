@@ -1,8 +1,9 @@
+// App.jsx
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
 
-// ✅ Images live in src/ (same folder as this file or adjust paths accordingly)
+// Images in src/
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
@@ -30,6 +31,7 @@ const apiPlayersSet = async (obj) => {
   });
   if (!r.ok) throw 0;
 };
+
 const apiMatchesList = async () => {
   try {
     const r = await fetch("/api/matches" + buster(), { cache: "no-store" });
@@ -94,7 +96,7 @@ const apiFixturesUpdate = async (id, patch) => {
 
 /* ----------------- UI primitives ----------------- */
 const Card = ({ className = "", children }) => (
-  <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>{children}</div>
+  <div className={bg-white rounded-2xl shadow border border-zinc-200 ${className}}>{children}</div>
 );
 const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled }) => {
   const base = "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium";
@@ -108,7 +110,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", type =
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`${base} ${styles} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
+      className={${base} ${styles} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}}
     >
       {children}
     </button>
@@ -197,37 +199,43 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
   );
 };
 
-/* ----------------- Settings (players) with categories ----------------- */
-/*
- Categories and the order used when saving:
-  Singles: Women's Singles, Kid's Singles, Men's(A) Singles, Men's(B) Singles
-  Doubles: Women's Doubles, Kid's Doubles, Men's(A) Doubles, Men's(B) Doubles, Mixed Doubles
-*/
+/* ----------------- Settings (players) - with categories ----------------- */
 const Settings = ({ onBack }) => {
-  const initialPlayers = {
-    singles: {
-      womens: [],
-      kids: [],
-      mensA: [],
-      mensB: []
-    },
-    doubles: {
-      womens: [],
-      kids: [],
-      mensA: [],
-      mensB: [],
-      mixed: []
-    }
-  };
+  // category definitions and order requested (unique)
+  const SINGLES_CATEGORIES = [
+    "Women's Singles",
+    "Kid's Singles",
+    "Men's(A) Singles",
+    "Men's(B) Singles",
+  ];
+  const DOUBLES_CATEGORIES = [
+    "Women's Doubles",
+    "Kid's Doubles",
+    "Men's(A) Doubles",
+    "Men's(B) Doubles",
+    "Mixed Doubles",
+  ];
 
-  const [players, setPlayers] = useState(initialPlayers);
+  // state: structured by category
+  const [singlesByCat, setSinglesByCat] = useState({});
+  const [doublesByCat, setDoublesByCat] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [toast, setToast] = useState({ show: false, text: "" });
   const [error, setError] = useState("");
 
-  const saveDraft = (pl) => {
-    try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify(pl)); } catch {}
+  // utility: ensure category keys exist
+  const ensureCats = (sObj, dObj) => {
+    const s = { ...sObj };
+    const d = { ...dObj };
+    SINGLES_CATEGORIES.forEach((c) => { if (!Array.isArray(s[c])) s[c] = []; });
+    DOUBLES_CATEGORIES.forEach((c) => { if (!Array.isArray(d[c])) d[c] = []; });
+    return [s, d];
+  };
+
+  const saveDraft = (s, d) => {
+    try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify({ singles: s, doubles: d })); } catch {}
   };
   const loadDraft = () => {
     try { const r = localStorage.getItem(LS_PLAYERS_DRAFT); return r ? JSON.parse(r) : null; } catch { return null; }
@@ -237,29 +245,61 @@ const Settings = ({ onBack }) => {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const draft = loadDraft();
-      if (draft) {
-        setPlayers(draft);
+      const dft = loadDraft();
+      if (dft) {
+        const [s, d] = ensureCats(dft.singles || {}, dft.doubles || {});
+        setSinglesByCat(s);
+        setDoublesByCat(d);
         setDirty(true);
         setLoading(false);
         return;
       }
-      try {
-        const obj = await apiPlayersGet(); // obj.singles[], obj.doubles[]
-        if (!alive) return;
 
-        // Map flattened arrays into categories:
-        // For existing data we don't have category labels, so put them into first category so they are visible.
-        const p = { ...initialPlayers };
-        if (obj && Array.isArray(obj.singles) && obj.singles.length) {
-          p.singles.womens = obj.singles.slice(); // put all loaded singles into women's slot (admin can re-categorize)
+      try {
+        const obj = await apiPlayersGet();
+        // Backwards compatibility:
+        // If obj.singles is an array => old format; put into Men's(A) Singles by default
+        let sObj = {};
+        let dObj = {};
+        if (Array.isArray(obj.singles) && Array.isArray(obj.doubles)) {
+          // old format: arrays -> put entire array into first sensible category
+          sObj = {};
+          dObj = {};
+          SINGLES_CATEGORIES.forEach((c) => (sObj[c] = []));
+          DOUBLES_CATEGORIES.forEach((c) => (dObj[c] = []));
+          // default mapping: existing singles -> Men's(A) Singles; doubles -> Men's(A) Doubles
+          sObj["Men's(A) Singles"] = obj.singles.slice();
+          dObj["Men's(A) Doubles"] = obj.doubles.slice();
+        } else {
+          // object format: assume keys are category names or nested structure
+          // if obj.singles is an object with category arrays, use directly
+          if (obj.singles && typeof obj.singles === "object" && !Array.isArray(obj.singles)) {
+            sObj = { ...obj.singles };
+          } else {
+            // none -> initialize
+            sObj = {};
+          }
+          if (obj.doubles && typeof obj.doubles === "object" && !Array.isArray(obj.doubles)) {
+            dObj = { ...obj.doubles };
+          } else {
+            dObj = {};
+          }
         }
-        if (obj && Array.isArray(obj.doubles) && obj.doubles.length) {
-          p.doubles.womens = obj.doubles.slice(); // put all loaded doubles into women's slot
+        // ensure categories exist
+        const [sFinal, dFinal] = ensureCats(sObj, dObj);
+        if (alive) {
+          setSinglesByCat(sFinal);
+          setDoublesByCat(dFinal);
         }
-        setPlayers(p);
       } catch (e) {
-        setError("Could not load players");
+        console.warn("Could not load players:", e);
+        // still ensure empty cats
+        const [s, d] = ensureCats({}, {});
+        if (alive) {
+          setSinglesByCat(s);
+          setDoublesByCat(d);
+          setError("Could not load players (KV maybe off?). You can edit and Save to retry.");
+        }
       } finally {
         if (alive) setLoading(false);
       }
@@ -267,53 +307,64 @@ const Settings = ({ onBack }) => {
     return () => { alive = false; };
   }, []);
 
-  const markDirty = (newPlayers) => { setDirty(true); saveDraft(newPlayers); setPlayers(newPlayers); };
+  const markDirty = (s, d) => { setDirty(true); saveDraft(s, d); };
 
-  // helpers for editing categories
-  const updCategory = (type, cat, idx, value) => {
-    setPlayers(prev => {
-      const copy = JSON.parse(JSON.stringify(prev));
-      copy[type][cat][idx] = value;
-      saveDraft(copy); setDirty(true);
-      return copy;
-    });
+  // single/double category mutators
+  const addPlayer = (cat, isSingles) => {
+    if (isSingles) {
+      const s = { ...singlesByCat };
+      s[cat] = [...(s[cat] || []), "New Player"];
+      setSinglesByCat(s);
+      markDirty(s, doublesByCat);
+    } else {
+      const d = { ...doublesByCat };
+      d[cat] = [...(d[cat] || []), "New Pair"];
+      setDoublesByCat(d);
+      markDirty(singlesByCat, d);
+    }
   };
-  const addToCategory = (type, cat) => {
-    setPlayers(prev => {
-      const copy = JSON.parse(JSON.stringify(prev));
-      copy[type][cat].push(type === "singles" ? "New Player" : "New Pair");
-      saveDraft(copy); setDirty(true);
-      return copy;
-    });
+  const updateEntry = (cat, idx, val, isSingles) => {
+    if (isSingles) {
+      const s = { ...singlesByCat };
+      s[cat] = s[cat].map((x, i) => (i === idx ? val : x));
+      setSinglesByCat(s);
+      markDirty(s, doublesByCat);
+    } else {
+      const d = { ...doublesByCat };
+      d[cat] = d[cat].map((x, i) => (i === idx ? val : x));
+      setDoublesByCat(d);
+      markDirty(singlesByCat, d);
+    }
   };
-  const delFromCategory = (type, cat, idx) => {
-    setPlayers(prev => {
-      const copy = JSON.parse(JSON.stringify(prev));
-      copy[type][cat] = copy[type][cat].filter((_,i)=>i!==idx);
-      saveDraft(copy); setDirty(true);
-      return copy;
-    });
+  const deleteEntry = (cat, idx, isSingles) => {
+    if (isSingles) {
+      const s = { ...singlesByCat };
+      s[cat] = s[cat].filter((_, i) => i !== idx);
+      setSinglesByCat(s);
+      markDirty(s, doublesByCat);
+    } else {
+      const d = { ...doublesByCat };
+      d[cat] = d[cat].filter((_, i) => i !== idx);
+      setDoublesByCat(d);
+      markDirty(singlesByCat, d);
+    }
   };
 
-  // Flatten in requested order for saving to backend
-  const flattenForSave = () => {
-    const singlesOrder = ["womens", "kids", "mensA", "mensB"];
-    const doublesOrder = ["womens", "kids", "mensA", "mensB", "mixed"];
-    const singlesFlat = singlesOrder.flatMap(k => players.singles[k] || []);
-    const doublesFlat = doublesOrder.flatMap(k => players.doubles[k] || []);
-    return { singles: singlesFlat, doubles: doublesFlat };
-  };
-
-  const onSave = async () => {
+  const saveAll = async () => {
     setSaving(true); setError("");
     try {
-      const payload = flattenForSave();
-      await apiPlayersSet(payload);
+      // store the structured object: { singles: {cat:[]}, doubles:{cat:[] } }
+      await apiPlayersSet({ singles: singlesByCat, doubles: doublesByCat });
       setDirty(false);
       clearDraft();
+      setToast({ show: true, text: "Players saved" });
+      setTimeout(() => setToast({ show: false, text: "" }), 1500);
     } catch (e) {
-      console.error(e);
-      setError("Save failed");
+      console.error("Save failed", e);
+      setError("Save failed. Keep editing and try again.");
+      // keep draft
+      saveDraft(singlesByCat, doublesByCat);
+      setDirty(true);
     } finally {
       setSaving(false);
     }
@@ -321,11 +372,12 @@ const Settings = ({ onBack }) => {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      {toast.show && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-emerald-600 text-white shadow-lg">{toast.text}</div>}
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
         <h2 className="text-xl font-bold">Manage Players</h2>
-        <div className="ml-auto">
-          <Button onClick={onSave} disabled={!dirty || saving}>{saving ? "Saving…" : "Save Changes"}</Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" onClick={saveAll} disabled={!dirty || saving}>{saving ? "Saving…" : "Save Changes"}</Button>
         </div>
       </div>
 
@@ -334,163 +386,657 @@ const Settings = ({ onBack }) => {
       {loading ? (
         <Card className="p-5 text-center text-zinc-500">Loading…</Card>
       ) : (
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <div className="font-semibold mb-3">Singles</div>
+            <div className="space-y-6">
+              {SINGLES_CATEGORIES.map((cat) => (
+                <div key={cat} className="border rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium">{cat}</div>
+                    <div>
+                      <Button variant="ghost" onClick={() => addPlayer(cat, true)}><Plus className="w-4 h-4" /></Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {(singlesByCat[cat] || []).map((name, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updateEntry(cat, idx, e.target.value, true)} />
+                        <button onClick={() => deleteEntry(cat, idx, true)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                    {/* friendly empty state */}
+                    {(!singlesByCat[cat] || singlesByCat[cat].length === 0) && <div className="text-sm text-zinc-500">No players yet. Click + to add.</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="font-semibold mb-3">Doubles</div>
+            <div className="space-y-6">
+              {DOUBLES_CATEGORIES.map((cat) => (
+                <div key={cat} className="border rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium">{cat}</div>
+                    <div>
+                      <Button variant="ghost" onClick={() => addPlayer(cat, false)}><Plus className="w-4 h-4" /></Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {(doublesByCat[cat] || []).map((name, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updateEntry(cat, idx, e.target.value, false)} />
+                        <button onClick={() => deleteEntry(cat, idx, false)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                    {(!doublesByCat[cat] || doublesByCat[cat].length === 0) && <div className="text-sm text-zinc-500">No pairs yet. Click + to add.</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      <div className="text-xs text-zinc-500 mt-3">{dirty ? "You have unsaved changes." : "All changes saved."}</div>
+    </div>
+  );
+};
+
+/* ----------------- Fixtures (create/list/remove) ----------------- */
+// (unchanged from previous implementation; uses apiPlayersGet)
+const Fixtures = ({ onBack }) => {
+  const [players, setPlayers] = useState({ singles: [], doubles: [] });
+  const [mode, setMode] = useState("singles");
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const p = await apiPlayersGet(); if (alive) setPlayers(p); } catch {}
+      try { const fx = await apiFixturesList(); if (alive) setList(fx); } catch {}
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // options for selects: if players.singles/doubles are objects with categories, flatten them
+  const flattenPlayers = (obj) => {
+    if (!obj) return [];
+    if (Array.isArray(obj)) return obj;
+    // obj is map of categories -> arrays
+    return Object.keys(obj).reduce((acc, k) => acc.concat(obj[k] || []), []).filter(Boolean);
+  };
+
+  const options = mode === "singles" ? flattenPlayers(players.singles) : flattenPlayers(players.doubles);
+  const canAdd = a && b && a !== b && date && time;
+
+  const add = async (e) => {
+    e.preventDefault();
+    const start = new Date(${date}T${time}:00).getTime();
+    const payload = { id: crypto.randomUUID(), mode, sides: [a, b], start, status: "upcoming" };
+    await apiFixturesAdd(payload);
+    setList(prev => [...prev, payload].sort((x, y) => x.start - y.start));
+    setA(""); setB(""); setDate(""); setTime("");
+  };
+  const remove = async (id) => {
+    await apiFixturesRemove(id);
+    setList(prev => prev.filter(f => f.id !== id));
+  };
+  const clear = async () => {
+    if (!confirm("Clear ALL fixtures?")) return;
+    await apiFixturesClear();
+    setList([]);
+  };
+  const refresh = async () => { setList(await apiFixturesList()); };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <h2 className="text-xl font-bold">Fixtures</h2>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" onClick={refresh}><RefreshCw className="w-4 h-4" /> Refresh</Button>
+          <Button variant="secondary" onClick={clear}>Clear All</Button>
+        </div>
+      </div>
+      {loading ? (
+        <Card className="p-5 text-center text-zinc-500">Loading…</Card>
+      ) : (
         <>
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Singles categories */}
-            <Card className="p-5">
-              <div className="font-semibold mb-3">Singles</div>
-
-              <div className="mb-4">
-                <div className="text-sm font-medium mb-2">Women's Singles</div>
-                <div className="space-y-2">
-                  {players.singles.womens.map((name, idx) => (
-                    <div key={"w-"+idx} className="flex items-center gap-2">
-                      <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updCategory("singles","womens",idx,e.target.value)} />
-                      <button onClick={()=>delFromCategory("singles","womens",idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                  ))}
-                  <Button variant="secondary" onClick={()=>addToCategory("singles","womens")}><Plus className="w-4 h-4"/> Add Player</Button>
+          <Card className="p-5 mb-6">
+            <div className="font-semibold mb-3">Schedule a Match</div>
+            <form onSubmit={add} className="grid md:grid-cols-4 gap-4">
+              <div className="md:col-span-1">
+                <div className="text-sm mb-1">Type</div>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
                 </div>
               </div>
-
-              <div className="mb-4">
-                <div className="text-sm font-medium mb-2">Kid's Singles</div>
-                <div className="space-y-2">
-                  {players.singles.kids.map((name, idx) => (
-                    <div key={"k-"+idx} className="flex items-center gap-2">
-                      <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updCategory("singles","kids",idx,e.target.value)} />
-                      <button onClick={()=>delFromCategory("singles","kids",idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                  ))}
-                  <Button variant="secondary" onClick={()=>addToCategory("singles","kids")}><Plus className="w-4 h-4"/> Add Player</Button>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <div className="text-sm font-medium mb-2">Men's (A) Singles</div>
-                <div className="space-y-2">
-                  {players.singles.mensA.map((name, idx) => (
-                    <div key={"ma-"+idx} className="flex items-center gap-2">
-                      <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updCategory("singles","mensA",idx,e.target.value)} />
-                      <button onClick={()=>delFromCategory("singles","mensA",idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                  ))}
-                  <Button variant="secondary" onClick={()=>addToCategory("singles","mensA")}><Plus className="w-4 h-4"/> Add Player</Button>
-                </div>
-              </div>
-
               <div>
-                <div className="text-sm font-medium mb-2">Men's (B) Singles</div>
-                <div className="space-y-2">
-                  {players.singles.mensB.map((name, idx) => (
-                    <div key={"mb-"+idx} className="flex items-center gap-2">
-                      <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updCategory("singles","mensB",idx,e.target.value)} />
-                      <button onClick={()=>delFromCategory("singles","mensB",idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                  ))}
-                  <Button variant="secondary" onClick={()=>addToCategory("singles","mensB")}><Plus className="w-4 h-4"/> Add Player</Button>
-                </div>
+                <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
+                  <option value="">Choose…</option>
+                  {options.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
               </div>
-            </Card>
-
-            {/* Doubles categories */}
-            <Card className="p-5">
-              <div className="font-semibold mb-3">Doubles</div>
-
-              <div className="mb-4">
-                <div className="text-sm font-medium mb-2">Women's Doubles</div>
-                <div className="space-y-2">
-                  {players.doubles.womens.map((name, idx) => (
-                    <div key={"dw-"+idx} className="flex items-center gap-2">
-                      <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updCategory("doubles","womens",idx,e.target.value)} />
-                      <button onClick={()=>delFromCategory("doubles","womens",idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                  ))}
-                  <Button variant="secondary" onClick={()=>addToCategory("doubles","womens")}><Plus className="w-4 h-4"/> Add Pair</Button>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <div className="text-sm font-medium mb-2">Kid's Doubles</div>
-                <div className="space-y-2">
-                  {players.doubles.kids.map((name, idx) => (
-                    <div key={"dk-"+idx} className="flex items-center gap-2">
-                      <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updCategory("doubles","kids",idx,e.target.value)} />
-                      <button onClick={()=>delFromCategory("doubles","kids",idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                  ))}
-                  <Button variant="secondary" onClick={()=>addToCategory("doubles","kids")}><Plus className="w-4 h-4"/> Add Pair</Button>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <div className="text-sm font-medium mb-2">Men's (A) Doubles</div>
-                <div className="space-y-2">
-                  {players.doubles.mensA.map((name, idx) => (
-                    <div key={"dma-"+idx} className="flex items-center gap-2">
-                      <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updCategory("doubles","mensA",idx,e.target.value)} />
-                      <button onClick={()=>delFromCategory("doubles","mensA",idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                  ))}
-                  <Button variant="secondary" onClick={()=>addToCategory("doubles","mensA")}><Plus className="w-4 h-4"/> Add Pair</Button>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <div className="text-sm font-medium mb-2">Men's (B) Doubles</div>
-                <div className="space-y-2">
-                  {players.doubles.mensB.map((name, idx) => (
-                    <div key={"dmb-"+idx} className="flex items-center gap-2">
-                      <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updCategory("doubles","mensB",idx,e.target.value)} />
-                      <button onClick={()=>delFromCategory("doubles","mensB",idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                  ))}
-                  <Button variant="secondary" onClick={()=>addToCategory("doubles","mensB")}><Plus className="w-4 h-4"/> Add Pair</Button>
-                </div>
-              </div>
-
               <div>
-                <div className="text-sm font-medium mb-2">Mixed Doubles</div>
-                <div className="space-y-2">
-                  {players.doubles.mixed.map((name, idx) => (
-                    <div key={"dmx-"+idx} className="flex items-center gap-2">
-                      <input className="flex-1 rounded-xl border px-3 py-2" value={name} onChange={e => updCategory("doubles","mixed",idx,e.target.value)} />
-                      <button onClick={()=>delFromCategory("doubles","mixed",idx)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                  ))}
-                  <Button variant="secondary" onClick={()=>addToCategory("doubles","mixed")}><Plus className="w-4 h-4"/> Add Pair</Button>
-                </div>
+                <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
+                  <option value="">Choose…</option>
+                  {options.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
               </div>
-            </Card>
-          </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><div className="text-sm mb-1">Date</div><input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} /></div>
+                <div><div className="text-sm mb-1">Time</div><input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} /></div>
+              </div>
+              <div className="md:col-span-4">
+                <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
+              </div>
+            </form>
+          </Card>
 
-          <div className="text-xs text-zinc-500 mt-3">{dirty ? "You have unsaved changes." : "All changes saved."}</div>
+          {list.length === 0 ? (
+            <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card>
+          ) : (
+            <div className="space-y-3">
+              {list.map(f => (
+                <Card key={f.id} className="p-4 flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="font-semibold">
+                      {f.sides?.[0]} vs {f.sides?.[1]}{" "}
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>
+                    </div>
+                    <div className="text-sm text-zinc-500">
+                      {new Date(f.start).toLocaleString()}{" "}
+                      {f.status === "active" && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-emerald-600">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live
+                        </span>
+                      )}
+                      {f.status === "completed" && <span className="ml-2 text-zinc-500 text-xs">(completed)</span>}
+                    </div>
+                  </div>
+                  <Button variant="ghost" onClick={() => remove(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
+                </Card>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>
   );
 };
 
-/* ----------------- Fixtures, StartFromFixtures, Scoring, Results, Viewer, App shell ----------------- */
-/* The rest of the file keeps the same behavior as your current app:
-   - Fixtures component (create/list/remove)
-   - StartFromFixtures (select fixture and Start)
-   - Scoring (Fast4 rules you already had)
-   - Results + Viewer
-   I did not change those except to keep saving/loading players compatible.
-*/
+/* ----------------- Start Match (from fixtures) ----------------- */
+function StartFromFixtures({ onBack, onStartScoring }) {
+  const [mode, setMode] = useState("singles");
+  const [fixtures, setFixtures] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-/* ----------------- For brevity: reuse components you already have below unchanged ----------------- */
-/* If you want, I can paste the entire file again with the unchanged components appended.
-   But to avoid duplication in this message, please keep the rest of your App.jsx as-is and
-   replace only the Settings component with the code above.
-*/
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const fx = await apiFixturesList(); if (alive) setFixtures(fx); }
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, []);
 
-/* ----------------- If you want the full file as a single paste (complete), I can provide that too. ----------------- */
+  const list = fixtures.filter(f => (f.mode || "singles") === mode && f.status !== "completed");
 
-export default function App() {
-  // Keep the same App shell you have currently in the project.
-  // If you want the full, single-file version (Settings replaced), tell me and I'll send the entire App.jsx here.
-  return null;
+  const startFixture = async (fx) => {
+    const now = Date.now();
+    const patch = { status: "active" };
+    if (fx.start > now) patch.start = now;
+
+    // ensure only one "active"
+    for (const other of fixtures) {
+      if (other.id !== fx.id && other.status === "active") {
+        await apiFixturesUpdate(other.id, { status: "upcoming" });
+      }
+    }
+    await apiFixturesUpdate(fx.id, patch);
+
+    onStartScoring({
+      mode: fx.mode,
+      sides: fx.sides,
+      startingServer: 0,
+      fixtureId: fx.id,
+    });
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <h2 className="text-xl font-bold">Start Match</h2>
+      </div>
+      <Card className="p-5">
+        <div className="flex gap-6 mb-4">
+          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
+          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
+        </div>
+        {loading ? (
+          <div className="text-zinc-500">Loading fixtures…</div>
+        ) : list.length === 0 ? (
+          <div className="text-zinc-500">No fixtures for {mode}.</div>
+        ) : (
+          <div className="space-y-3">
+            {list.map(f => (
+              <Card key={f.id} className="p-4 flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+                  <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                </div>
+                <Button onClick={() => startFixture(f)}><Play className="w-4 h-4" /> Start Now</Button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
 }
 
+/* ----------------- FAST4 scoring (your rules) ----------------- */
+// Implementation unchanged (Fast4 no-ad / tiebreak at 3-3 to 5, next-point at 4-4)
+const nextPointNoAd = (p) => ({ 0: 15, 15: 30, 30: 40, 40: "Game" }[p] ?? p);
+function advancePointNoAd(a, b, who) {
+  let pA = a, pB = b;
+  if (who === 0) pA = nextPointNoAd(pA);
+  else pB = nextPointNoAd(pB);
+  return [pA, pB];
+}
+function makeEmptySet() {
+  return { gamesA: 0, gamesB: 0, tie: false, tieA: 0, tieB: 0, finished: false };
+}
+function setOverFast4(s) {
+  if (s.tie) {
+    if ((s.tieA >= 5 || s.tieB >= 5) && Math.abs(s.tieA - s.tieB) >= 1) return true;
+    return false;
+  } else {
+    if (s.gamesA === 3 && s.gamesB === 3) return false;
+    if (s.gamesA >= 4 || s.gamesB >= 4) return true;
+    return false;
+  }
+}
+function Scoring({ config, onAbort, onComplete }) {
+  const { sides, startingServer = 0, fixtureId } = config;
+  const [points, setPoints] = useState([0, 0]);
+  const [sets, setSets] = useState([makeEmptySet()]);
+  const current = sets[sets.length - 1];
+
+  const gameWin = (a, b) => (a === "Game" ? "A" : b === "Game" ? "B" : null);
+
+  const pointTo = (who) => {
+    if (current.finished) return;
+    if (current.tie) {
+      const ns = [...sets];
+      const s = { ...current };
+      if (who === 0) s.tieA++;
+      else s.tieB++;
+      if (setOverFast4(s)) {
+        s.finished = true;
+        if (s.tieA > s.tieB) s.gamesA = 4;
+        else s.gamesB = 4;
+      }
+      ns[ns.length - 1] = s;
+      setSets(ns);
+      return;
+    }
+
+    let [a, b] = advancePointNoAd(points[0], points[1], who);
+    setPoints([a, b]);
+    const gw = gameWin(a, b);
+    if (!gw) return;
+
+    const ns = [...sets];
+    const s = { ...current };
+    if (gw === "A") s.gamesA++;
+    else s.gamesB++;
+    setPoints([0, 0]);
+
+    if (s.gamesA === 3 && s.gamesB === 3 && !s.tie && !s.finished) {
+      s.tie = true;
+      s.tieA = 0; s.tieB = 0;
+    } else if (setOverFast4(s)) {
+      s.finished = true;
+    }
+
+    ns[ns.length - 1] = s;
+    setSets(ns);
+
+    if (s.finished) {
+      recordResult(ns[0]);
+    }
+  };
+
+  const recordResult = async (setObj) => {
+    const scoreline = setObj.tie
+      ? 4-3(${Math.max(setObj.tieA, setObj.tieB)}-${Math.min(setObj.tieA, setObj.tieB)})
+      : ${setObj.gamesA}-${setObj.gamesB};
+    const winner = setObj.gamesA > setObj.gamesB ? sides[0] : sides[1];
+    const payload = {
+      id: crypto.randomUUID(),
+      sides,
+      finishedAt: Date.now(),
+      scoreline,
+      winner,
+      mode: config.mode || "singles",
+    };
+    await apiMatchesAdd(payload);
+    if (fixtureId) {
+      await apiFixturesUpdate(fixtureId, {
+        status: "completed",
+        finishedAt: payload.finishedAt,
+        winner: payload.winner,
+        scoreline: payload.scoreline,
+      });
+    }
+    onComplete();
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onAbort}><ChevronLeft className="w-5 h-5" /> Quit</Button>
+        <h2 className="text-xl font-bold">Scoring • {sides[0]} vs {sides[1]}</h2>
+      </div>
+
+      <Card className="p-6">
+        <div className="grid grid-cols-3 gap-4 items-center">
+          <div className="text-right text-3xl font-bold">{String(points[0])}</div>
+          <div className="text-center">—</div>
+          <div className="text-3xl font-bold">{String(points[1])}</div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <Button onClick={() => pointTo(0)} className="w-full">Point {sides[0]}</Button>
+          <Button onClick={() => pointTo(1)} className="w-full">Point {sides[1]}</Button>
+        </div>
+
+        <div className="mt-6">
+          <div className="font-semibold mb-2">Set</div>
+          {!current.tie ? (
+            <div className="text-sm font-mono">{current.gamesA}-{current.gamesB}</div>
+          ) : (
+            <div className="text-sm font-mono">
+              3-3 • TB {current.tieA}-{current.tieB} {Math.max(current.tieA, current.tieB) === 4 && Math.abs(current.tieA - current.tieB) === 0 ? "(next point wins)" : ""}
+            </div>
+          )}
+          <div className="text-xs text-zinc-500 mt-2">
+            Fast4: first to 4 games; no-ad at deuce; tiebreak to 5 at 3–3 (4–4 next point wins).
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ----------------- Results ----------------- */
+const Results = ({ onBack }) => {
+  const [fixtures, setFixtures] = useState([]);
+  const [matches, setMatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const fx = await apiFixturesList();
+      const ms = await apiMatchesList();
+      if (alive) { setFixtures(fx); setMatches(ms); setLoading(false); }
+    })();
+    const iv = setInterval(async () => {
+      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch {}
+    }, 8000);
+    return () => { alive = false; clearInterval(iv); };
+  }, []);
+
+  const active = fixtures.filter(f => f.status === "active");
+  const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
+  const completedFixtures = fixtures.filter(f => f.status === "completed");
+  const completed = [...completedFixtures, ...matches.map(m => ({
+    id: m.id, sides: m.sides, finishedAt: m.finishedAt, scoreline: m.scoreline, winner: m.winner, mode: m.mode || "singles"
+  }))].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+
+  return (
+    <div className="max-w-5xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <h2 className="text-xl font-bold">Results</h2>
+      </div>
+      {loading ? (
+        <Card className="p-6 text-center text-zinc-500">Loading…</Card>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <div className="text-lg font-semibold mb-3">Active</div>
+            {active.length ? active.map(f => (
+              <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+                <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+              </div>
+            )) : <div className="text-zinc-500">No active match.</div>}
+
+            <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
+            {upcoming.length ? upcoming.map(f => (
+              <div key={f.id} className="py-2 border-b last:border-0">
+                <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div>
+                <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+              </div>
+            )) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+          </Card>
+
+          <Card className="p-5">
+            <div className="text-lg font-semibold mb-3">Completed</div>
+            {completed.length ? completed.map(m => (
+              <div key={m.id + String(m.finishedAt)} className="py-2 border-b last:border-0">
+                <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
+                <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
+                <div className="mt-1 text-sm">
+                  <span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner || ""}</span>
+                  <span className="ml-3 font-mono">{m.scoreline || ""}</span>
+                </div>
+              </div>
+            )) : <div className="text-zinc-500">No results yet.</div>}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ----------------- Viewer (public) ----------------- */
+function Viewer(){
+  const [fixtures,setFixtures]=React.useState([]);
+  const [results,setResults]=React.useState([]);
+  const [loading,setLoading]=React.useState(true);
+
+  const apiFixturesListLocal = async () => {
+    const r = await fetch('/api/fixtures'+buster(), { cache:'no-store' });
+    if(!r.ok) throw 0;
+    return await r.json();
+  };
+  const apiMatchesListLocal = async () => {
+    try{
+      const r = await fetch('/api/matches'+buster(), { cache:'no-store' });
+      if(!r.ok) throw 0;
+      return await r.json();
+    }catch{
+      return [];
+    }
+  };
+
+  React.useEffect(()=>{
+    let alive = true;
+    (async ()=>{
+      try{
+        const [fx,ms] = await Promise.all([apiFixturesListLocal(), apiMatchesListLocal()]);
+        if(!alive) return;
+        setFixtures(fx);
+        setResults(ms);
+      } finally {
+        if(alive) setLoading(false);
+      }
+    })();
+
+    const iv = setInterval(async ()=>{
+      try{
+        const [fx,ms] = await Promise.all([apiFixturesListLocal(), apiMatchesListLocal()]);
+        setFixtures(fx);
+        setResults(ms);
+      }catch{}
+    }, 10000);
+
+    return ()=>{ alive=false; clearInterval(iv); };
+  },[]);
+
+  const active    = fixtures.filter(f => f.status === 'active');
+  const upcoming  = fixtures.filter(f => !f.status || f.status === 'upcoming');
+  const completedFixtures = fixtures.filter(f => f.status === 'completed');
+  const completed = [
+    ...completedFixtures,
+    ...results.map(m => ({
+      id: m.id,
+      sides: m.sides,
+      finishedAt: m.finishedAt,
+      scoreline: m.scoreline,
+      winner: m.winner,
+      mode: m.mode || 'singles'
+    }))
+  ].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
+
+  const CardLocal = ({className="", children}) =>
+    <div className={bg-white rounded-2xl shadow border border-zinc-200 ${className}}>{children}</div>;
+
+  return (
+    <div className="app-bg">
+      <div className="max-w-5xl mx-auto p-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">RNW Tennis Tournament</h1>
+        </div>
+
+        {loading ? (
+          <CardLocal className="p-6 text-center text-zinc-500">Loading…</CardLocal>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-6">
+            <CardLocal className="p-5">
+              <div className="text-lg font-semibold mb-3">Active</div>
+              {active.length ? active.map(f=>(
+                <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+                  <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                </div>
+              )) : <div className="text-zinc-500">No live match.</div>}
+
+              <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
+              {upcoming.length ? upcoming.map(f=>(
+                <div key={f.id} className="py-2 border-b last:border-0">
+                  <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div>
+                  <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                </div>
+              )) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+            </CardLocal>
+
+            <CardLocal className="p-5">
+              <div className="text-lg font-semibold mb-3">Completed</div>
+              {completed.length ? completed.map(m=>(
+                <div key={(m.id||'')+String(m.finishedAt||'')} className="py-2 border-b last:border-0">
+                  <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
+                  <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
+                  <div className="mt-1 text-sm">
+                    <span className="uppercase text-zinc-400 text-xs">Winner</span>{" "}
+                    <span className="font-semibold">{m.winner||''}</span>{" "}
+                    <span className="ml-3 font-mono">{m.scoreline||''}</span>
+                  </div>
+                </div>
+              )) : <div className="text-zinc-500">No completed matches yet.</div>}
+            </CardLocal>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ----------------- App shell ----------------- */
+export default function App() {
+  const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+  // public viewer route (no login)
+  if (path.startsWith('/viewer')) {
+    return <Viewer />;
+  }
+
+  const [view, setView] = useState("landing");
+  const [cfg, setCfg] = useState(null);
+  const logged = localStorage.getItem("lt_admin") === "1";
+  if (!logged) return <AdminLogin onOk={() => window.location.reload()} />;
+
+  const to = (v) => setView(v);
+
+  return (
+    <div className="app-bg">
+      <div className="max-w-6xl mx-auto py-8">
+        <AnimatePresence mode="wait">
+          {view === "landing" && (
+            <motion.div key="landing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <Landing
+                onStart={() => to("start")}
+                onResults={() => to("results")}
+                onSettings={() => to("settings")}
+                onFixtures={() => to("fixtures")}
+              />
+            </motion.div>
+          )}
+          {view === "settings" && (
+            <motion.div key="settings" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <Settings onBack={() => to("landing")} />
+            </motion.div>
+          )}
+          {view === "fixtures" && (
+            <motion.div key="fixtures" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <Fixtures onBack={() => to("landing")} />
+            </motion.div>
+          )}
+          {view === "start" && (
+            <motion.div key="start" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <StartFromFixtures
+                onBack={() => to("landing")}
+                onStartScoring={(c) => { setCfg(c); to("scoring"); }}
+              />
+            </motion.div>
+          )}
+          {view === "scoring" && cfg && (
+            <motion.div key="scoring" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <Scoring
+                config={cfg}
+                onAbort={() => to("landing")}
+                onComplete={() => to("results")}
+              />
+            </motion.div>
+          )}
+          {view === "results" && (
+            <motion.div key="results" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <Results onBack={() => to("landing")} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <footer className="py-6 text-center text-xs text-zinc-500">
+        © {new Date().getFullYear()} RNW NPL
+      </footer>
+    </div>
+  );
+}
