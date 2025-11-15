@@ -72,14 +72,12 @@ const apiFixturesUpdate = async (id, patch) => {
 const SINGLES_CATEGORIES_ORDER = [
   "Women's Singles",
   "Kid's Singles",
-  "Kid's Singles", // you requested duplicates in order — keep them if needed
   "Men's (A) Singles",
   "Men's (B) Singles",
 ];
 
 const DOUBLES_CATEGORIES_ORDER = [
   "Women's Doubles",
-  "Kid's Doubles",
   "Kid's Doubles",
   "Men's (A) Doubles",
   "Men's (B) Doubles",
