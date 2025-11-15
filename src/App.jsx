@@ -266,6 +266,7 @@ function RulesPanel() {
           </li>
         </ol>
       </div>
+
       <div>
         <h3 className="font-semibold">Other Rules</h3>
         <ol className="list-decimal ml-6 mt-2 space-y-2 text-sm">
@@ -273,10 +274,7 @@ function RulesPanel() {
             <strong>Water break between games</strong> — Each team/player can take maximum of 1 break of 1 minute (so maximum 2 breaks) each whenever they prefer.
           </li>
           <li>
-            <strong>Warmn up break</strong> — Each team/player will be given maximum 3 minutes of warm up time before the match.
-          </li>
-          <li>
-            <strong>Warmn up break</strong> — During tournament if anhy player is not available the opponent will be given walk-over, but organizing committee's decision will be final.
+            <strong>Warm up break</strong> — Each team/player will be given maximum 3 minutes of warm up time before the match.
           </li>
         </ol>
       </div>
