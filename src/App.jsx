@@ -1,22 +1,4 @@
-[14:23, 15/11/2025] Somesh: // App.jsx
 import React, { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
-
-// Images in src/
-import imgStart from "./StartMatch.jpg";
-import imgScore from "./Score.jpg";
-import imgSettings from "./Settings.jpg";
-
-/* ----------------- Local helpers ----------------- */
-const LS_MATCHES_FALLBACK = "lt_matches_fallback";
-const LS_PLAYERS_DRAFT = "lt_players_draft";
-const readLS = (k, f) => {
-  try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : f; } catch { return f; }
-};
-const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
-const buster = () => "?t=" + Date.now();…
-[16:54, 15/11/2025] Somesh: import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
 
@@ -112,7 +94,7 @@ const apiFixturesUpdate = async (id, patch) => {
 
 /* ----------------- UI primitives ----------------- */
 const Card = ({ className = "", children }) => (
-  <div className={bg-white rounded-2xl shadow border border-zinc-200 ${className}}>{children}</div>
+  <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>{children}</div>
 );
 const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled }) => {
   const base = "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium";
@@ -126,7 +108,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", type =
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={${base} ${styles} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}}
+      className={`${base} ${styles} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
     >
       {children}
     </button>
@@ -548,7 +530,7 @@ const Fixtures = ({ onBack }) => {
 
   const add = async (e) => {
     e.preventDefault();
-    const start = new Date(${date}T${time}:00).getTime();
+    const start = new Date(`${date}T${time}:00`).getTime();
     const payload = { id: crypto.randomUUID(), mode, sides: [a, b], start, status: "upcoming" };
     await apiFixturesAdd(payload);
     // combine by category: keep same mode grouped, then sort by start
@@ -788,7 +770,7 @@ function Viewer() {
   const [fixtures, setFixtures] = React.useState([]);
   const [results, setResults] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const b = () => ?t=${Date.now()};
+  const b = () => `?t=${Date.now()}`;
 
   const apiFixturesListLocal = async () => {
     const r = await fetch('/api/fixtures'+buster(), { cache:'no-store' });
@@ -845,7 +827,7 @@ function Viewer() {
   ].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
 
   const CardLocal = ({className="", children}) =>
-    <div className={bg-white rounded-2xl shadow border border-zinc-200 ${className}}>{children}</div>;
+    <div className={`bg-white rounded-2xl shadow border border-zinc-200 ${className}`}>{children}</div>;
 
   return (
     <div className="app-bg">
@@ -904,3 +886,4 @@ function Viewer() {
     </div>
   );
 }
+
