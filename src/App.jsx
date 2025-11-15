@@ -116,7 +116,7 @@ function ViewerShell() {
       <div className="max-w-5xl mx-auto p-6">
         <div className="flex items-center gap-3 mb-6">
           <Trophy className="w-6 h-6 text-green-600" />
-          <h1 className="text-2xl font-bold">Lawn Tennis — Public Viewer</h1>
+          <h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 mb-6">
@@ -164,7 +164,7 @@ function ViewerShell() {
           {panel === "fixtures" && <ViewerFixtures />}
         </div>
       </div>
-      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis — Viewer</footer>
+      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW NPL</footer>
     </div>
   );
 }
@@ -185,9 +185,6 @@ function ViewerRules() {
         </div>
         <div>
           <strong>3.</strong> <strong>No-adv (no AD) scoring</strong> — When game hits deuce (40-40) the next point decides the game. Receiver chooses which side the server will serve from. In doubles, receiving team chooses receiving side.
-        </div>
-        <div>
-          <strong>4.</strong> <strong>Match formats</strong> — Matches can be set by number of sets or other criteria; admin config available in scoring screen.
         </div>
       </div>
     </Card>
@@ -962,7 +959,7 @@ export default function App() {
         </AnimatePresence>
       </div>
 
-      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} Lawn Tennis Scoring (Admin)</footer>
+      <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW Tennis Tournament 2025</footer>
     </div>
   );
 }
@@ -980,7 +977,7 @@ function Landing({ onStart, onResults, onSettings, onFixtures }) {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-8"><Trophy className="w-6 h-6 text-green-600" /><h1 className="text-2xl font-bold">Lawn Tennis Scoring (Admin)</h1></div>
+      <div className="flex items-center gap-3 mb-8"><Trophy className="w-6 h-6 text-green-600" /><h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1></div>
 
       <div className="grid md:grid-cols-3 gap-6">
         <Tile title="Start Match" subtitle="Choose from fixtures" src={imgStart} action={onStart} />
