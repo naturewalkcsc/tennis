@@ -29,15 +29,15 @@ const CATEGORY_COLORS = {
 const SINGLES_ORDER = [
   "Women's Singles",
   "Kid's Singles",
-  "Men's (A) Singles",
-  "Men's (B) Singles",
+  "NW Team (A) Singles",
+  "NW Team (B) Singles",
 ];
 
 const DOUBLES_ORDER = [
   "Women's Doubles",
   "Kid's Doubles",
-  "Men's (A) Doubles",
-  "Men's (B) Doubles",
+  "NW Team (A) Doubles",
+  "NW Team (B) Doubles",
   "Mixed Doubles",
 ];
 

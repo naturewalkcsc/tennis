@@ -31,14 +31,14 @@ const DEFAULT_PLAYERS = {
   singles: {
     "Women's Singles": [],
     "Kid's Singles": [],
-    "Men's (A) Singles": [],
-    "Men's (B) Singles": []
+    "NW Team (A) Singles": [],
+    "NW Team (B) Singles": []
   },
   doubles: {
     "Women's Doubles": [],
     "Kid's Doubles": [],
-    "Men's (A) Doubles": [],
-    "Men's (B) Doubles": [],
+    "NW Team (A) Doubles": [],
+    "NW Team (B) Doubles": [],
     "Mixed Doubles": []
   }
 };
