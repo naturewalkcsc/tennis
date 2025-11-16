@@ -16,13 +16,13 @@ import { ChevronLeft } from "lucide-react";
 const CATEGORY_STYLES = {
   "Women's Singles": { background: "#dcfce7", color: "#065f46" }, // green pastel
   "Kid's Singles": { background: "#e6f6ff", color: "#0b5ed7" }, // blue pastel
-  "Men's (A) Singles": { background: "#fff1e6", color: "#92400e" }, // warm pastel
-  "Men's (B) Singles": { background: "#f3e8ff", color: "#6b21a8" },
+  "NW Team (A) Singles": { background: "#fff1e6", color: "#92400e" }, // warm pastel
+  "NW Team (B) Singles": { background: "#f3e8ff", color: "#6b21a8" },
 
   "Women's Doubles": { background: "#fff1e6", color: "#9a3412" },
   "Kid's Doubles": { background: "#f5f3ff", color: "#6b21a8" },
-  "Men's (A) Doubles": { background: "#ecfeff", color: "#064e3b" },
-  "Men's (B) Doubles": { background: "#ecfeff", color: "#055160" },
+  "NW Team (A) Doubles": { background: "#ecfeff", color: "#064e3b" },
+  "NW Team (B) Doubles": { background: "#ecfeff", color: "#055160" },
   "Mixed Doubles": { background: "#dcfce7", color: "#14532d" },
 };
 
@@ -30,14 +30,14 @@ const CATEGORY_STYLES = {
 const SINGLES_ORDER = [
   "Women's Singles",
   "Kid's Singles",
-  "Men's (A) Singles",
-  "Men's (B) Singles",
+  "NW Team (A) Singles",
+  "NW Team (B) Singles",
 ];
 const DOUBLES_ORDER = [
   "Women's Doubles",
   "Kid's Doubles",
-  "Men's (A) Doubles",
-  "Men's (B) Doubles",
+  "NW Team (A) Doubles",
+  "NW Team (B) Doubles",
   "Mixed Doubles",
 ];
 
