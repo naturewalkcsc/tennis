@@ -16,13 +16,13 @@ import { ChevronLeft } from "lucide-react";
 const CATEGORY_COLORS = {
   "Women's Singles": "background:#fff1f2;color:#9f1239",
   "Kid's Singles": "background:#fffbeb;color:#92400e",
-  "Men's (A) Singles": "background:#ecfeff;color:#065f46",
-  "Men's (B) Singles": "background:#f5f3ff;color:#5b21b6",
+  "NW Team (A) Singles": "background:#ecfeff;color:#065f46",
+  "NW Team (B) Singles": "background:#f5f3ff;color:#5b21b6",
 
   "Women's Doubles": "background:#fdf2f8;color:#be185d",
   "Kid's Doubles": "background:#fffbeb;color:#92400e",
-  "Men's (A) Doubles": "background:#ecfeff;color:#0f766e",
-  "Men's (B) Doubles": "background:#eff6ff;color:#1e40af",
+  "NW Team (A) Doubles": "background:#ecfeff;color:#0f766e",
+  "NW Team (B) Doubles": "background:#eff6ff;color:#1e40af",
   "Mixed Doubles": "background:#f5f3ff;color:#7c3aed",
 };
 

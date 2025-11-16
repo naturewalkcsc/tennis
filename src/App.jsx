@@ -231,8 +231,8 @@ function ResultsAdmin() {
 
 function ManagePlayersAdmin() {
   const navigate = useNavigate();
-  const SINGLE_CATS = ["Women's Singles", "Kid's Singles", "Men's (A) Singles", "Men's (B) Singles"];
-  const DOUBLES_CATS = ["Women's Doubles", "Kid's Doubles", "Men's (A) Doubles", "Men's (B) Doubles", "Mixed Doubles"];
+  const SINGLE_CATS = ["Women's Singles", "Kid's Singles", "NW Team (A) Singles", "NW Team (B) Singles"];
+  const DOUBLES_CATS = ["Women's Doubles", "Kid's Doubles", "NW Team (A) Doubles", "NW Team (B) Doubles", "Mixed Doubles"];
 
   const [players, setPlayersState] = useState({ singles: {}, doubles: {} });
   const [loading, setLoading] = useState(true);
