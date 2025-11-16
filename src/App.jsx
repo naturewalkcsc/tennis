@@ -142,6 +142,8 @@ function Viewer() {
   const [loadingFixtures, setLoadingFixtures] = useState(true);
   const [loadingPlayers, setLoadingPlayers] = useState(true);
 
+  alert("Viewer called");
+
   useEffect(() => {
     let alive = true;
     (async () => {
