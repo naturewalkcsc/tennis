@@ -553,7 +553,7 @@ function ViewerFixtures() {
             {completed.length === 0 ? <div style={{ color: "#6b7280" }}>No completed fixtures.</div> : completed.map(f => (
               <div key={f.id} style={{ background: "white", padding: 12, borderRadius: 10, border: "1px solid #e6edf8", marginBottom: 8 }}>
                 <div style={{ fontWeight: 600 }}>{(f.sides||[]).join(" vs ")}</div>
-                <div style={{ color: "#6b7280" }}>{f.winner ? Winner: ${f.winner} : ""}</div>
+                <div style={{ color: "#6b7280" }}> {f.winner ? 'Winner: ${f.winner}' : ""}</div>
                 <div>Score: {f.scoreline || "-"}</div>
               </div>
             ))}
