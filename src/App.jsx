@@ -902,7 +902,9 @@ function StartFromFixtures({ onBack, onStartScoring }) {
               <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}</div>
               <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
             </div>
-            <Button onClick={() => startFixture(f)}><Play className="w-4 h-4" /> Start Now</Button>
+            <Button type="button" onClick={() => startFixture(f)}>
+                <Play className="w-4 h-4" /> Start Now
+            </Button>
           </Card>
         ))}</div>)}
       </Card>
