@@ -86,7 +86,7 @@ function usePlayers() {
   return { players, setPlayers, loading };
 }
 
-export default function Viewer() {
+export default function Viewer({ onBack }) {
   const [view, setView] = useState("landing"); // 'rules' | 'teams' | 'fixtures'
   const { players, loading: playersLoading } = usePlayers();
   const [fixtures, setFixtures] = useState([]);
