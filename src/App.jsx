@@ -69,20 +69,19 @@ const apiFixturesUpdate = async (id, patch) => {
 /* ===========================
    Categories config (order requested)
    =========================== */
-
 const SINGLES_CATEGORIES_ORDER = [
   "Women's Singles",
   "Kid's Singles",
-  "NW Team (A) Singles",
-  "NW Team (B) Singles"
+  "Men's (A) Singles",
+  "Men's (B) Singles",
 ];
 
 const DOUBLES_CATEGORIES_ORDER = [
   "Women's Doubles",
   "Kid's Doubles",
-  "NW Team (A) Doubles",
-  "NW Team (B) Doubles",
-  "Mixed Doubles"
+  "Men's (A) Doubles",
+  "Men's (B) Doubles",
+  "Mixed Doubles",
 ];
 
 /* ===========================
@@ -678,60 +677,35 @@ export default function App() {
 
 // FixturesAdmin: small admin UI to add/remove fixtures (category picker and qualifier/semi/final option)
 function FixturesAdmin({ onBack }) {
-  const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
-  const [mode, setMode] = React.useState("singles"); // 'singles' | 'doubles'
-  const [category, setCategory] = React.useState(
-    SINGLES_CATEGORIES_ORDER[0]
-  );
-  const [sideA, setSideA] = React.useState("");
-  const [sideB, setSideB] = React.useState("");
-  const [date, setDate] = React.useState("");
-  const [time, setTime] = React.useState("");
-  const [list, setList] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
+  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
+  const [mode, setMode] = useState("singles");
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [category, setCategory] = useState("");
+  const [matchType, setMatchType] = useState("Qualifier");
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // load players + fixtures
-  React.useEffect(() => {
+  useEffect(() => {
     let alive = true;
     (async () => {
-      setLoading(true);
       try {
-        // load players
-        try {
-          const p = await apiPlayersGet();
-          if (alive && p) {
-            // ensure shape
-            setPlayers({
-              singles: p.singles || {},
-              doubles: p.doubles || {}
-            });
-            // default category depending on mode
-            if (mode === "singles") {
-              setCategory((prev) => prev || SINGLES_CATEGORIES_ORDER[0]);
-            } else {
-              setCategory((prev) => prev || DOUBLES_CATEGORIES_ORDER[0]);
-            }
-          }
-        } catch (e) {
-          // non-fatal: keep players empty
-          console.warn("Failed loading players", e);
+        const p = await apiPlayersGet();
+        if (alive) {
+          const singles = Array.isArray(p.singles) ? { "General Singles": p.singles } : { ...(p.singles || {}) };
+          const doubles = Array.isArray(p.doubles) ? { "General Doubles": p.doubles } : { ...(p.doubles || {}) };
+          setPlayers({ singles, doubles });
         }
-
-        // load fixtures
-        try {
-          const fx = await apiFixturesList();
-          if (alive) {
-            // normalize to array and sort
-            const arr = Array.isArray(fx) ? fx.slice() : [];
-            arr.sort((a, b) => (a.start || 0) - (b.start || 0));
-            setList(arr);
-          }
-        } catch (e) {
-          console.warn("Failed loading fixtures", e);
-        }
-      } catch (e) {
-        if (alive) setError("Could not load fixtures/players.");
+      } catch (_) {
+        if (alive) setPlayers({ singles: {}, doubles: {} });
+      }
+      try {
+        const fx = await apiFixturesList();
+        if (alive) setList(fx || []);
+      } catch (_) {
+        if (alive) setList([]);
       } finally {
         if (alive) setLoading(false);
       }
@@ -739,90 +713,51 @@ function FixturesAdmin({ onBack }) {
     return () => {
       alive = false;
     };
-  }, []); // run once on mount
+  }, []);
 
-  // when mode changes, reset category and sides
-  React.useEffect(() => {
-    setCategory(mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]);
-    setSideA("");
-    setSideB("");
-  }, [mode]);
+  const options = mode === "singles" ? Object.keys(players.singles || {}) : Object.keys(players.doubles || {});
 
-  // options available in Side dropdowns for the selected mode+category
-  const options = React.useMemo(() => {
-    if (mode === "singles") {
-      return players.singles && players.singles[category] ? players.singles[category] : [];
-    } else {
-      return players.doubles && players.doubles[category] ? players.doubles[category] : [];
-    }
-  }, [mode, category, players]);
-
-  const canAdd = category && sideA && sideB && sideA !== sideB && date && time;
-
-  const addFixture = async (e) => {
+  const canAdd = a && b && a !== b && date && time && category;
+  const add = async (e) => {
     e.preventDefault();
-    if (!canAdd) return;
+    const start = new Date(`${date}T${time}:00`).getTime();
+    const payload = {
+      id: crypto.randomUUID(),
+      mode,
+      sides: [a, b],
+      start,
+      status: "upcoming",
+      category,
+      matchType,
+    };
     try {
-      const start = new Date(`${date}T${time}:00`).getTime();
-      const payload = {
-        id: crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
-        mode,
-        category,
-        sides: [sideA, sideB],
-        start,
-        status: "upcoming" // default
-      };
       await apiFixturesAdd(payload);
-
-      // reload fixtures client-side (or append + sort)
-      const newList = [...list, payload].sort((a,b) => (a.start||0)-(b.start||0));
-      setList(newList);
-
-      // clear form
-      setSideA("");
-      setSideB("");
-      setDate("");
-      setTime("");
-    } catch (err) {
-      console.error("Add fixture failed", err);
-      setError("Failed to add fixture.");
-    }
-  };
-
-  const removeFixture = async (id) => {
-    try {
-      await apiFixturesRemove(id);
-      setList((prev) => prev.filter((f) => f.id !== id));
-    } catch (err) {
-      console.error("Remove fixture failed", err);
-      setError("Failed to remove fixture.");
-    }
-  };
-
-  const clearFixtures = async () => {
-    if (!confirm("Clear ALL fixtures?")) return;
-    try {
-      await apiFixturesClear();
-      setList([]);
-    } catch (err) {
-      console.error("Clear fixtures failed", err);
-      setError("Failed to clear fixtures.");
-    }
-  };
-
-  const refreshFixtures = async () => {
-    setLoading(true);
-    try {
-      const fx = await apiFixturesList();
-      const arr = Array.isArray(fx) ? fx.slice() : [];
-      arr.sort((a, b) => (a.start || 0) - (b.start || 0));
-      setList(arr);
-      setError("");
+      // combine matches per category and sort
+      setList((prev) => {
+        const combined = [...prev, payload];
+        combined.sort((x, y) => {
+          if ((x.category || "") < (y.category || "")) return -1;
+          if ((x.category || "") > (y.category || "")) return 1;
+          return (x.start || 0) - (y.start || 0);
+        });
+        return combined;
+      });
+      setA(""); setB(""); setDate(""); setTime("");
     } catch (e) {
-      console.error("Refresh failed", e);
-      setError("Refresh failed.");
-    } finally {
-      setLoading(false);
+      alert("Failed to add fixture");
+    }
+  };
+
+  const remove = async (id) => {
+    try {
+      await fetch("/api/fixtures" + buster(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove", id }),
+      });
+      setList((prev) => prev.filter((f) => f.id !== id));
+    } catch (e) {
+      alert("Remove failed");
     }
   };
 
@@ -831,92 +766,80 @@ function FixturesAdmin({ onBack }) {
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
         <h2 className="text-xl font-bold">Fixtures</h2>
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="secondary" onClick={refreshFixtures}><RefreshCw className="w-4 h-4" /> Refresh</Button>
-          <Button variant="secondary" onClick={clearFixtures}>Clear All</Button>
-        </div>
       </div>
 
-      {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200 rounded-xl">{error}</Card>}
-
-      {loading ? (
-        <Card className="p-5 text-center text-zinc-500">Loading fixtures…</Card>
-      ) : (
-        <>
-          <Card className="p-5 mb-6">
-            <div className="font-semibold mb-3">Schedule a Match</div>
-
-            <form onSubmit={addFixture} className="grid md:grid-cols-4 gap-4">
-              <div className="md:col-span-1">
-                <div className="text-sm text-zinc-600 mb-1">Type</div>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="mode" value="singles" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="mode" value="doubles" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-sm text-zinc-600 mb-1">Category</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={category} onChange={(e) => setCategory(e.target.value)}>
-                  {(mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <div className="text-sm text-zinc-600 mb-1">{mode === "singles" ? 'Player 1' : 'Team 1'}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={sideA} onChange={(e) => setSideA(e.target.value)}>
-                  <option value="">Choose…</option>
-                  {options.map((o, i) => <option key={i} value={o}>{o}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <div className="text-sm text-zinc-600 mb-1">{mode === "singles" ? 'Player 2' : 'Team 2'}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={sideB} onChange={(e) => setSideB(e.target.value)}>
-                  <option value="">Choose…</option>
-                  {options.map((o, i) => <option key={i} value={o}>{o}</option>)}
-                </select>
-              </div>
-
-              <div className="md:col-span-1">
-                <div className="text-sm text-zinc-600 mb-1">Date</div>
-                <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-
-              <div className="md:col-span-1">
-                <div className="text-sm text-zinc-600 mb-1">Time</div>
-                <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={(e) => setTime(e.target.value)} />
-              </div>
-
-              <div className="md:col-span-4">
-                <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
-              </div>
-            </form>
-          </Card>
-
-          {list.length === 0 ? (
-            <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card>
-          ) : (
-            <div className="space-y-3">
-              {list.map((f) => (
-                <Card key={f.id} className="p-4 flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode} • {f.category || ""}</span></div>
-                    <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()} {f.status === "active" && <span className="ml-2 inline-flex items-center gap-1 text-emerald-600"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live</span>} {f.status === "completed" && <span className="ml-2 text-zinc-500 text-xs">(completed)</span>}</div>
-                  </div>
-                  <Button variant="ghost" onClick={() => removeFixture(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
-                </Card>
-              ))}
+      <Card className="p-5 mb-6">
+        <div className="font-semibold mb-3">Schedule a Match</div>
+        <form onSubmit={add} className="grid md:grid-cols-4 gap-4">
+          <div className="md:col-span-1">
+            <div className="text-sm mb-1">Type</div>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
+              <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
             </div>
-          )}
-        </>
-      )}
+          </div>
+
+          <div>
+            <div className="text-sm mb-1">Category</div>
+            <input value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl border px-3 py-2" placeholder="e.g. Men's (A) Singles" />
+          </div>
+
+          <div>
+            <div className="text-sm mb-1">Match Type</div>
+            <select className="w-full rounded-xl border px-3 py-2" value={matchType} onChange={(e) => setMatchType(e.target.value)}>
+              <option>Qualifier</option>
+              <option>Semifinal</option>
+              <option>Final</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="text-sm mb-1">Date</div>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-xl border px-3 py-2" />
+            </div>
+            <div>
+              <div className="text-sm mb-1">Time</div>
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full rounded-xl border px-3 py-2" />
+            </div>
+          </div>
+
+          <div className="md:col-span-4">
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <div className="text-sm mb-1">Side A</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={(e) => setA(e.target.value)}>
+                  <option value="">Choose…</option>
+                  {options.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="text-sm mb-1">Side B</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={(e) => setB(e.target.value)}>
+                  <option value="">Choose…</option>
+                  {options.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="md:col-span-4">
+            <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
+          </div>
+        </form>
+      </Card>
+
+      <div className="space-y-3">
+        {list.map((f) => (
+          <Card key={f.id} className="p-4 flex items-center gap-4">
+            <div className="flex-1">
+              <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.category} • {f.matchType}</span></div>
+              <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+            </div>
+            <Button variant="ghost" onClick={() => remove(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
