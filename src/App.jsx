@@ -5,8 +5,6 @@ import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } f
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
-// IMPORTANT: import the external Viewer component and name it PublicViewer
-import PublicViewer from "./Viewer.jsx";
 
 /* ===========================
    Helpers & Small primitives
@@ -71,19 +69,20 @@ const apiFixturesUpdate = async (id, patch) => {
 /* ===========================
    Categories config (order requested)
    =========================== */
+
 const SINGLES_CATEGORIES_ORDER = [
   "Women's Singles",
   "Kid's Singles",
-  "Men's (A) Singles",
-  "Men's (B) Singles",
+  "NW Team (A) Singles",
+  "NW Team (B) Singles"
 ];
 
 const DOUBLES_CATEGORIES_ORDER = [
   "Women's Doubles",
   "Kid's Doubles",
-  "Men's (A) Doubles",
-  "Men's (B) Doubles",
-  "Mixed Doubles",
+  "NW Team (A) Doubles",
+  "NW Team (B) Doubles",
+  "Mixed Doubles"
 ];
 
 /* ===========================
@@ -134,11 +133,10 @@ function AdminLogin({ onOk }) {
 }
 
 /* ===========================
-   Admin-side internal viewer (renamed to avoid conflict)
-   This is retained so admin can preview a viewer-like panel inside admin console
-   but importantly it does NOT conflict with the external PublicViewer component.
+   Viewer (public path: /viewer)
+   - Shows three buttons: Rules, Teams, Fixture/Scores
    =========================== */
-function AdminViewerPanel() {
+function Viewer() {
   const [panel, setPanel] = useState("home");
   const [fixtures, setFixtures] = useState([]);
   const [playersData, setPlayersData] = useState({ singles: {}, doubles: {} });
@@ -161,7 +159,9 @@ function AdminViewerPanel() {
       try {
         const p = await apiPlayersGet();
         if (alive) {
+          // normalize – if legacy array -> convert to category-less format
           if (Array.isArray(p.singles)) {
+            // convert to a default single category
             setPlayersData({ singles: { "General Singles": p.singles }, doubles: { "General Doubles": p.doubles || [] } });
           } else {
             setPlayersData({ singles: p.singles || {}, doubles: p.doubles || {} });
@@ -183,7 +183,7 @@ function AdminViewerPanel() {
       <div className="max-w-5xl mx-auto p-6">
         <div className="flex items-center gap-3 mb-8">
           <Trophy className="w-6 h-6 text-green-600" />
-          <h1 className="text-2xl font-bold">RNW Tennis Tournament 2025 (Admin Viewer)</h1>
+          <h1 className="text-2xl font-bold">RNW Tennis Tournament 2025</h1>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 mb-6">
@@ -222,7 +222,9 @@ function AdminViewerPanel() {
           {panel === "rules" && <RulesPanel />}
           {panel === "teams" && <TeamsPanel loading={loadingPlayers} playersData={playersData} />}
           {panel === "fixtures" && <FixturesPanel loading={loadingFixtures} fixtures={fixtures} />}
-          {panel === "home" && <div className="text-zinc-500">Select a panel above to view rules, teams or fixtures.</div>}
+          {panel === "home" && (
+            <div className="text-zinc-500">Select a panel above to view rules, teams or fixtures.</div>
+          )}
         </div>
       </div>
     </div>
@@ -230,8 +232,7 @@ function AdminViewerPanel() {
 }
 
 /* ===========================
-   RulesPanel, TeamsPanel, FixturesPanel
-   (kept same as before - unchanged)
+   Rules Panel (uses updated wording)
    =========================== */
 function RulesPanel() {
   return (
@@ -239,27 +240,55 @@ function RulesPanel() {
       <h2 className="text-xl font-bold mb-4">Match Formats & Rules</h2>
 
       <div className="mb-4">
-        <h3 className="font-semibold">Qualifiers and Semifinal Matches Format: Fast4 will be followed.</h3>
+        <h3 className="font-semibold">Qualifiers and Semifinal Matches Format: Fast4(https://www.tennis.com.au/wp-content/uploads/2016/12/FAST4-Tennis-Information-Sheet.pdf) will be followed.</h3>
         <ol className="list-decimal ml-6 mt-2 space-y-2 text-sm">
-          <li><strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.</li>
-          <li><strong>Tiebreak at 3-3</strong> — At 3-3 a tiebreak is played. Tiebreak won by first to 5 points. 4-4 ⇒ next point wins.</li>
-          <li><strong>No-adv scoring</strong> — At deuce the next point decides the game. Receiver chooses receiving side; in doubles the receiving team decides.</li>
+          <li>
+            <strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.
+          </li>
+          <li>
+            <strong>Tiebreak at 3-3</strong> — At 3-3 a tiebreak is played. The tiebreak is won by the first player to reach 5 points. If it reaches 4-4, next point wins.
+          </li>
+          <li>
+            <strong>No-adv (no AD) scoring</strong> — When game hits deuce (40-40) the next point decides the game. Receiver chooses which side the server will serve from. In doubles, receiving team chooses receiving side.
+          </li>
         </ol>
       </div>
 
       <div>
         <h3 className="font-semibold">Final Matches format:</h3>
         <ol className="list-decimal ml-6 mt-2 space-y-2 text-sm">
-          <li><strong>One full set</strong> — Standard set rule of 6 games and Tie break will be followed.</li>
-          <li><strong>Limited Deuce Points</strong> — Max 3 deuce points; at the 4th deuce the next point decides the game.</li>
+          <li>
+            <strong>One full set</strong> — Standard set rule of 6 games and Tie break will be followed.
+          </li>
+          <li>
+            <strong>Limited Deuce Points</strong> — As a deviation max 3 deuce points will be allowed. At 4th deuce the next point decides the game.
+          </li>
+        </ol>
+      </div>
+
+      <div>
+        <h3 className="font-semibold">Other Rules</h3>
+        <ol className="list-decimal ml-6 mt-2 space-y-2 text-sm">
+          <li>
+            <strong>Water break between games</strong> — Each team/player can take maximum of 1 break of 1 minute (so maximum 2 breaks) each whenever they prefer.
+          </li>
+          <li>
+            <strong>Warm up break</strong> — Each team/player will be given maximum 3 minutes of warm up time before the match.
+          </li>
         </ol>
       </div>
     </Card>
   );
 }
 
+/* ===========================
+   Teams Panel - Colored, nicer table
+   - playersData: { singles: {category: [names...]}, doubles: {category: [names...]} }
+   =========================== */
 function TeamsPanel({ loading, playersData }) {
+  // nice palette to pick colors from
   const colorPalette = ["#c7f9cc", "#cff4ff", "#ffedd5", "#f0e6ff", "#ffe4e6", "#e6f7ff"];
+
   const catKeysSingles = Object.keys(playersData.singles || {});
   const catKeysDoubles = Object.keys(playersData.doubles || {});
 
@@ -312,6 +341,9 @@ function TeamsPanel({ loading, playersData }) {
   );
 }
 
+/* ===========================
+   Fixtures Panel (public)
+   =========================== */
 function FixturesPanel({ loading, fixtures = [] }) {
   const active = fixtures.filter((f) => f.status === "active");
   const upcoming = fixtures.filter((f) => !f.status || f.status === "upcoming");
@@ -353,25 +385,24 @@ function FixturesPanel({ loading, fixtures = [] }) {
 }
 
 /* ===========================
-   ManagePlayers, FixturesAdmin, StartFromFixtures, ResultsAdmin
-   (kept same as earlier implementation)
-   NOTE: FixturesAdmin/StartFromFixtures/ResultsAdmin must exist in your file.
-   If your earlier file contained those functions, keep them in place unchanged.
-   For safety here we assume they are already in the file (your copy).
+   Manage Players (admin) - categories view
+   - Saves structured data to /api/players as:
+     { singles: {category: [names]}, doubles: {category: [names]} }
+   - No toast on save; show error message inline if save fails
    =========================== */
-
-// ManagePlayers implementation (unchanged)
 function ManagePlayers({ onBack }) {
   const [data, setData] = useState({ singles: {}, doubles: {} });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // initialize categories with order (ensure keys exist)
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const p = await apiPlayersGet();
+        // normalize: if legacy arrays -> convert to default categories
         let singles = {};
         let doubles = {};
         if (Array.isArray(p.singles)) {
@@ -384,11 +415,14 @@ function ManagePlayers({ onBack }) {
         } else {
           doubles = { ...p.doubles };
         }
+        // ensure all configured categories exist (but do not wipe user data)
         SINGLES_CATEGORIES_ORDER.forEach((c) => { if (!singles[c]) singles[c] = []; });
         DOUBLES_CATEGORIES_ORDER.forEach((c) => { if (!doubles[c]) doubles[c] = []; });
         if (alive) setData({ singles, doubles });
       } catch (e) {
-        const singles = {}; const doubles = {};
+        // start with empty categories
+        const singles = {};
+        const doubles = {};
         SINGLES_CATEGORIES_ORDER.forEach((c) => (singles[c] = []));
         DOUBLES_CATEGORIES_ORDER.forEach((c) => (doubles[c] = []));
         if (alive) setData({ singles, doubles });
@@ -396,7 +430,9 @@ function ManagePlayers({ onBack }) {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const setPlayerName = (type, category, idx, val) => {
@@ -438,7 +474,9 @@ function ManagePlayers({ onBack }) {
     setSaving(true);
     setError("");
     try {
+      // send data as structured object
       await apiPlayersSet({ singles: data.singles, doubles: data.doubles });
+      // do not show toast - per user request
     } catch (e) {
       setError("Save failed. Make sure KV is configured.");
     } finally {
@@ -449,7 +487,9 @@ function ManagePlayers({ onBack }) {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <Button variant="ghost" onClick={onBack}>
+          <ChevronLeft className="w-5 h-5" /> Back
+        </Button>
         <h2 className="text-xl font-bold">Manage Players</h2>
         <div className="ml-auto">
           <Button onClick={doSave} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Button>
@@ -520,32 +560,9 @@ function ManagePlayers({ onBack }) {
 }
 
 /* ===========================
-   Admin FixturesAdmin, StartFromFixtures, ResultsAdmin
-   (ASSUMPTION: these are present in your file already and unchanged)
-   We'll reference StartFromFixtures in the main app below.
-   =========================== */
-
-// Placeholder safe exports when user moved full implementations elsewhere.
-// If your file already includes the full implementations, keep those.
-// Below placeholders are only present to avoid runtime errors if the full functions
-// were not present in this snippet. Replace/remove if you have full code already.
-function FixturesAdmin({ onBack }) {
-  return <div />; // if you have full implementation, keep that instead
-}
-function StartFromFixtures({ onBack, onStartScoring }) {
-  // If you already have the real StartFromFixtures implementation in the file, keep that.
-  // The real implementation should call onStartScoring(config) when starting a match.
-  return <div />;
-}
-function ResultsAdmin({ onBack }) {
-  return <div />;
-}
-function Scoring({ config, onAbort, onComplete }) {
-  return <div />;
-}
-
-/* ===========================
    Landing (admin) and Main App Shell
+   - preserves original layout: Start Match | Results | Manage Players
+   - fixtures button below (admin only)
    =========================== */
 function Landing({ onStart, onResults, onSettings, onFixtures }) {
   const Tile = ({ title, subtitle, src, action }) => (
@@ -569,16 +586,15 @@ function Landing({ onStart, onResults, onSettings, onFixtures }) {
 
 /* ===========================
    MAIN APP export
-   - If path starts with /viewer -> render the external PublicViewer (from Viewer.jsx)
+   - If path starts with /viewer -> render public Viewer
    - else require admin login for admin console
    =========================== */
 export default function App() {
-  // If path is /viewer (public), show external PublicViewer
+  // If path is /viewer (public), show Viewer
   const isViewer = typeof window !== "undefined" && window.location && window.location.pathname && window.location.pathname.startsWith("/viewer");
 
   if (isViewer) {
-    // RENDER THE EXTERNAL PUBLIC VIEWER MODULE
-    return <PublicViewer />;
+    return <Viewer />;
   }
 
   // Admin console:
@@ -589,10 +605,8 @@ export default function App() {
       return false;
     }
   });
-  const [view, setView] = useState("landing"); // landing, start, results, settings, fixtures, scoring
+  const [view, setView] = useState("landing"); // landing, start, results, settings, fixtures
   const [fixtureList, setFixtureList] = useState([]);
-  // NEW: scoring config (so StartFromFixtures can pass the match config to the main app)
-  const [cfg, setCfg] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -640,15 +654,7 @@ export default function App() {
 
           {view === "start" && (
             <motion.div key="start" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              {/* IMPORTANT: pass a handler that accepts a scoring config (c) */}
-              <StartFromFixtures
-                onBack={() => setView("landing")}
-                onStartScoring={(c) => {
-                  // c should be the scoring configuration object from StartFromFixtures/startFixture
-                  setCfg(c);
-                  setView("scoring");
-                }}
-              />
+              <StartFromFixtures onBack={() => setView("landing")} onStartScoring={() => setView("scoring")} />
             </motion.div>
           )}
 
@@ -657,32 +663,372 @@ export default function App() {
               <ResultsAdmin onBack={() => setView("landing")} />
             </motion.div>
           )}
-
-          {view === "scoring" && cfg && (
-            <motion.div key="scoring" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Scoring
-                config={cfg}
-                onAbort={() => {
-                  setCfg(null);
-                  setView("landing");
-                }}
-                onComplete={() => {
-                  setCfg(null);
-                  setView("results");
-                }}
-              />
-            </motion.div>
-          )}
-
-          {/* Admin can also open the small AdminViewerPanel if you want */}
-          {view === "viewer-admin" && (
-            <motion.div key="viewer-admin" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <AdminViewerPanel />
-            </motion.div>
-          )}
         </AnimatePresence>
       </div>
       <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW NPL</footer>
+    </div>
+  );
+}
+
+/* ===========================
+   Minimal FixturesAdmin, Start, ResultsAdmin, Scoring placeholders
+   (I retain the fixture-based start/results logic you already had previously.)
+   These are simplified to fit into one file — adapt if your full scoring logic differs.
+   =========================== */
+
+// FixturesAdmin: small admin UI to add/remove fixtures (category picker and qualifier/semi/final option)
+function FixturesAdmin({ onBack }) {
+  const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
+  const [mode, setMode] = React.useState("singles"); // 'singles' | 'doubles'
+  const [category, setCategory] = React.useState(
+    SINGLES_CATEGORIES_ORDER[0]
+  );
+  const [sideA, setSideA] = React.useState("");
+  const [sideB, setSideB] = React.useState("");
+  const [date, setDate] = React.useState("");
+  const [time, setTime] = React.useState("");
+  const [list, setList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
+
+  // load players + fixtures
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      try {
+        // load players
+        try {
+          const p = await apiPlayersGet();
+          if (alive && p) {
+            // ensure shape
+            setPlayers({
+              singles: p.singles || {},
+              doubles: p.doubles || {}
+            });
+            // default category depending on mode
+            if (mode === "singles") {
+              setCategory((prev) => prev || SINGLES_CATEGORIES_ORDER[0]);
+            } else {
+              setCategory((prev) => prev || DOUBLES_CATEGORIES_ORDER[0]);
+            }
+          }
+        } catch (e) {
+          // non-fatal: keep players empty
+          console.warn("Failed loading players", e);
+        }
+
+        // load fixtures
+        try {
+          const fx = await apiFixturesList();
+          if (alive) {
+            // normalize to array and sort
+            const arr = Array.isArray(fx) ? fx.slice() : [];
+            arr.sort((a, b) => (a.start || 0) - (b.start || 0));
+            setList(arr);
+          }
+        } catch (e) {
+          console.warn("Failed loading fixtures", e);
+        }
+      } catch (e) {
+        if (alive) setError("Could not load fixtures/players.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []); // run once on mount
+
+  // when mode changes, reset category and sides
+  React.useEffect(() => {
+    setCategory(mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]);
+    setSideA("");
+    setSideB("");
+  }, [mode]);
+
+  // options available in Side dropdowns for the selected mode+category
+  const options = React.useMemo(() => {
+    if (mode === "singles") {
+      return players.singles && players.singles[category] ? players.singles[category] : [];
+    } else {
+      return players.doubles && players.doubles[category] ? players.doubles[category] : [];
+    }
+  }, [mode, category, players]);
+
+  const canAdd = category && sideA && sideB && sideA !== sideB && date && time;
+
+  const addFixture = async (e) => {
+    e.preventDefault();
+    if (!canAdd) return;
+    try {
+      const start = new Date(`${date}T${time}:00`).getTime();
+      const payload = {
+        id: crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
+        mode,
+        category,
+        sides: [sideA, sideB],
+        start,
+        status: "upcoming" // default
+      };
+      await apiFixturesAdd(payload);
+
+      // reload fixtures client-side (or append + sort)
+      const newList = [...list, payload].sort((a,b) => (a.start||0)-(b.start||0));
+      setList(newList);
+
+      // clear form
+      setSideA("");
+      setSideB("");
+      setDate("");
+      setTime("");
+    } catch (err) {
+      console.error("Add fixture failed", err);
+      setError("Failed to add fixture.");
+    }
+  };
+
+  const removeFixture = async (id) => {
+    try {
+      await apiFixturesRemove(id);
+      setList((prev) => prev.filter((f) => f.id !== id));
+    } catch (err) {
+      console.error("Remove fixture failed", err);
+      setError("Failed to remove fixture.");
+    }
+  };
+
+  const clearFixtures = async () => {
+    if (!confirm("Clear ALL fixtures?")) return;
+    try {
+      await apiFixturesClear();
+      setList([]);
+    } catch (err) {
+      console.error("Clear fixtures failed", err);
+      setError("Failed to clear fixtures.");
+    }
+  };
+
+  const refreshFixtures = async () => {
+    setLoading(true);
+    try {
+      const fx = await apiFixturesList();
+      const arr = Array.isArray(fx) ? fx.slice() : [];
+      arr.sort((a, b) => (a.start || 0) - (b.start || 0));
+      setList(arr);
+      setError("");
+    } catch (e) {
+      console.error("Refresh failed", e);
+      setError("Refresh failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <h2 className="text-xl font-bold">Fixtures</h2>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" onClick={refreshFixtures}><RefreshCw className="w-4 h-4" /> Refresh</Button>
+          <Button variant="secondary" onClick={clearFixtures}>Clear All</Button>
+        </div>
+      </div>
+
+      {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200 rounded-xl">{error}</Card>}
+
+      {loading ? (
+        <Card className="p-5 text-center text-zinc-500">Loading fixtures…</Card>
+      ) : (
+        <>
+          <Card className="p-5 mb-6">
+            <div className="font-semibold mb-3">Schedule a Match</div>
+
+            <form onSubmit={addFixture} className="grid md:grid-cols-4 gap-4">
+              <div className="md:col-span-1">
+                <div className="text-sm text-zinc-600 mb-1">Type</div>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="mode" value="singles" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="mode" value="doubles" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm text-zinc-600 mb-1">Category</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={category} onChange={(e) => setCategory(e.target.value)}>
+                  {(mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="text-sm text-zinc-600 mb-1">{mode === "singles" ? 'Player 1' : 'Team 1'}</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={sideA} onChange={(e) => setSideA(e.target.value)}>
+                  <option value="">Choose…</option>
+                  {options.map((o, i) => <option key={i} value={o}>{o}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div className="text-sm text-zinc-600 mb-1">{mode === "singles" ? 'Player 2' : 'Team 2'}</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={sideB} onChange={(e) => setSideB(e.target.value)}>
+                  <option value="">Choose…</option>
+                  {options.map((o, i) => <option key={i} value={o}>{o}</option>)}
+                </select>
+              </div>
+
+              <div className="md:col-span-1">
+                <div className="text-sm text-zinc-600 mb-1">Date</div>
+                <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+
+              <div className="md:col-span-1">
+                <div className="text-sm text-zinc-600 mb-1">Time</div>
+                <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={(e) => setTime(e.target.value)} />
+              </div>
+
+              <div className="md:col-span-4">
+                <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
+              </div>
+            </form>
+          </Card>
+
+          {list.length === 0 ? (
+            <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card>
+          ) : (
+            <div className="space-y-3">
+              {list.map((f) => (
+                <Card key={f.id} className="p-4 flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode} • {f.category || ""}</span></div>
+                    <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()} {f.status === "active" && <span className="ml-2 inline-flex items-center gap-1 text-emerald-600"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live</span>} {f.status === "completed" && <span className="ml-2 text-zinc-500 text-xs">(completed)</span>}</div>
+                  </div>
+                  <Button variant="ghost" onClick={() => removeFixture(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// StartFromFixtures (admin) - presents fixtures for start
+function StartFromFixtures({ onBack, onStartScoring }) {
+  const [mode, setMode] = useState("singles");
+  const [fixtures, setFixtures] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const fx = await apiFixturesList();
+        if (alive) setFixtures(fx || []);
+      } catch (_) {
+        if (alive) setFixtures([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const list = fixtures.filter((f) => (f.mode || "singles") === mode && f.status !== "completed");
+
+  const startFixture = async (fx) => {
+    const now = Date.now();
+    const patch = { status: "active" };
+    if (fx.start > now) patch.start = now;
+    try {
+      // demote other active
+      for (const other of fixtures) {
+        if (other.id !== fx.id && other.status === "active") {
+          await apiFixturesUpdate(other.id, { status: "upcoming" });
+        }
+      }
+      await apiFixturesUpdate(fx.id, patch);
+      onStartScoring({ mode: fx.mode, sides: fx.sides, rule: "regular", bestOf: 3, gamesTarget: 6, startingServer: 0, fixtureId: fx.id });
+    } catch (e) {
+      alert("Start failed");
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button><h2 className="text-xl font-bold">Start Match</h2></div>
+      <Card className="p-5">
+        <div className="flex gap-6 mb-4">
+          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
+          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
+        </div>
+
+        {loading ? <div className="text-zinc-500">Loading fixtures…</div> : (list.length === 0 ? <div className="text-zinc-500">No fixtures for {mode}.</div> : <div className="space-y-3">{list.map((f) => (
+          <Card key={f.id} className="p-4 flex items-center gap-4">
+            <div className="flex-1">
+              <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+              <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+            </div>
+            <Button onClick={() => startFixture(f)}><Play className="w-4 h-4" /> Start Now</Button>
+          </Card>
+        ))}</div>)}
+      </Card>
+    </div>
+  );
+}
+
+// ResultsAdmin: uses fixtures endpoint to show status
+function ResultsAdmin({ onBack }) {
+  const [fixtures, setFixtures] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const fx = await apiFixturesList();
+        if (alive) setFixtures(fx || []);
+      } catch (_) {
+        if (alive) setFixtures([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const active = fixtures.filter((f) => f.status === "active");
+  const upcoming = fixtures.filter((f) => !f.status || f.status === "upcoming");
+  const completed = fixtures.filter((f) => f.status === "completed").sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+
+  return (
+    <div className="max-w-5xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button><h2 className="text-xl font-bold">Results</h2></div>
+      {loading ? <Card className="p-6 text-center text-zinc-500">Loading…</Card> : (
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <div className="text-lg font-semibold mb-3">Active</div>
+            {active.length ? active.map(f => <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>) : <div className="text-zinc-500">No active match.</div>}
+            <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
+            {upcoming.length ? upcoming.map(f => <div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.category}</span></div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+          </Card>
+
+          <Card className="p-5">
+            <div className="text-lg font-semibold mb-3">Completed</div>
+            {completed.length ? completed.map(f => <div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="text-sm text-zinc-500">{f.finishedAt ? new Date(f.finishedAt).toLocaleString() : ""}</div><div className="mt-1 text-sm"><span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{f.winner || ""}</span> <span className="ml-3 font-mono">{f.scoreline || ""}</span></div></div>) : <div className="text-zinc-500">No completed fixtures.</div>}
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
