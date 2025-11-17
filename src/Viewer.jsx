@@ -1,176 +1,162 @@
 // src/Viewer.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
 import { ChevronLeft } from "lucide-react";
 
-/*
-  Viewer.jsx
-  - Tiles: Rules / Teams / Fixture-Scores (use images in the src root)
-  - When a tile is clicked: open a dedicated page for that tile (Back button returns to main menu)
-  - Teams view: pastel color cards, grouped categories in requested order, category counts
-  - Fetches players and fixtures from /api/players and /api/fixtures (fallback to localStorage)
-*/
+/**
+ * Viewer component
+ * - Tiles: Rules / Teams / Fixture-Scores
+ * - Rules: simple text
+ * - Teams: grouped, colored table with search & export CSV
+ * - Fixture/Scores: upcoming / active / completed lists
+ *
+ * Requires:
+ * - apiPlayersGet() -> { singles: { category: [names...] }, doubles: { category: [names...] } }
+ * - apiFixturesList() -> fixtures array with { id, mode, sides, start, status, winner, scoreline }
+ *
+ * If your players API still returns the legacy format ({ singles: [], doubles: [] }),
+ * adjust apiPlayersGet usage accordingly before using this file.
+ */
 
-const CATEGORY_STYLES = {
-  "Women's Singles": { background: "#dcfce7", color: "#065f46" }, // green pastel
-  "Kid's Singles": { background: "#e6f6ff", color: "#0b5ed7" }, // blue pastel
-  "NW Team (A) Singles": { background: "#fff1e6", color: "#92400e" }, // warm pastel
-  "NW Team (B) Singles": { background: "#f3e8ff", color: "#6b21a8" },
+const CATEGORY_COLORS = {
+  "Women's Singles": "bg-pink-100 border-pink-300 text-pink-700",
+  "Kid's Singles": "bg-yellow-50 border-yellow-300 text-yellow-700",
+  "Men's (A) Singles": "bg-emerald-50 border-emerald-300 text-emerald-700",
+  "Men's (B) Singles": "bg-lime-50 border-lime-300 text-lime-700",
 
-  "Women's Doubles": { background: "#fff1e6", color: "#9a3412" },
-  "Kid's Doubles": { background: "#f5f3ff", color: "#6b21a8" },
-  "NW Team (A) Doubles": { background: "#ecfeff", color: "#064e3b" },
-  "NW Team (B) Doubles": { background: "#ecfeff", color: "#055160" },
-  "Mixed Doubles": { background: "#dcfce7", color: "#14532d" },
+  "Women's Doubles": "bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700",
+  "Kid's Doubles": "bg-amber-50 border-amber-300 text-amber-700",
+  "Men's (A) Doubles": "bg-cyan-50 border-cyan-300 text-cyan-700",
+  "Men's (B) Doubles": "bg-sky-50 border-sky-300 text-sky-700",
+  "Mixed Doubles": "bg-violet-50 border-violet-300 text-violet-700",
 };
 
-// Display order required by you
+// Order requested for display
 const SINGLES_ORDER = [
   "Women's Singles",
   "Kid's Singles",
-  "NW Team (A) Singles",
-  "NW Team (B) Singles",
+  "Men's (A) Singles",
+  "Men's (B) Singles",
 ];
 const DOUBLES_ORDER = [
   "Women's Doubles",
   "Kid's Doubles",
-  "NW Team (A) Doubles",
-  "NW Team (B) Doubles",
+  "Men's (A) Doubles",
+  "Men's (B) Doubles",
   "Mixed Doubles",
 ];
 
-// helper: load /api/players JSON; fallback to localStorage
-async function fetchPlayers() {
-  try {
-    const res = await fetch("/api/players", { cache: "no-store" });
-    if (!res.ok) throw new Error("fetch players failed");
-    const json = await res.json();
-    // Expecting grouped format { singles: {category: []}, doubles: {category: []} }
-    // Support legacy flat arrays: { singles: [], doubles: [] }
-    if (Array.isArray(json?.singles)) {
-      // convert to grouped fallback (Women's Singles / Women's Doubles)
-      return {
-        singles: { "Women's Singles": json.singles || [] },
-        doubles: { "Women's Doubles": json.doubles || [] },
-      };
-    }
-    return {
-      singles: json?.singles || {},
-      doubles: json?.doubles || {},
-    };
-  } catch (e) {
-    // fallback to localStorage
-    try {
-      const raw = localStorage.getItem("tennis:players");
-      if (!raw) return { singles: {}, doubles: {} };
-      const j = JSON.parse(raw);
-      if (Array.isArray(j?.singles)) {
-        return {
-          singles: { "Women's Singles": j.singles || [] },
-          doubles: { "Women's Doubles": j.doubles || [] },
-        };
+function usePlayers() {
+  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const p = await apiPlayersGet();
+        // Support both new grouped format and old flat arrays
+        // If p.singles is an array -> convert to default categories (put everything under Women's Singles as fallback)
+        if (Array.isArray(p?.singles)) {
+          // put all singles into Women's Singles fallback to preserve data
+          const s = { "Women's Singles": p.singles || [] };
+          const d = { "Women's Doubles": p.doubles || [] };
+          if (alive) setPlayers({ singles: s, doubles: d });
+        } else {
+          // assume grouped already
+          if (alive)
+            setPlayers({
+              singles: p?.singles || {},
+              doubles: p?.doubles || {},
+            });
+        }
+      } catch (e) {
+        // fallback to empty grouped lists
+        if (alive) setPlayers({ singles: {}, doubles: {} });
+        console.error("Failed loading players", e);
+      } finally {
+        if (alive) setLoading(false);
       }
-      return { singles: j.singles || {}, doubles: j.doubles || {} };
-    } catch {
-      return { singles: {}, doubles: {} };
-    }
-  }
-}
-
-async function fetchFixtures() {
-  try {
-    const res = await fetch("/api/fixtures", { cache: "no-store" });
-    if (!res.ok) throw new Error("fetch fixtures failed");
-    const json = await res.json();
-    return Array.isArray(json) ? json : json?.fixtures || [];
-  } catch {
-    try {
-      const raw = localStorage.getItem("tennis:fixtures");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return { players, setPlayers, loading };
 }
 
 export default function Viewer() {
-  const [view, setView] = useState("landing"); // landing | rules | teams | fixtures
-  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
+  const [view, setView] = useState("landing"); // 'rules' | 'teams' | 'fixtures'
+  const { players, loading: playersLoading } = usePlayers();
   const [fixtures, setFixtures] = useState([]);
-  const [loadingPlayers, setLoadingPlayers] = useState(true);
-  const [loadingFixtures, setLoadingFixtures] = useState(true);
+  const [fixturesLoading, setFixturesLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      setLoadingPlayers(true);
-      const p = await fetchPlayers();
-      if (!alive) return;
-      setPlayers(p || { singles: {}, doubles: {} });
-      setLoadingPlayers(false);
+      try {
+        const fx = await apiFixturesList();
+        if (alive) setFixtures(fx || []);
+      } catch (e) {
+        if (alive) setFixtures([]);
+        console.error("Failed loading fixtures", e);
+      } finally {
+        if (alive) setFixturesLoading(false);
+      }
     })();
     return () => (alive = false);
   }, []);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      setLoadingFixtures(true);
-      const f = await fetchFixtures();
-      if (!alive) return;
-      setFixtures(f || []);
-      setLoadingFixtures(false);
-    })();
-    return () => (alive = false);
-  }, []);
-
-  // derived lists
-  const flattenedPlayers = useMemo(() => {
-    const out = [];
-    for (const [cat, arr] of Object.entries(players.singles || {})) {
-      (arr || []).forEach((name) => out.push({ category: cat, type: "Singles", name }));
-    }
-    for (const [cat, arr] of Object.entries(players.doubles || {})) {
-      (arr || []).forEach((name) => out.push({ category: cat, type: "Doubles", name }));
-    }
-    return out;
-  }, [players]);
-
-  // filter by search
-  const filteredPlayers = useMemo(() => {
-    const q = (search || "").trim().toLowerCase();
-    if (!q) return flattenedPlayers;
-    return flattenedPlayers.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)
-    );
-  }, [flattenedPlayers, search]);
-
-  // fixtures partitions
-  const active = useMemo(() => fixtures.filter((f) => f.status === "active"), [fixtures]);
-  const completed = useMemo(() => fixtures.filter((f) => f.status === "completed"), [fixtures]);
+  const completed = useMemo(
+    () => fixtures.filter((f) => f.status === "completed"),
+    [fixtures]
+  );
+  const active = useMemo(() => fixtures.filter((f) => f.status === "active"), [
+    fixtures,
+  ]);
   const upcoming = useMemo(
-    () => fixtures.filter((f) => !f.status || f.status === "upcoming").sort((a, b) => (a.start || 0) - (b.start || 0)),
+    () =>
+      fixtures
+        .filter((f) => !f.status || f.status === "upcoming")
+        .sort((a, b) => (a.start || 0) - (b.start || 0)),
     [fixtures]
   );
 
-  // export simple Teams CSV
+  // Flatten players for search/filter
+  const flattenedPlayers = useMemo(() => {
+    const res = [];
+    for (const [cat, arr] of Object.entries(players?.singles || {})) {
+      (arr || []).forEach((name) => res.push({ category: cat, type: "Singles", name }));
+    }
+    for (const [cat, arr] of Object.entries(players?.doubles || {})) {
+      (arr || []).forEach((name) => res.push({ category: cat, type: "Doubles", name }));
+    }
+    return res;
+  }, [players]);
+
+  const filteredPlayers = useMemo(() => {
+    if (!search?.trim()) return flattenedPlayers;
+    const q = search.trim().toLowerCase();
+    return flattenedPlayers.filter((p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
+  }, [flattenedPlayers, search]);
+
+  // CSV export for Teams
   const exportTeamsCSV = () => {
-    const rows = [["Category", "Type", "Name"]];
-    for (const cat of SINGLES_ORDER) {
-      const arr = players.singles?.[cat] || [];
-      if (!arr.length) rows.push([cat, "Singles", ""]);
-      else arr.forEach((n) => rows.push([cat, "Singles", n]));
+    // Build rows: Category, Type, Player
+    const rows = [];
+    for (const cat of [...SINGLES_ORDER, ...DOUBLES_ORDER]) {
+      const type = SINGLES_ORDER.includes(cat) ? "Singles" : "Doubles";
+      const arr = (type === "Singles" ? players.singles?.[cat] : players.doubles?.[cat]) || [];
+      if ((arr || []).length === 0) {
+        rows.push([cat, type, ""]);
+      } else {
+        arr.forEach((n) => rows.push([cat, type, n]));
+      }
     }
-    for (const cat of DOUBLES_ORDER) {
-      const arr = players.doubles?.[cat] || [];
-      if (!arr.length) rows.push([cat, "Doubles", ""]);
-      else arr.forEach((n) => rows.push([cat, "Doubles", n]));
-    }
-    const csv = rows.map((r) => r.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    const csv = [["Category", "Type", "Name"], ...rows].map((r) => r.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -179,118 +165,123 @@ export default function Viewer() {
     URL.revokeObjectURL(url);
   };
 
-  // Teams panel rendering (colors + counts)
-  const renderTeamsPanel = () => {
-    // Only show categories in the given order; if a category doesn't exist we still show it (optionally)
-    const singlesCats = SINGLES_ORDER;
-    const doublesCats = DOUBLES_ORDER;
+  // Small UI components
+  const Tile = ({ title, subtitle, src, action }) => (
+    <button onClick={action} className="w-full md:w-80 rounded-2xl overflow-hidden border shadow bg-white text-left hover:shadow-lg transition">
+      <div className="h-40 relative"><img src={src} className="absolute inset-0 w-full h-full object-cover" alt="" /></div>
+      <div className="p-4"><div className="font-semibold">{title}</div><div className="text-sm text-zinc-600">{subtitle}</div></div>
+    </button>
+  );
 
+  // Teams rendering grouped by categories (with colors)
+  const renderTeamsPanel = () => {
     return (
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-          <button className="btn" onClick={() => setView("landing")}><ChevronLeft className="w-4 h-4" /> Back</button>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>Teams</h2>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <button className="btn" onClick={exportTeamsCSV}>Export CSV</button>
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-100" onClick={() => setView("landing")}>
+            <ChevronLeft className="w-4 h-4" /> Back
+          </button>
+          <h2 className="text-xl font-bold">Teams</h2>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={exportTeamsCSV} className="px-4 py-2 rounded-xl bg-emerald-600 text-white">Export CSV</button>
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
-          <div>
-            <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>Singles</div>
-              <div style={{ color: "#6b7280" }}>{singlesCats.length} categories</div>
+        <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <div className="flex items-center gap-2 mb-3">
+              <input className="flex-1 rounded-xl border px-3 py-2" placeholder="Search players or categories..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <button onClick={() => setSearch("")} className="px-3 py-2 rounded-xl bg-zinc-100">Clear</button>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              {singlesCats.map((cat) => {
-                const arr = players.singles?.[cat] || [];
-                const style = CATEGORY_STYLES[cat] || { background: "#f8fafc", color: "#334155" };
-                return (
-                  <div key={cat} style={{ background: style.background, borderRadius: 12, padding: 14, minHeight: 120 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                      <div style={{ fontWeight: 700, color: style.color }}>{cat}</div>
-                      <div style={{ color: "#6b7280" }}>{arr.length} {arr.length === 1 ? "player" : "players"}</div>
-                    </div>
-                    <div>
-                      {arr.length === 0 ? <div style={{ color: "#6b7280" }}>No players</div> : (
-                        <ul style={{ marginLeft: 18 }}>
-                          {arr.map((n, i) => <li key={i} style={{ marginBottom: 4 }}>{n}</li>)}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <div className="space-y-4">
+              {/* Render singles first in the requested order */}
+              <div>
+                <div className="text-lg font-semibold mb-3">Singles</div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {SINGLES_ORDER.map((cat) => {
+                    const arr = players.singles?.[cat] || [];
+                    const visible = filteredPlayers.some((p) => p.category === cat) || search.trim() === "";
+                    return (
+                      <div key={cat} className="bg-white rounded-2xl border p-4 shadow-sm">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className={`px-3 py-1 rounded-full text-xs font-semibold ${CATEGORY_COLORS[cat] || "bg-zinc-100 border-zinc-200 text-zinc-700"}`}>
+                            {cat}
+                          </div>
+                          <div className="text-sm text-zinc-500">{arr.length} {arr.length === 1 ? "player" : "players"}</div>
+                        </div>
+                        <div>
+                          {(!arr || arr.length === 0) ? <div className="text-zinc-400">No players</div> : (
+                            <ul className="space-y-2">
+                              {arr.map((n, i) => <li key={i} className="px-3 py-2 rounded-lg bg-zinc-50">{n}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-            <div style={{ marginTop: 28, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>Doubles</div>
-              <div style={{ color: "#6b7280" }}>{doublesCats.length} categories</div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              {doublesCats.map((cat) => {
-                const arr = players.doubles?.[cat] || [];
-                const style = CATEGORY_STYLES[cat] || { background: "#f8fafc", color: "#334155" };
-                return (
-                  <div key={cat} style={{ background: style.background, borderRadius: 12, padding: 14, minHeight: 120 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                      <div style={{ fontWeight: 700, color: style.color }}>{cat}</div>
-                      <div style={{ color: "#6b7280" }}>{arr.length} {arr.length === 1 ? "pair" : "pairs"}</div>
-                    </div>
-                    <div>
-                      {arr.length === 0 ? <div style={{ color: "#6b7280" }}>No pairs</div> : (
-                        <ul style={{ marginLeft: 18 }}>
-                          {arr.map((n, i) => <li key={i} style={{ marginBottom: 4 }}>{n}</li>)}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {/* Doubles */}
+              <div>
+                <div className="text-lg font-semibold mb-3">Doubles</div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {DOUBLES_ORDER.map((cat) => {
+                    const arr = players.doubles?.[cat] || [];
+                    return (
+                      <div key={cat} className="bg-white rounded-2xl border p-4 shadow-sm">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className={`px-3 py-1 rounded-full text-xs font-semibold ${CATEGORY_COLORS[cat] || "bg-zinc-100 border-zinc-200 text-zinc-700"}`}>
+                            {cat}
+                          </div>
+                          <div className="text-sm text-zinc-500">{arr.length} {arr.length === 1 ? "pair" : "pairs"}</div>
+                        </div>
+                        <div>
+                          {(!arr || arr.length === 0) ? <div className="text-zinc-400">No pairs</div> : (
+                            <ul className="space-y-2">
+                              {arr.map((n, i) => <li key={i} className="px-3 py-2 rounded-lg bg-zinc-50">{n}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Right column summary */}
+          {/* Right column - a compact summary */}
           <div>
-            <div style={{ background: "white", borderRadius: 12, padding: 14, marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Summary</div>
-              <div style={{ color: "#6b7280", marginBottom: 8 }}>Total (listed): {flattenedPlayers.length}</div>
-
-              <div style={{ display: "grid", gap: 8 }}>
-                {SINGLES_ORDER.map((cat) => {
-                  const arr = players.singles?.[cat] || [];
-                  const style = CATEGORY_STYLES[cat] || { background: "#f8fafc", color: "#334155" };
-                  return (
-                    <div key={cat} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <span style={{ width: 12, height: 12, borderRadius: 6, display: "inline-block", background: style.color }} />
-                        <div style={{ fontSize: 13 }}>{cat}</div>
-                      </div>
-                      <div style={{ color: "#6b7280" }}>{arr.length}</div>
+            <div className="bg-white rounded-2xl border p-4 shadow-sm mb-4">
+              <div className="font-semibold mb-2">Quick Summary</div>
+              <div className="text-sm text-zinc-600 mb-2">Total Players (approx): {flattenedPlayers.length}</div>
+              <div className="space-y-2">
+                {Object.entries(players.singles || {}).map(([cat, arr]) => (
+                  <div key={cat} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${CATEGORY_COLORS[cat] ? CATEGORY_COLORS[cat].split(" ")[0].replace("bg-", "bg-") : "bg-zinc-300"}`} />
+                      <div>{cat}</div>
                     </div>
-                  );
-                })}
-                {DOUBLES_ORDER.map((cat) => {
-                  const arr = players.doubles?.[cat] || [];
-                  const style = CATEGORY_STYLES[cat] || { background: "#f8fafc", color: "#334155" };
-                  return (
-                    <div key={cat} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <span style={{ width: 12, height: 12, borderRadius: 6, display: "inline-block", background: style.color }} />
-                        <div style={{ fontSize: 13 }}>{cat}</div>
-                      </div>
-                      <div style={{ color: "#6b7280" }}>{arr.length}</div>
+                    <div className="text-zinc-500">{(arr || []).length}</div>
+                  </div>
+                ))}
+                {Object.entries(players.doubles || {}).map(([cat, arr]) => (
+                  <div key={cat} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${CATEGORY_COLORS[cat] ? CATEGORY_COLORS[cat].split(" ")[0].replace("bg-", "bg-") : "bg-zinc-300"}`} />
+                      <div>{cat}</div>
                     </div>
-                  );
-                })}
+                    <div className="text-zinc-500">{(arr || []).length}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div style={{ background: "white", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Actions</div>
-              <button className="btn" style={{ width: "100%" }} onClick={exportTeamsCSV}>Download CSV</button>
+            <div className="bg-white rounded-2xl border p-4 shadow-sm">
+              <div className="font-semibold mb-2">Actions</div>
+              <button onClick={() => exportTeamsCSV()} className="w-full px-4 py-2 rounded-xl bg-emerald-600 text-white">Export CSV</button>
             </div>
           </div>
         </div>
@@ -299,83 +290,89 @@ export default function Viewer() {
   };
 
   const renderRulesPanel = () => (
-    <div style={{ maxWidth: 800, margin: "0 auto", padding: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-        <button className="btn" onClick={() => setView("landing")}><ChevronLeft className="w-4 h-4" /> Back</button>
-        <h2 style={{ fontSize: 18, fontWeight: 700 }}>Rules</h2>
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-100" onClick={() => setView("landing")}>
+          <ChevronLeft className="w-4 h-4" /> Back
+        </button>
+        <h2 className="text-xl font-bold">Rules</h2>
       </div>
-      <div style={{ background: "white", borderRadius: 12, padding: 18 }}>
-        <h3 style={{ marginBottom: 8 }}>Qualifiers and Semifinal Matches Format</h3>
-        <ol style={{ paddingLeft: 18, color: "#374151" }}>
-          <li>First to four games wins — First player/team to reach 4 games wins a set.</li>
-          <li>Tiebreak at 3-3 — At 3-3 a tiebreak is played (first to 5 points; 4-4 next point wins).</li>
-          <li>No-adv scoring — at deuce, next point decides the game (receiver chooses receiving side).</li>
-        </ol>
 
-        <h3 style={{ marginTop: 12 }}>Final Matches format</h3>
-        <ol style={{ paddingLeft: 18, color: "#374151" }}>
-          <li>One full set — standard set to 6 games with tie-break.</li>
-          <li>Limited deuce points — maximum 3 deuce points; next point after that decides the game.</li>
+      <div className="bg-white rounded-2xl shadow border p-6">
+        <h3 className="text-lg font-semibold mb-3">Scoring Summary</h3>
+        <ol className="list-decimal pl-5 space-y-2 text-sm text-zinc-700">
+          <li>First to four games wins the set.</li>
+          <li>Tiebreak at 3-3. Tiebreak is first to 5 points, 4-4 = next point wins.</li>
+          <li>No-adv games: the deciding point at deuce; receiver chooses side to receive from.</li>
+          <li>For doubles, receiving team decides their receiving side.</li>
         </ol>
       </div>
     </div>
   );
 
   const renderFixturesPanel = () => (
-    <div style={{ maxWidth: 1000, margin: "0 auto", padding: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-        <button className="btn" onClick={() => setView("landing")}><ChevronLeft className="w-4 h-4" /> Back</button>
-        <h2 style={{ fontSize: 18, fontWeight: 700 }}>Fixture & Scores</h2>
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-100" onClick={() => setView("landing")}>
+          <ChevronLeft className="w-4 h-4" /> Back
+        </button>
+        <h2 className="text-xl font-bold">Fixture & Scores</h2>
       </div>
 
-      {loadingFixtures ? <div style={{ padding: 18, color: "#6b7280" }}>Loading fixtures…</div> : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16 }}>
-          <div>
-            <div style={{ marginBottom: 12, fontWeight: 700 }}>Active</div>
-            {active.length === 0 ? <div style={{ color: "#6b7280" }}>No active matches</div> : active.map((f) => (
-              <div key={f.id} style={{ background: "white", padding: 12, borderRadius: 10, marginBottom: 8 }}>
-                <div style={{ fontWeight: 700 }}>{f.sides?.[0]} vs {f.sides?.[1]}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{new Date(f.start).toLocaleString()}</div>
-                <div style={{ marginTop: 6 }}>Score: {f.scoreline || "—"}</div>
-              </div>
-            ))}
+      {fixturesLoading ? <div className="text-zinc-500 p-6">Loading fixtures…</div> : (
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="md:col-span-2 space-y-4">
+            <div className="bg-white rounded-2xl border p-4 shadow-sm">
+              <div className="font-semibold mb-2">Active Match</div>
+              {active.length === 0 ? <div className="text-zinc-500">No active matches</div> : active.map(f => (
+                <div key={f.id} className="p-3 rounded-lg border mb-2">
+                  <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+                  <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                  <div className="mt-1 text-sm">Score: {f.scoreline || "—"}</div>
+                </div>
+              ))}
+            </div>
 
-            <div style={{ marginTop: 18, fontWeight: 700 }}>Upcoming</div>
-            {upcoming.length === 0 ? <div style={{ color: "#6b7280" }}>No upcoming fixtures</div> : upcoming.map((f) => (
-              <div key={f.id} style={{ background: "white", padding: 12, borderRadius: 10, marginBottom: 8 }}>
-                <div style={{ fontWeight: 700 }}>{f.sides?.[0]} vs {f.sides?.[1]}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{new Date(f.start).toLocaleString()}</div>
-              </div>
-            ))}
+            <div className="bg-white rounded-2xl border p-4 shadow-sm">
+              <div className="font-semibold mb-2">Upcoming</div>
+              {upcoming.length === 0 ? <div className="text-zinc-500">No upcoming fixtures</div> : upcoming.map(f => (
+                <div key={f.id} className="p-3 rounded-lg border mb-2">
+                  <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div>
+                  <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Completed</div>
-            {completed.length === 0 ? <div style={{ color: "#6b7280" }}>No completed fixtures</div> : completed.slice(0, 8).map((f) => (
-              <div key={f.id} style={{ background: "white", padding: 12, borderRadius: 10, marginBottom: 8 }}>
-                <div style={{ fontWeight: 700 }}>{f.sides?.[0]} vs {f.sides?.[1]}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? `Winner: ${f.winner}` : ""}</div>
-                <div style={{ marginTop: 6 }}>{f.scoreline || ""}</div>
-              </div>
-            ))}
+            <div className="bg-white rounded-2xl border p-4 shadow-sm">
+              <div className="font-semibold mb-2">Completed</div>
+              {completed.length === 0 ? <div className="text-zinc-500">No completed fixtures</div> : completed.slice(0, 10).map(f => (
+                <div key={f.id} className="p-3 rounded-lg border mb-2">
+                  <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+                  <div className="text-sm text-zinc-500">{f.winner ? `Winner: ${f.winner}` : ""}</div>
+                  <div className="mt-1 text-sm">{f.scoreline || ""}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 
-  // Landing page with image tiles (keeps images on tiles)
+  // Landing view (three tiles)
   if (view === "landing") {
     return (
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800 }}>Viewer</h1>
+      <div className="max-w-5xl mx-auto p-6">
+        <div className="flex items-center gap-3 mb-8">
+          <h1 className="text-2xl font-bold">Viewer</h1>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
-          <Tile title="Rules" subtitle="Match rules & formats" src={imgStart} action={() => setView("rules")} />
-          <Tile title="Teams" subtitle="View players by category" src={imgSettings} action={() => setView("teams")} />
-          <Tile title="Fixture / Scores" subtitle="Active, Upcoming & Completed" src={imgScore} action={() => setView("fixtures")} />
+        <div className="grid md:grid-cols-3 gap-6">
+          <Tile title="Rules" subtitle="View match rules & scoring" src={imgStart} action={() => setView("rules")} />
+          <Tile title="Teams" subtitle="View players & pairs" src={imgSettings} action={() => setView("teams")} />
+          <Tile title="Fixture / Scores" subtitle="Active • Upcoming • Completed" src={imgScore} action={() => setView("fixtures")} />
         </div>
       </div>
     );
@@ -386,20 +383,5 @@ export default function Viewer() {
   if (view === "fixtures") return renderFixturesPanel();
 
   return null;
-}
-
-// small Tile component
-function Tile({ title, subtitle, src, action }) {
-  return (
-    <button onClick={action} style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #e6e9ef", background: "white", textAlign: "left", display: "block", cursor: "pointer" }}>
-      <div style={{ height: 140, position: "relative" }}>
-        <img src={src} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-      </div>
-      <div style={{ padding: 14 }}>
-        <div style={{ fontWeight: 700 }}>{title}</div>
-        <div style={{ color: "#6b7280", marginTop: 4 }}>{subtitle}</div>
-      </div>
-    </button>
-  );
 }
 
