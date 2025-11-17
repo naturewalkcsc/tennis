@@ -870,6 +870,7 @@ function StartFromFixtures({ onBack, onStartScoring }) {
   const list = fixtures.filter((f) => (f.mode || "singles") === mode && f.status !== "completed");
 
   const startFixture = async (fx) => {
+    alert("startFixture");
     const now = Date.now();
     const patch = { status: "active" };
     if (fx.start > now) patch.start = now;
