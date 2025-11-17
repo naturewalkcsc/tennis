@@ -677,6 +677,7 @@ export default function App() {
    =========================== */
 
 // FixturesAdmin: small admin UI to add/remove fixtures (category picker and qualifier/semi/final option)
+function FixturesAdmin({ onBack }) {
   const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
   const [mode, setMode] = React.useState("singles"); // 'singles' | 'doubles'
   const [category, setCategory] = React.useState(
