@@ -354,9 +354,13 @@ function FixturesPanel({ loading, fixtures = [] }) {
 
 /* ===========================
    ManagePlayers, FixturesAdmin, StartFromFixtures, ResultsAdmin
-   (unchanged from your admin implementation)
+   (kept same as earlier implementation)
+   NOTE: FixturesAdmin/StartFromFixtures/ResultsAdmin must exist in your file.
+   If your earlier file contained those functions, keep them in place unchanged.
+   For safety here we assume they are already in the file (your copy).
    =========================== */
-// ManagePlayers: unchanged from your version above (keeps categories etc.)
+
+// ManagePlayers implementation (unchanged)
 function ManagePlayers({ onBack }) {
   const [data, setData] = useState({ singles: {}, doubles: {} });
   const [loading, setLoading] = useState(true);
@@ -517,23 +521,26 @@ function ManagePlayers({ onBack }) {
 
 /* ===========================
    Admin FixturesAdmin, StartFromFixtures, ResultsAdmin
-   (kept same as earlier implementation in your file)
+   (ASSUMPTION: these are present in your file already and unchanged)
+   We'll reference StartFromFixtures in the main app below.
    =========================== */
 
+// Placeholder safe exports when user moved full implementations elsewhere.
+// If your file already includes the full implementations, keep those.
+// Below placeholders are only present to avoid runtime errors if the full functions
+// were not present in this snippet. Replace/remove if you have full code already.
 function FixturesAdmin({ onBack }) {
-  // ... (the same code from your file) - kept to avoid breaking features
-  // For brevity, you already have this earlier in your file; ensure it's present here unchanged.
-  // If you need the full function inline, copy the earlier implementation exactly.
-  return <div />; // placeholder to avoid syntax error if you pasted only parts. Replace with your full implementation.
+  return <div />; // if you have full implementation, keep that instead
 }
-
 function StartFromFixtures({ onBack, onStartScoring }) {
-  // ... (use your existing full implementation)
+  // If you already have the real StartFromFixtures implementation in the file, keep that.
+  // The real implementation should call onStartScoring(config) when starting a match.
   return <div />;
 }
-
 function ResultsAdmin({ onBack }) {
-  // ... (use your existing full implementation)
+  return <div />;
+}
+function Scoring({ config, onAbort, onComplete }) {
   return <div />;
 }
 
@@ -582,8 +589,10 @@ export default function App() {
       return false;
     }
   });
-  const [view, setView] = useState("landing"); // landing, start, results, settings, fixtures
+  const [view, setView] = useState("landing"); // landing, start, results, settings, fixtures, scoring
   const [fixtureList, setFixtureList] = useState([]);
+  // NEW: scoring config (so StartFromFixtures can pass the match config to the main app)
+  const [cfg, setCfg] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -631,13 +640,37 @@ export default function App() {
 
           {view === "start" && (
             <motion.div key="start" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <StartFromFixtures onBack={() => setView("landing")} onStartScoring={() => setView("scoring")} />
+              {/* IMPORTANT: pass a handler that accepts a scoring config (c) */}
+              <StartFromFixtures
+                onBack={() => setView("landing")}
+                onStartScoring={(c) => {
+                  // c should be the scoring configuration object from StartFromFixtures/startFixture
+                  setCfg(c);
+                  setView("scoring");
+                }}
+              />
             </motion.div>
           )}
 
           {view === "results" && (
             <motion.div key="results" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
               <ResultsAdmin onBack={() => setView("landing")} />
+            </motion.div>
+          )}
+
+          {view === "scoring" && cfg && (
+            <motion.div key="scoring" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <Scoring
+                config={cfg}
+                onAbort={() => {
+                  setCfg(null);
+                  setView("landing");
+                }}
+                onComplete={() => {
+                  setCfg(null);
+                  setView("results");
+                }}
+              />
             </motion.div>
           )}
 
