@@ -608,56 +608,328 @@ function ViewerPageStandalone() {
 }
 
 /* ---------------------- Public Viewer component ---------------------- */
+// Viewer component — replace the existing function Viewer() in App.jsx with this
 function Viewer() {
-  const [fixtures, setFixtures] = useState([]);
-  const [matches, setMatches] = useState([]);
-  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
-  const [loading, setLoading] = useState(true);
+  console.log("Viewer mounted"); // debug: confirms this component ran
+  const [view, setView] = React.useState("landing"); // landing | rules | teams | fixtures
+  const [fixtures, setFixtures] = React.useState([]);
+  const [matches, setMatches] = React.useState([]);
+  const [playersObj, setPlayersObj] = React.useState({ singles: [], doubles: [] });
+  const [loading, setLoading] = React.useState(true);
 
-  useEffect(() => {
+  const busterLocal = () => `?t=${Date.now()}`;
+
+  // minimal api wrappers here (independent, so Viewer doesn't import other local helpers)
+  const apiFixturesListLocal = async () => {
+    const r = await fetch("/api/fixtures" + busterLocal(), { cache: "no-store" });
+    if (!r.ok) throw new Error("fixtures fetch failed");
+    return await r.json();
+  };
+  const apiMatchesListLocal = async () => {
+    const r = await fetch("/api/matches" + busterLocal(), { cache: "no-store" });
+    if (!r.ok) throw new Error("matches fetch failed");
+    return await r.json();
+  };
+  const apiPlayersGetLocal = async () => {
+    const r = await fetch("/api/players" + busterLocal(), { cache: "no-store" });
+    if (!r.ok) throw new Error("players fetch failed");
+    return await r.json();
+  };
+
+  React.useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const [fx, ms, pl] = await Promise.all([apiFixturesList(), apiMatchesList(), apiPlayersGet()]);
+        const [fx, ms, pl] = await Promise.allSettled([
+          apiFixturesListLocal(),
+          apiMatchesListLocal(),
+          apiPlayersGetLocal(),
+        ]);
         if (!alive) return;
-        setFixtures(fx || []);
-        setMatches(ms || []);
-        setPlayers(normalizePlayers(pl));
+
+        if (fx.status === "fulfilled") setFixtures(Array.isArray(fx.value) ? fx.value : []);
+        else setFixtures([]);
+
+        if (ms.status === "fulfilled") setMatches(Array.isArray(ms.value) ? ms.value : []);
+        else setMatches([]);
+
+        if (pl.status === "fulfilled") {
+          // player data can be legacy (array) or new object {singles:..., doubles:...}
+          const p = pl.value;
+          if (Array.isArray(p)) {
+            // legacy: treat as singles array
+            setPlayersObj({ singles: p, doubles: [] });
+          } else if (p && typeof p === "object") {
+            setPlayersObj({
+              singles: Array.isArray(p.singles) ? p.singles : [],
+              doubles: Array.isArray(p.doubles) ? p.doubles : [],
+            });
+          } else {
+            setPlayersObj({ singles: [], doubles: [] });
+          }
+        } else {
+          setPlayersObj({ singles: [], doubles: [] });
+        }
       } catch (e) {
-        console.error("Viewer load failed", e);
-      } finally { if (alive) setLoading(false); }
+        console.error("Viewer load error", e);
+        setFixtures([]);
+        setMatches([]);
+        setPlayersObj({ singles: [], doubles: [] });
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
 
+    // live refresh every 10s for fixtures/matches so viewer stays live
     const iv = setInterval(async () => {
-      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch {}
+      try {
+        const [fx, ms] = await Promise.all([apiFixturesListLocal(), apiMatchesListLocal()]);
+        setFixtures(Array.isArray(fx) ? fx : []);
+        setMatches(Array.isArray(ms) ? ms : []);
+      } catch (e) {
+        // ignore transient errors
+      }
     }, 10000);
-    return () => { alive = false; clearInterval(iv); };
+
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
   }, []);
 
-  const active = fixtures.filter(f => f.status === "active");
-  const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
-  const completed = [...fixtures.filter(f => f.status === "completed"), ...matches].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
+  // Helpers to compute views
+  const active = fixtures.filter((f) => f.status === "active");
+  const upcoming = fixtures.filter((f) => !f.status || f.status === "upcoming");
+  const completedFixtures = fixtures.filter((f) => f.status === "completed");
+  const completed = [
+    ...completedFixtures,
+    ...matches.map((m) => ({
+      id: m.id,
+      sides: m.sides,
+      finishedAt: m.finishedAt,
+      scoreline: m.scoreline,
+      winner: m.winner,
+      mode: m.mode || "singles",
+    })),
+  ].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
 
+  // Simple card tile used in landing
+  const Tile = ({ title, subtitle, src, onClick }) => (
+    <motion.button
+      onClick={onClick}
+      whileHover={{ y: -2 }}
+      className="w-full md:w-80 rounded-2xl overflow-hidden border shadow bg-white text-left"
+    >
+      <div className="h-40 relative">
+        <img src={src} className="absolute inset-0 w-full h-full object-cover" alt="" />
+      </div>
+      <div className="p-4">
+        <div className="font-semibold">{title}</div>
+        <div className="text-sm text-zinc-600">{subtitle}</div>
+      </div>
+    </motion.button>
+  );
+
+  // Renders each dedicated page
+  if (view === "rules") {
+    return (
+      <div className="app-bg">
+        <div className="max-w-4xl mx-auto p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Button variant="ghost" onClick={() => setView("landing")}>
+              <ChevronLeft className="w-5 h-5" /> Back
+            </Button>
+            <h2 className="text-xl font-bold">Rules</h2>
+          </div>
+          <Card className="p-5">
+            <h3 className="font-semibold mb-2">Qualifiers and Semifinal Matches Format</h3>
+            <ol className="list-decimal pl-6 mb-4">
+              <li>First to four games wins — First player/team to reach 4 games wins a set.</li>
+              <li>
+                Tiebreak at 3-3 — At 3-3 a tiebreak is played. The tiebreak is won by the first player to reach 5
+                points. If it reaches 4-4, next point wins.
+              </li>
+              <li>No-adv scoring — at deuce (40-40) next point decides the game. Receiver chooses receiving side.</li>
+            </ol>
+
+            <h3 className="font-semibold mb-2">Final Matches format</h3>
+            <ol className="list-decimal pl-6">
+              <li>One full set - standard set rule of 6 games and tie-break followed.</li>
+              <li>
+                Limited Deuce Points: Max 3 deuce points allowed. At 4th deuce point the next point decides the game.
+              </li>
+            </ol>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "teams") {
+    // Render teams page (colored boxes by category) — attempt to preserve your styling
+    const SINGLES_CATEGORIES_ORDER = [
+      "Women's Singles",
+      "Kid's Singles",
+      "NW Team (A) Singles",
+      "NW Team (B) Singles",
+    ];
+    const DOUBLES_CATEGORIES_ORDER = [
+      "Women's Doubles",
+      "Kid's Doubles",
+      "NW Team (A) Doubles",
+      "NW Team (B) Doubles",
+      "Mixed Doubles",
+    ];
+
+    const singlesByCategory = playersObj.singles && !Array.isArray(playersObj.singles)
+      ? playersObj.singles
+      : (() => {
+          // if singles is array (legacy), put it in "Women's Singles" as fallback
+          const map = {};
+          SINGLES_CATEGORIES_ORDER.forEach((c) => (map[c] = []));
+          if (Array.isArray(playersObj.singles)) map["Women's Singles"] = playersObj.singles.slice();
+          return map;
+        })();
+
+    const doublesByCategory = playersObj.doubles && !Array.isArray(playersObj.doubles)
+      ? playersObj.doubles
+      : (() => {
+          const map = {};
+          DOUBLES_CATEGORIES_ORDER.forEach((c) => (map[c] = []));
+          if (Array.isArray(playersObj.doubles)) map["Women's Doubles"] = playersObj.doubles.slice();
+          return map;
+        })();
+
+    const colored = [
+      "bg-emerald-100",
+      "bg-sky-100",
+      "bg-amber-100",
+      "bg-violet-100",
+      "bg-rose-100",
+      "bg-lime-100",
+    ];
+
+    return (
+      <div className="app-bg">
+        <div className="max-w-5xl mx-auto p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Button variant="ghost" onClick={() => setView("landing")}>
+              <ChevronLeft className="w-5 h-5" /> Back
+            </Button>
+            <h2 className="text-xl font-bold">Teams</h2>
+          </div>
+
+          <Card className="p-5 mb-6">
+            <div className="text-lg font-semibold mb-3">Singles</div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {SINGLES_CATEGORIES_ORDER.map((cat, idx) => {
+                const list = (singlesByCategory && singlesByCategory[cat]) || [];
+                return (
+                  <div key={cat} className={`p-4 rounded-lg ${colored[idx % colored.length]}`}>
+                    <div className="font-semibold mb-2">{cat} <span className="text-sm text-zinc-600 float-right">{list.length} players</span></div>
+                    <ul className="list-disc pl-5">
+                      {list.map((n, i) => <li key={i}>{n}</li>)}
+                      {list.length === 0 && <li className="text-zinc-500">—</li>}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="text-lg font-semibold mb-3">Doubles</div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {DOUBLES_CATEGORIES_ORDER.map((cat, idx) => {
+                const list = (doublesByCategory && doublesByCategory[cat]) || [];
+                return (
+                  <div key={cat} className={`p-4 rounded-lg ${colored[(idx+2) % colored.length]}`}>
+                    <div className="font-semibold mb-2">{cat} <span className="text-sm text-zinc-600 float-right">{list.length} teams</span></div>
+                    <ul className="list-disc pl-5">
+                      {list.map((n, i) => <li key={i}>{n}</li>)}
+                      {list.length === 0 && <li className="text-zinc-500">—</li>}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "fixtures") {
+    return (
+      <div className="app-bg">
+        <div className="max-w-4xl mx-auto p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Button variant="ghost" onClick={() => setView("landing")}>
+              <ChevronLeft className="w-5 h-5" /> Back
+            </Button>
+            <h2 className="text-xl font-bold">Fixture / Scores</h2>
+          </div>
+
+          {loading ? (
+            <Card className="p-6 text-center text-zinc-500">Loading…</Card>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card className="p-5">
+                <div className="text-lg font-semibold mb-3">Active</div>
+                {active.length ? active.map((f) => (
+                  <div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div>
+                    <div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                  </div>
+                )) : <div className="text-zinc-500">No live match.</div>}
+
+                <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
+                {upcoming.length ? upcoming.map((f) => (
+                  <div key={f.id} className="py-2 border-b last:border-0">
+                    <div className="font-medium">
+                      {f.sides?.[0]} vs {f.sides?.[1]}
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>
+                    </div>
+                    <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div>
+                  </div>
+                )) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+              </Card>
+
+              <Card className="p-5">
+                <div className="text-lg font-semibold mb-3">Completed</div>
+                {completed.length ? completed.map((m) => (
+                  <div key={(m.id||"") + String(m.finishedAt||"")} className="py-2 border-b last:border-0">
+                    <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
+                    <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
+                    <div className="mt-1 text-sm">
+                      <span className="uppercase text-zinc-400 text-xs">Winner</span>{" "}
+                      <span className="font-semibold">{m.winner||''}</span>{" "}
+                      <span className="ml-3 font-mono">{m.scoreline||''}</span>
+                    </div>
+                  </div>
+                )) : <div className="text-zinc-500">No completed matches yet.</div>}
+              </Card>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // default landing with tiles
   return (
     <div className="app-bg">
       <div className="max-w-5xl mx-auto p-6">
-        <div className="mb-6"><h1 className="text-2xl font-bold">RNW Tennis Tournament</h1></div>
-        {loading ? <Card className="p-6 text-center text-zinc-500">Loading…</Card> : (
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="p-5">
-              <div className="text-lg font-semibold mb-3">Active</div>
-              {active.length ? active.map(f => (<div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> <div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No live match.</div>}
+        <div className="flex items-center gap-3 mb-8">
+          <h1 className="text-2xl font-bold">RNW Tennis Tournament</h1>
+        </div>
 
-              <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
-              {upcoming.length ? upcoming.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode || f.category || "—"}</span></div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
-            </Card>
-
-            <Card className="p-5">
-              <div className="text-lg font-semibold mb-3">Completed</div>
-              {completed.length ? completed.map(m => (<div key={(m.id||'')+String(m.finishedAt||'')} className="py-2 border-b last:border-0"><div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div><div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div><div className="mt-1 text-sm"><span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner||''}</span> <span className="ml-3 font-mono">{m.scoreline||''}</span></div></div>)) : <div className="text-zinc-500">No completed matches yet.</div>}
-            </Card>
-          </div>
-        )}
+        <div className="grid md:grid-cols-3 gap-6">
+          <Tile title="Rules" subtitle="Match rules and formats" src={imgStart} action={() => setView("rules")} />
+          <Tile title="Teams" subtitle="View players by category" src={imgScore} action={() => setView("teams")} />
+          <Tile title="Fixture/Scores" subtitle="Live, upcoming & recent results" src={imgSettings} action={() => setView("fixtures")} />
+        </div>
       </div>
     </div>
   );
