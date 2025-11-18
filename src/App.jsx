@@ -150,11 +150,9 @@ function AdminLogin({ onOk }) {
               />
             </div>
             {err && <div className="text-sm text-red-600">{err}</div>}
-            <button type="submit" className="w-full px-4 py-3 rounded-xl bg-green-600 text-white">
-              Enter Admin
-            </button>
+            <button type="submit" className="w-full px-4 py-3 rounded-xl bg-green-600 text-white">Enter Admin</button>
           </form>
-        </div>
+        </Card>
       </div>
     </div>
   );
@@ -258,6 +256,9 @@ const Settings = ({ onBack }) => {
     } finally { setSaving(false); }
   };
 
+  const singlesKeys = Object.keys(players.singles || {});
+  const doublesKeys = Object.keys(players.doubles || {});
+
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
@@ -304,12 +305,15 @@ const Settings = ({ onBack }) => {
 const Fixtures = ({ onBack }) => {
   const [players, setPlayers] = useState({ singles: [], doubles: [] });
   const [mode, setMode] = useState("singles");
+  const [category, setCategory] = useState("");
   const [a, setA] = useState("");
   const [b, setB] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const SINGLES_ORDER = ["Women's Singles","Kid's Singles","NW Team (A) Singles","NW Team (B) Singles"];
+  const DOUBLES_ORDER = ["Women's Doubles","Kid's Doubles","NW Team (A) Doubles","NW Team (B) Doubles","Mixed Doubles"];
 
   useEffect(() => {
     let alive = true;
@@ -374,6 +378,7 @@ const Fixtures = ({ onBack }) => {
                   {options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
+
               <div>
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
                 <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
@@ -470,8 +475,8 @@ function StartFromFixtures({ onBack, onStartScoring }) {
       </div>
       <Card className="p-5">
         <div className="flex gap-6 mb-4">
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
+          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode==="singles"} onChange={()=>setMode("singles")} /> Singles</label>
+          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode==="doubles"} onChange={()=>setMode("doubles")} /> Doubles</label>
         </div>
         {loading ? (
           <div className="text-zinc-500">Loading fixtures…</div>
