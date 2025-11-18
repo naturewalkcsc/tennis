@@ -200,6 +200,7 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
 
 /* ----------------- Settings (players) ----------------- */
 const Settings = ({ onBack }) => {
+  // Keep these as arrays in Settings for the simple Manage UI
   const [singles, setSingles] = useState([]);
   const [doubles, setDoubles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -229,10 +230,29 @@ const Settings = ({ onBack }) => {
       try {
         const obj = await apiPlayersGet();
         if (alive) {
-          setSingles(obj.singles || []);
-          setDoubles(obj.doubles || []);
+          // ---------- Robust handling ----------
+          // If backend returns arrays (legacy), use directly.
+          // If backend returns category-mapped objects (new format), flatten them into arrays for Manage UI.
+          const singlesRaw = obj && obj.singles !== undefined ? obj.singles : [];
+          const doublesRaw = obj && obj.doubles !== undefined ? obj.doubles : [];
+
+          const singlesArr = Array.isArray(singlesRaw)
+            ? singlesRaw
+            : (typeof singlesRaw === "object" && singlesRaw !== null)
+              ? Object.values(singlesRaw).flat()
+              : [];
+
+          const doublesArr = Array.isArray(doublesRaw)
+            ? doublesRaw
+            : (typeof doublesRaw === "object" && doublesRaw !== null)
+              ? Object.values(doublesRaw).flat()
+              : [];
+
+          setSingles(singlesArr || []);
+          setDoubles(doublesArr || []);
         }
-      } catch {
+      } catch (e) {
+        console.warn("Players load failed", e);
         setError("Could not load players");
       } finally {
         if (alive) setLoading(false);
@@ -252,9 +272,12 @@ const Settings = ({ onBack }) => {
   const save = async () => {
     setSaving(true); setError("");
     try {
+      // Saving arrays (legacy format). If you later want to persist by categories,
+      // update this block to store the object form expected by your backend.
       await apiPlayersSet({ singles, doubles });
       setDirty(false); clearDraft();
-    } catch {
+    } catch (e) {
+      console.error("players save failed", e);
       setError("Save failed");
     } finally { setSaving(false); }
   };
@@ -372,14 +395,14 @@ const Fixtures = ({ onBack }) => {
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
                 <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
                   <option value="">Choose…</option>
-                  {options.map(o => <option key={o} value={o}>{o}</option>)}
+                  {options && options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div>
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
                 <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
                   <option value="">Choose…</option>
-                  {options.map(o => <option key={o} value={o}>{o}</option>)}
+                  {options && options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-2">
