@@ -92,7 +92,7 @@ function renderCategoryCard(category, items, idx) {
         </div>
         <ul style={{ marginTop: 8, paddingLeft: 18 }}>
           {items.map((p, i) => (
-            <li key={${category}-${i}} style={{ marginBottom: 6 }}>
+            <li key={'${category}-${i}'} style={{ marginBottom: 6 }}>
               {p.name}
             </li>
           ))}
@@ -121,7 +121,7 @@ function renderCategoryCard(category, items, idx) {
               <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool A</div>
               <ul style={{ paddingLeft: 18 }}>
                 {groups.A.map((n, i) => (
-                  <li key={a-${i}} style={{ marginBottom: 6 }}>{n}</li>
+                  <li key={'a-${i}'} style={{ marginBottom: 6 }}>{n}</li>
                 ))}
               </ul>
             </div>
@@ -131,7 +131,7 @@ function renderCategoryCard(category, items, idx) {
               <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool B</div>
               <ul style={{ paddingLeft: 18 }}>
                 {groups.B.map((n, i) => (
-                  <li key={b-${i}} style={{ marginBottom: 6 }}>{n}</li>
+                  <li key={'b-${i}'} style={{ marginBottom: 6 }}>{n}</li>
                 ))}
               </ul>
             </div>
@@ -141,7 +141,7 @@ function renderCategoryCard(category, items, idx) {
               <div style={{ fontWeight: 600, marginBottom: 6 }}>No Pool</div>
               <ul style={{ paddingLeft: 18 }}>
                 {groups.none.map((n, i) => (
-                  <li key={n-${i}} style={{ marginBottom: 6 }}>{n}</li>
+                  <li key={'n-${i}'} style={{ marginBottom: 6 }}>{n}</li>
                 ))}
               </ul>
             </div>
