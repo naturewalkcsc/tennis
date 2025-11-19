@@ -16,7 +16,7 @@ import imgSettings from "./Settings.jpg";
  * The code tolerates player entries being plain strings (name) or objects { name: "...", pool: "A"| "B" | "none" }.
  */
 
-const cacheBuster = () => ?t=${Date.now()};
+const cacheBuster = () => '?t=${Date.now()}';
 
 async function fetchJson(url) {
   const res = await fetch(url + cacheBuster(), { cache: "no-store" });
