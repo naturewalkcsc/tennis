@@ -17,7 +17,7 @@ const buster = () => "?t=" + Date.now();
 
 async function fetchJson(url) {
   const res = await fetch(url + buster(), { cache: "no-store" });
-  if (!res.ok) throw new Error('${url} failed: ${res.status}');
+  if (!res.ok) throw new Error(${url} failed: ${res.status});
   return await res.json();
 }
 
@@ -254,7 +254,10 @@ export default function Viewer() {
               {active.length ? active.map(f => (
                 <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
                   <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-                  <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? Winner: ${f.winner} : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
+                  <div style={{ color: "#6b7280", fontSize: 13 }}>
+                    {f.winner && Winner: ${f.winner}}
+                    {f.scoreline && ` • ${f.scoreline}`}
+                  </div>
                   <div style={{ color: "#9ca3af", fontSize: 13 }}>{new Date(f.start).toLocaleString()}</div>
                 </div>
               )) : <div style={{ color: "#9ca3af" }}>No live match</div>}
@@ -275,7 +278,10 @@ export default function Viewer() {
               {completed.length ? completed.map(f => (
                 <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
                   <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-                  <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? Winner: ${f.winner} : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
+                  <div style={{ color: "#6b7280", fontSize: 13 }}>
+                    {f.winner && Winner: ${f.winner}}
+                    {f.scoreline && ` • ${f.scoreline}`}
+                  </div>
                   <div style={{ color: "#9ca3af", fontSize: 13 }}>{f.finishedAt ? new Date(f.finishedAt).toLocaleString() : ""}</div>
                 </div>
               )) : <div style={{ color: "#9ca3af" }}>No completed fixtures</div>}
