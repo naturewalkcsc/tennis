@@ -106,7 +106,7 @@ export default function Viewer() {
 
   const MenuView = () => (
     <div style={{ padding: 28 }}>
-      <h1 style={{ fontSize: 28, marginBottom: 18 }}>Viewer</h1>
+      <h1 style={{ fontSize: 28, marginBottom: 18 }}>RNW Tennis Tournament 2025</h1>
 
       <div
         style={{
