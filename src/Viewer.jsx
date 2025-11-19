@@ -255,8 +255,8 @@ export default function Viewer() {
                 <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
                   <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
                   <div style={{ color: "#6b7280", fontSize: 13 }}>
-                    {f.winner && Winner: ${f.winner}}
-                    {f.scoreline && ` • ${f.scoreline}`}
+                    {f.winner ? 'Winner: ${f.winner}' : ""}
+                    {f.scoreline ? ` • ${f.scoreline}`:""}
                   </div>
                   <div style={{ color: "#9ca3af", fontSize: 13 }}>{new Date(f.start).toLocaleString()}</div>
                 </div>
