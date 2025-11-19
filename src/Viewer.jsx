@@ -12,7 +12,7 @@ import imgSettings from "./Settings.jpg";
     * If any entry has pool 'A' or 'B', show Pool A & Pool B sub-tables (and No Pool list)
 */
 
-const buster = () => ?t=${Date.now()};
+const buster = () => '?t=${Date.now()}';
 
 async function fetchJson(url) {
   const res = await fetch(url + buster(), { cache: "no-store" });
