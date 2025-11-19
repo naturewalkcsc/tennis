@@ -208,9 +208,9 @@ export default function Viewer() {
                       <div style={{ marginTop: 8 }}>
                         {(groups.A.length > 0 || groups.B.length > 0) ? (
                           <>
-                            {groups.A.length > 0 && (<div style={{ marginBottom: 6 }}><div style={{ fontWeight: 600 }}>Pool A</div><ul>{groups.A.map((n, i) => <li key={a-${i}}>{n}</li>)}</ul></div>)}
-                            {groups.B.length > 0 && (<div style={{ marginBottom: 6 }}><div style={{ fontWeight: 600 }}>Pool B</div><ul>{groups.B.map((n, i) => <li key={b-${i}}>{n}</li>)}</ul></div>)}
-                            {groups.none.length > 0 && (<div><div style={{ fontWeight: 600 }}>No Pool</div><ul>{groups.none.map((n,i)=>(<li key={n-${i}}>{n}</li>))}</ul></div>)}
+                            {groups.A.length > 0 && (<div style={{ marginBottom: 6 }}><div style={{ fontWeight: 600 }}>Pool A</div><ul>{groups.A.map((n, i) => <li key={'a-${i}'}>{n}</li>)}</ul></div>)}
+                            {groups.B.length > 0 && (<div style={{ marginBottom: 6 }}><div style={{ fontWeight: 600 }}>Pool B</div><ul>{groups.B.map((n, i) => <li key={'b-${i}'}>{n}</li>)}</ul></div>)}
+                            {groups.none.length > 0 && (<div><div style={{ fontWeight: 600 }}>No Pool</div><ul>{groups.none.map((n,i)=>(<li key={'none-${i}'}>{n}</li>))}</ul></div>)}
                           </>
                         ) : (
                           <div style={{ color: "#9ca3af" }}>No players</div>
@@ -246,9 +246,9 @@ export default function Viewer() {
                       <div style={{ marginTop: 8 }}>
                         {(groups.A.length > 0 || groups.B.length > 0) ? (
                           <>
-                            {groups.A.length > 0 && (<div style={{ marginBottom: 6 }}><div style={{ fontWeight: 600 }}>Pool A</div><ul>{groups.A.map((n, i) => <li key={a-${i}}>{n}</li>)}</ul></div>)}
-                            {groups.B.length > 0 && (<div style={{ marginBottom: 6 }}><div style={{ fontWeight: 600 }}>Pool B</div><ul>{groups.B.map((n, i) => <li key={b-${i}}>{n}</li>)}</ul></div>)}
-                            {groups.none.length > 0 && (<div><div style={{ fontWeight: 600 }}>No Pool</div><ul>{groups.none.map((n,i)=>(<li key={n-${i}}>{n}</li>))}</ul></div>)}
+                            {groups.A.length > 0 && (<div style={{ marginBottom: 6 }}><div style={{ fontWeight: 600 }}>Pool A</div><ul>{groups.A.map((n, i) => <li key={'a-${i}'}>{n}</li>)}</ul></div>)}
+                            {groups.B.length > 0 && (<div style={{ marginBottom: 6 }}><div style={{ fontWeight: 600 }}>Pool B</div><ul>{groups.B.map((n, i) => <li key={'b-${i}'}>{n}</li>)}</ul></div>)}
+                            {groups.none.length > 0 && (<div><div style={{ fontWeight: 600 }}>No Pool</div><ul>{groups.none.map((n,i)=>(<li key={'none-${i}'}>{n}</li>))}</ul></div>)}
                           </>
                         ) : (
                           <div style={{ color: "#9ca3af" }}>No pairs</div>
