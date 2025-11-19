@@ -329,7 +329,7 @@ export default function Viewer() {
             {active.length ? active.map((f) => (
               <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
                 <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? Winner: ${f.winner} : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
+                <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? 'Winner: ${f.winner}' : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
                 <div style={{ marginTop: 6, color: "#6b7280" }}>{f.start ? new Date(f.start).toLocaleString() : ""}</div>
               </div>
             )) : <div style={{ color: "#9ca3af" }}>No live match.</div>}
@@ -348,7 +348,7 @@ export default function Viewer() {
             {completed.length ? completed.map((f) => (
               <div key={(f.id || "") + String(f.finishedAt || "")} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
                 <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? Winner: ${f.winner} : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
+                <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? 'Winner: ${f.winner}' : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
                 <div style={{ marginTop: 6, color: "#6b7280" }}>{f.finishedAt ? new Date(f.finishedAt).toLocaleString() : ""}</div>
               </div>
             )) : <div style={{ color: "#9ca3af" }}>No completed fixtures</div>}
