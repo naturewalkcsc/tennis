@@ -14,12 +14,12 @@ const CATEGORY_COLORS = [
 ];
 
 function cacheBuster() {
-  return ?t=${Date.now()};
+  return '?t=${Date.now()}';
 }
 
 async function fetchJson(url) {
   const res = await fetch(url + cacheBuster(), { cache: "no-store" });
-  if (!res.ok) throw new Error(${url} failed: ${res.status});
+  if (!res.ok) throw new Error('${url} failed: ${res.status}');
   return await res.json();
 }
 
@@ -150,7 +150,7 @@ export default function Viewer() {
                 <div style={{ marginBottom: 6 }}>
                   <div style={{ fontWeight: 600 }}>Pool A</div>
                   <ul>
-                    {groups.A.map((n, i) => <li key={a-${i}}>{normalizeEntryToName(n)}</li>)}
+                    {groups.A.map((n, i) => <li key={'a-${i}'}>{normalizeEntryToName(n)}</li>)}
                   </ul>
                 </div>
               )}
@@ -158,7 +158,7 @@ export default function Viewer() {
                 <div style={{ marginBottom: 6 }}>
                   <div style={{ fontWeight: 600 }}>Pool B</div>
                   <ul>
-                    {groups.B.map((n, i) => <li key={b-${i}}>{normalizeEntryToName(n)}</li>)}
+                    {groups.B.map((n, i) => <li key={'b-${i}'}>{normalizeEntryToName(n)}</li>)}
                   </ul>
                 </div>
               )}
@@ -166,7 +166,7 @@ export default function Viewer() {
                 <div>
                   <div style={{ fontWeight: 600 }}>No Pool</div>
                   <ul>
-                    {groups.none.map((n, i) => <li key={n-${i}}>{normalizeEntryToName(n)}</li>)}
+                    {groups.none.map((n, i) => <li key={'n-${i}'}>{normalizeEntryToName(n)}</li>)}
                   </ul>
                 </div>
               )}
@@ -182,7 +182,7 @@ export default function Viewer() {
         <div key={cat} style={{ padding: 12, borderRadius: 12, background: color.background, color: color.color, border: "1px solid #e6edf8" }}>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>{cat} <span style={{ fontWeight: 600, fontSize: 12, marginLeft: 8, color: "#334155" }}>({(arr || []).length})</span></div>
           <ul>
-            {(arr || []).map((n, i) => <li key={${cat}-${i}}>{normalizeEntryToName(n)}</li>)}
+            {(arr || []).map((n, i) => <li key={'${cat}-${i}'}>{normalizeEntryToName(n)}</li>)}
           </ul>
         </div>
       );
@@ -295,7 +295,7 @@ export default function Viewer() {
             {active.length ? active.map((f) => (
               <div key={String(f.id)} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
                 <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? Winner: ${f.winner} : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
+                <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? 'Winner: ${f.winner}' : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
                 <div style={{ marginTop: 6, color: "#6b7280" }}>{f.start ? new Date(f.start).toLocaleString() : ""}</div>
               </div>
             )) : <div style={{ color: "#9ca3af" }}>No live match.</div>}
@@ -314,7 +314,7 @@ export default function Viewer() {
             {completed.length ? completed.map((f) => (
               <div key={String(f.id) + String(f.finishedAt || "")} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
                 <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? Winner: ${f.winner} : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
+                <div style={{ color: "#6b7280", fontSize: 13 }}>{f.winner ? 'Winner: ${f.winner}' : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}</div>
                 <div style={{ marginTop: 6, color: "#6b7280" }}>{f.finishedAt ? new Date(f.finishedAt).toLocaleString() : ""}</div>
               </div>
             )) : <div style={{ color: "#9ca3af" }}>No completed fixtures</div>}
