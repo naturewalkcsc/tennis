@@ -139,122 +139,283 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
 
 /* ---------------------- Manage Players (admin) ---------------------- */
 function ManagePlayers({ onBack }) {
-  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const SINGLES_CATEGORIES_ORDER = [
+    "Women's Singles",
+    "Kid's Singles",
+    "NW Team (A) Singles",
+    "NW Team (B) Singles"
+  ];
+  const DOUBLES_CATEGORIES_ORDER = [
+    "Women's Doubles",
+    "Kid's Doubles",
+    "NW Team (A) Doubles",
+    "NW Team (B) Doubles",
+    "Mixed Doubles"
+  ];
 
-  useEffect(() => {
+  const POOLS = ["No Pool", "Pool A", "Pool B"];
+
+  const LS_PLAYERS_DRAFT = "LS_PLAYERS_DRAFT_v2";
+
+  const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [dirty, setDirty] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [toast, setToast] = React.useState(false);
+
+  // Helpers to migrate legacy arrays to new object format
+  const migrateIfNeeded = (raw) => {
+    // Expecting raw = { singles: {...} or [] , doubles: {...} or [] }
+    const out = { singles: {}, doubles: {} };
+
+    // helper to convert to object mapping category -> [{name,pool}]
+    const toMap = (val) => {
+      if (!val) return {};
+      // if val is array -> legacy global list? we will put into "Women's Singles" default bucket
+      if (Array.isArray(val)) {
+        // fallback: put everything into "Women's Singles" as legacy fallback
+        return { [SINGLES_CATEGORIES_ORDER[0]]: val.map((n) => ({ name: n, pool: "No Pool" })) };
+      }
+      // if object mapping categories -> array of strings or array of objects
+      const map = {};
+      for (const [k, arr] of Object.entries(val)) {
+        if (!arr) continue;
+        if (!Array.isArray(arr)) {
+          // unexpected, skip
+          continue;
+        }
+        map[k] = arr.map((el) => {
+          if (typeof el === "string") return { name: el, pool: "No Pool" };
+          if (typeof el === "object" && el !== null) {
+            // if already object with name & pool, honor it; if only name property exists that's fine
+            return { name: String(el.name || el.label || ""), pool: String(el.pool || "No Pool") };
+          }
+          return { name: String(el), pool: "No Pool" };
+        });
+      }
+      return map;
+    };
+
+    out.singles = toMap(raw.singles);
+    out.doubles = toMap(raw.doubles);
+    return out;
+  };
+
+  // Local draft helpers
+  const saveDraft = (obj) => {
+    try {
+      localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify(obj));
+    } catch (e) {}
+  };
+  const loadDraft = () => {
+    try {
+      const s = localStorage.getItem(LS_PLAYERS_DRAFT);
+      return s ? JSON.parse(s) : null;
+    } catch (e) { return null; }
+  };
+  const clearDraft = () => {
+    try { localStorage.removeItem(LS_PLAYERS_DRAFT); } catch (e) {}
+  };
+
+  React.useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const raw = await apiPlayersGet();
+      setLoading(true);
+      // prefer draft if present
+      const draft = loadDraft();
+      if (draft) {
         if (!alive) return;
-        const normalized = normalizePlayers(raw);
-        setPlayers(normalized);
+        setPlayers(draft);
+        setDirty(true);
+        setLoading(false);
+        return;
+      }
+      try {
+        const obj = await apiPlayersGet();
+        if (!alive) return;
+        const migrated = migrateIfNeeded(obj || { singles: {}, doubles: {} });
+        // Ensure categories present (so UI shows empty boxes)
+        SINGLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.singles[c]) migrated.singles[c] = []; });
+        DOUBLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.doubles[c]) migrated.doubles[c] = []; });
+        setPlayers(migrated);
       } catch (e) {
-        console.error(e);
-        setError("Failed loading players (KV?).");
-      } finally { if (alive) setLoading(false); }
+        console.warn("Could not load players", e);
+        setError("Could not load players (KV off?). You can edit and Save to retry.");
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
     return () => { alive = false; };
   }, []);
 
-  // Helpers to update category arrays immutably
-  const updateCategory = (type, cat, arr) => setPlayers(prev => {
-    const copy = { singles: { ...prev.singles }, doubles: { ...prev.doubles } };
-    copy[type] = { ...copy[type], [cat]: arr };
-    return copy;
-  });
-
-  const addItem = (type, cat) => {
-    const arr = [...(players[type][cat] || []), type === "singles" ? "New Player" : "New Pair"];
-    updateCategory(type, cat, arr);
-  };
-  const removeItem = (type, cat, idx) => {
-    const arr = (players[type][cat] || []).filter((_, i) => i !== idx);
-    updateCategory(type, cat, arr);
-  };
-  const setItem = (type, cat, idx, val) => {
-    const arr = [...(players[type][cat] || [])];
-    arr[idx] = val;
-    updateCategory(type, cat, arr);
+  const markDirty = (newPlayers) => {
+    setDirty(true);
+    saveDraft(newPlayers);
+    setPlayers(newPlayers);
   };
 
-  const saveAll = async () => {
-    setSaving(true); setError("");
+  // Generic updater for a particular category (type = 'singles' or 'doubles', category = string)
+  const updateCategory = (type, category, updater) => {
+    setPlayers((prev) => {
+      const copy = { singles: { ...prev.singles }, doubles: { ...prev.doubles } };
+      const arr = (type === "singles" ? copy.singles[category] : copy.doubles[category]) || [];
+      const updated = updater(arr.slice());
+      if (type === "singles") copy.singles[category] = updated;
+      else copy.doubles[category] = updated;
+      markDirty(copy);
+      return copy;
+    });
+  };
+
+  // add player/pair
+  const addItem = (type, category, name = "New Player", pool = "No Pool") => {
+    updateCategory(type, category, (arr) => {
+      arr.push({ name, pool });
+      return arr;
+    });
+  };
+  const updateItem = (type, category, idx, patch) => {
+    updateCategory(type, category, (arr) => {
+      arr[idx] = { ...arr[idx], ...patch };
+      return arr;
+    });
+  };
+  const deleteItem = (type, category, idx) => {
+    updateCategory(type, category, (arr) => {
+      arr.splice(idx, 1);
+      return arr;
+    });
+  };
+
+  const doSave = async () => {
+    setSaving(true);
+    setError("");
     try {
-      // Keep the canonical object shape; server expects { singles: ..., doubles: ... }
-      await apiPlayersSet(players);
+      // The server expects JSON. We will send object mapping category->array of objects {name,pool}
+      await apiPlayersSet({ singles: players.singles, doubles: players.doubles });
+      setDirty(false);
+      clearDraft();
+      setToast(true);
+      setTimeout(() => setToast(false), 1100);
     } catch (e) {
       console.error(e);
-      setError("Save failed. Make sure KV is configured.");
-    } finally { setSaving(false); }
+      setError("Save failed. Make sure KV is configured. Draft saved locally.");
+      saveDraft(players);
+      setDirty(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const singlesKeys = Object.keys(players.singles || {});
-  const doublesKeys = Object.keys(players.doubles || {});
+  const doRefresh = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const obj = await apiPlayersGet();
+      const migrated = migrateIfNeeded(obj || { singles: {}, doubles: {} });
+      SINGLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.singles[c]) migrated.singles[c] = []; });
+      DOUBLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.doubles[c]) migrated.doubles[c] = []; });
+      setPlayers(migrated);
+      setDirty(false);
+      clearDraft();
+    } catch (e) {
+      console.error(e);
+      setError("Refresh failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // UI render helpers
+  const CategoryCard = ({ type, category, arr }) => {
+    // Group by pool for display
+    const pooled = {};
+    (arr || []).forEach((it) => {
+      const pool = it.pool || "No Pool";
+      if (!pooled[pool]) pooled[pool] = [];
+      pooled[pool].push(it);
+    });
+    return (
+      <div className="card category-card" style={{ padding: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 700 }}>{category} <span style={{ fontWeight: 400, fontSize: 12, color: "#6b7280", marginLeft: 8 }}>({arr.length})</span></div>
+          <div>
+            <button className="btn ghost" onClick={() => addItem(type, category, "New Player", "No Pool")}>+ Add</button>
+          </div>
+        </div>
+        <div style={{ marginTop: 10 }}>
+          {POOLS.map((pool) => {
+            const list = pooled[pool] || [];
+            if (list.length === 0 && pool !== "No Pool") return null; // hide empty pools except "No Pool" maybe show counts
+            return (
+              <div key={pool} style={{ marginBottom: 10 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{pool === "No Pool" ? "" : pool}</div>
+                <ul style={{ marginLeft: 18 }}>
+                  {list.map((it, idx) => {
+                    // Need to compute original index within arr for update/delete.
+                    // Find index of this exact element by name+pool (there may be duplicates but ok).
+                    const originalIndex = arr.findIndex((x) => x === it);
+                    return (
+                      <li key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <input
+                          value={it.name}
+                          onChange={(e) => updateItem(type, category, originalIndex, { name: e.target.value })}
+                          style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
+                        />
+                        <select
+                          value={it.pool || "No Pool"}
+                          onChange={(e) => updateItem(type, category, originalIndex, { pool: e.target.value })}
+                          style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
+                        >
+                          {POOLS.map((p) => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <button className="btn ghost" title="Delete" onClick={() => deleteItem(type, category, originalIndex)}>🗑️</button>
+                      </li>
+                    );
+                  })}
+                  {list.length === 0 && <div style={{ color: "#6b7280", fontSize: 13 }}>No entries</div>}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      {toast && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-emerald-600 text-white shadow-lg">Players saved</div>}
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <button className="btn ghost" onClick={onBack}>◀ Back</button>
         <h2 className="text-xl font-bold">Manage Players</h2>
-        <div className="ml-auto"><Button onClick={saveAll}>{saving ? "Saving…" : "Save Changes"}</Button></div>
+        <div className="ml-auto flex items-center gap-2">
+          <button className="btn secondary" onClick={doRefresh}><span>⟳</span> Refresh</button>
+          <button className="btn" onClick={doSave} disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
+        </div>
       </div>
 
-      {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200">{error}</Card>}
+      {error && <div className="card" style={{ background: "#fff1f2", color: "#991b1b", borderColor: "#fecaca" }}>{error}</div>}
 
-      {loading ? <Card className="p-6 text-center text-zinc-500">Loading…</Card> : (
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="p-4">
-            <div className="font-semibold mb-3">Singles</div>
-            <div className="space-y-4">
-              {singlesKeys.length === 0 && <div className="text-zinc-500">No singles categories yet.</div>}
-              {singlesKeys.map(cat => (
-                <div key={cat} className="border rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium">{cat}</div>
-                    <div className="text-sm text-zinc-500">{(players.singles[cat]||[]).length} players</div>
-                  </div>
-                  <div className="space-y-2">
-                    {(players.singles[cat]||[]).map((name, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input value={name} onChange={e => setItem("singles", cat, i, e.target.value)} className="flex-1 rounded-xl border px-3 py-2" />
-                        <button onClick={() => removeItem("singles", cat, i)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    ))}
-                    <div><Button variant="secondary" onClick={() => addItem("singles", cat)}><Plus className="w-4 h-4" /> Add Player</Button></div>
-                  </div>
-                </div>
+      {loading ? <div className="card">Loading players…</div> : (
+        <>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <h3 style={{ margin: "8px 0 10px" }}>Singles</h3>
+              {SINGLES_CATEGORIES_ORDER.map((cat) => (
+                <CategoryCard key={cat} type="singles" category={cat} arr={(players.singles && players.singles[cat]) || []} />
               ))}
             </div>
-          </Card>
-
-          <Card className="p-4">
-            <div className="font-semibold mb-3">Doubles</div>
-            <div className="space-y-4">
-              {doublesKeys.length === 0 && <div className="text-zinc-500">No doubles categories yet.</div>}
-              {doublesKeys.map(cat => (
-                <div key={cat} className="border rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium">{cat}</div>
-                    <div className="text-sm text-zinc-500">{(players.doubles[cat]||[]).length} pairs</div>
-                  </div>
-                  <div className="space-y-2">
-                    {(players.doubles[cat]||[]).map((name, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input value={name} onChange={e => setItem("doubles", cat, i, e.target.value)} className="flex-1 rounded-xl border px-3 py-2" />
-                        <button onClick={() => removeItem("doubles", cat, i)} className="px-3 py-2 rounded-xl hover:bg-zinc-100"><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    ))}
-                    <div><Button variant="secondary" onClick={() => addItem("doubles", cat)}><Plus className="w-4 h-4" /> Add Pair</Button></div>
-                  </div>
-                </div>
+            <div>
+              <h3 style={{ margin: "8px 0 10px" }}>Doubles</h3>
+              {DOUBLES_CATEGORIES_ORDER.map((cat) => (
+                <CategoryCard key={cat} type="doubles" category={cat} arr={(players.doubles && players.doubles[cat]) || []} />
               ))}
             </div>
-          </Card>
-        </div>
+          </div>
+          <div className="text-xs text-zinc-500 mt-3">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</div>
+        </>
       )}
     </div>
   );
