@@ -237,7 +237,8 @@ export default function Viewer() {
   }
 
   // TEAMS PAGE
-{page === "teams" && (
+if (page === "teams")
+  return (
   <div className="card">
     <h3>Teams / Players</h3>
 
@@ -378,7 +379,8 @@ export default function Viewer() {
 
     </div>
   </div>
-)}
+);
+}
 
   // FIXTURES PAGE
   if (page === "fixtures") {
