@@ -21,7 +21,7 @@ const CATEGORY_COLORS = [
   { bg: "#F0FDF4", text: "#14532D" },
 ];
 
-const cacheBuster = () => ?t=${Date.now()};
+const cacheBuster = () => '?t=${Date.now()}';
 
 async function fetchJson(url) {
   const res = await fetch(url + cacheBuster(), { cache: "no-store" });
