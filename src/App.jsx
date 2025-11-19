@@ -345,45 +345,6 @@ function ManagePlayers({ onBack }) {
     </div>
   );
 }
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      {toast && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-emerald-600 text-white shadow-lg">Players saved</div>}
-
-      <div className="flex items-center gap-3 mb-6">
-        <button className="btn ghost" onClick={onBack}>◀️ Back</button>
-        <h2 className="text-xl font-bold">Manage Players</h2>
-        <div className="ml-auto flex items-center gap-2">
-          <button className="btn secondary" onClick={doRefresh}><span>⟳</span> Refresh</button>
-          <button className="btn" onClick={doSave} disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
-        </div>
-      </div>
-
-      {error && <div className="card" style={{ background: "#fff1f2", color: "#991b1b", borderColor: "#fecaca", padding: 10 }}>{error}</div>}
-
-      {loading ? (
-        <div className="card">Loading players…</div>
-      ) : (
-        <>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <h3 style={{ margin: "8px 0 10px" }}>Singles</h3>
-              {SINGLES_CATEGORIES_ORDER.map((cat) => (
-                <CategoryCard key={cat} type="singles" category={cat} arr={(players.singles && players.singles[cat]) || []} />
-              ))}
-            </div>
-            <div>
-              <h3 style={{ margin: "8px 0 10px" }}>Doubles</h3>
-              {DOUBLES_CATEGORIES_ORDER.map((cat) => (
-                <CategoryCard key={cat} type="doubles" category={cat} arr={(players.doubles && players.doubles[cat]) || []} />
-              ))}
-            </div>
-          </div>
-          <div className="text-xs text-zinc-500 mt-3">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</div>
-        </>
-      )}
-    </div>
-  );
-}
 
 /* ---------------------- Fixtures admin (simplified) ---------------------- */
 function FixturesAdmin({ onBack }) {
