@@ -1,78 +1,221 @@
+// src/Viewer.jsx
 import React, { useEffect, useState } from "react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
 
 /*
- Viewer.jsx
- - Menu with 3 image buttons: Rules, Teams, Fixtures
- - Each button opens a dedicated page (Back returns to menu)
- - Teams page supports pool display:
-    * Accepts legacy strings or objects { name, pool } for each category entry
-    * If any entry has pool 'A' or 'B', show Pool A & Pool B sub-tables (and No Pool list)
+  Viewer.jsx - public viewer page.
+  - Shows three tiles (Rules, Teams, Fixture/Scores)
+  - Clicking a tile opens a dedicated page with a Back button
+  - Loads data from /api/players and /api/fixtures
 */
 
-const buster = () => '?t=${Date.now()}';
+const buster = () => "?t=" + Date.now();
 
-async function fetchJson(url) {
-  const res = await fetch(url + buster(), { cache: "no-store" });
-  if (!res.ok) throw new Error('${url} failed: ${res.status}');
-  return await res.json();
-}
-
-/* Utility to normalize entries into objects with name + optional pool */
-function normalizeEntries(arr = []) {
-  if (!Array.isArray(arr)) return [];
-  return arr.map((it) => {
-    if (it == null) return null;
-    if (typeof it === "string") return { name: it, pool: null };
-    // if object already, try to extract fields (support {name, pool} or {player, pool})
-    if (typeof it === "object") {
-      const name = it.name ?? it.player ?? it.label ?? String(it);
-      const poolRaw = (it.pool ?? it.pool_group ?? it.poolGroup ?? null);
-      const pool =
-        typeof poolRaw === "string" ? (poolRaw.trim().toUpperCase() === "A" ? "A" : poolRaw.trim().toUpperCase() === "B" ? "B" : null) :
-        null;
-      return { name, pool };
+async function fetchJsonNoThrow(url) {
+  try {
+    const res = await fetch(url + buster(), { cache: "no-store" });
+    if (!res.ok) {
+      // return null to indicate failure; caller handles it
+      return null;
     }
-    return { name: String(it), pool: null };
-  }).filter(Boolean);
+    return await res.json();
+  } catch (e) {
+    console.warn("fetch failed", url, e);
+    return null;
+  }
 }
 
-/* Small presentational primitives (inline styles so they don't rely on other css) */
-const containerStyle = { maxWidth: 1000, margin: "0 auto", padding: 20 };
-const cardStyle = { background: "white", borderRadius: 12, padding: 14, border: "1px solid #e6edf8" };
-const tileStyle = { width: 220, borderRadius: 12, overflow: "hidden", cursor: "pointer", border: "1px solid #e6edf8", background: "white", textAlign: "left" };
-const tileImgStyle = { width: "100%", height: 120, objectFit: "cover", display: "block" };
-const tileBodyStyle = { padding: 10 };
-
-function ViewerMenu({ onOpen }) {
+function Tile({ title, subtitle, img, onClick }) {
   return (
-    <div style={containerStyle}>
-      <h1 style={{ fontSize: 22, marginBottom: 8 }}>Viewer</h1>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <div style={tileStyle} onClick={() => onOpen("rules")}>
-          <img src={imgStart} alt="Rules" style={tileImgStyle} />
-          <div style={tileBodyStyle}>
-            <div style={{ fontWeight: 700 }}>Rules</div>
-            <div style={{ color: "#6b7280", fontSize: 13 }}>Match formats and rules</div>
+    <button
+      onClick={onClick}
+      style={{
+        width: 220,
+        borderRadius: 14,
+        overflow: "hidden",
+        border: "1px solid #e6edf8",
+        background: "#fff",
+        textAlign: "left",
+        cursor: "pointer",
+        padding: 0,
+      }}
+    >
+      <div style={{ height: 120, position: "relative" }}>
+        <img
+          src={img}
+          alt={title}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      </div>
+      <div style={{ padding: 12 }}>
+        <div style={{ fontWeight: 700 }}>{title}</div>
+        <div style={{ color: "#6b7280", marginTop: 6, fontSize: 13 }}>{subtitle}</div>
+      </div>
+    </button>
+  );
+}
+
+function Menu({ onOpen }) {
+  return (
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 700 }}>Viewer</h1>
+
+      <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
+        <Tile title="Rules" subtitle="Match formats & tie-breaks" img={imgStart} onClick={() => onOpen("rules")} />
+        <Tile title="Teams" subtitle="Players / Pairs by category" img={imgScore} onClick={() => onOpen("teams")} />
+        <Tile title="Fixture / Scores" subtitle="Live, upcoming, completed" img={imgSettings} onClick={() => onOpen("fixtures")} />
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <small style={{ color: "#6b7280" }}>Viewer shows public rules, team lists, and fixtures. Use Back button to return.</small>
+      </div>
+    </div>
+  );
+}
+
+function RulesPage({ onBack }) {
+  return (
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onBack} style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e6edf8" }}>Back</button>
+        <h2 style={{ margin: 0 }}>Rules</h2>
+      </div>
+
+      <div style={{ marginTop: 14, background: "#fff", padding: 16, borderRadius: 12, border: "1px solid #e6edf8" }}>
+        <h3 style={{ marginTop: 0 }}>Qualifiers and Semifinal Matches Format</h3>
+        <ol>
+          <li><strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.</li>
+          <li><strong>Tiebreak at 3-3</strong> — At 3-3 a tiebreak is played to 5 points (4-4 → next point wins).</li>
+          <li><strong>No-adv (no AD) scoring</strong> — At deuce (40-40) the next point decides the game.</li>
+        </ol>
+
+        <h3>Final Matches Format</h3>
+        <ol>
+          <li>One full set — standard set rule of 6 games and tie break applies.</li>
+          <li>Limited Deuce Points — maximum 3 deuce points allowed; at the 4th deuce point the next point decides the game.</li>
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+function TeamsPage({ onBack, players }) {
+  // players may be null or { singles: {...}, doubles: {...} }
+  const singles = (players && players.singles) || {};
+  const doubles = (players && players.doubles) || {};
+
+  const renderCategory = (category, data) => {
+    // data can be:
+    //  - array => no pools
+    //  - object like { poolA: [...], poolB: [...], noPool: [...] } or similar
+    if (Array.isArray(data)) {
+      return (
+        <div key={category} style={{ marginBottom: 12, padding: 12, borderRadius: 10, border: "1px solid #eef2f7", background: "#fff" }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>{category} <span style={{ color: "#6b7280", fontSize: 13, marginLeft: 8 }}>({data.length})</span></div>
+          <ul style={{ margin: 0, paddingLeft: 16 }}>{data.map((n, i) => <li key={i}>{n}</li>)}</ul>
+        </div>
+      );
+    } else if (data && typeof data === "object") {
+      // check for pool keys (poolA / poolB / noPool)
+      const poolA = data.poolA || data["Pool A"] || data.pool_a || [];
+      const poolB = data.poolB || data["Pool B"] || data.pool_b || [];
+      const noPool = data.noPool || data.none || data.no_pool || [];
+      const hasPools = (poolA && poolA.length) || (poolB && poolB.length);
+      if (!hasPools && noPool.length) {
+        return renderCategory(category, noPool);
+      }
+      return (
+        <div key={category} style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>{category}</div>
+          <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ flex: 1, padding: 12, borderRadius: 10, border: "1px solid #eef2f7", background: "#fff" }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool A <span style={{ color: "#6b7280" }}>({poolA.length})</span></div>
+              <ul style={{ margin: 0, paddingLeft: 16 }}>{(poolA || []).map((n, i) => <li key={i}>{n}</li>)}</ul>
+            </div>
+            <div style={{ flex: 1, padding: 12, borderRadius: 10, border: "1px solid #eef2f7", background: "#fff" }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool B <span style={{ color: "#6b7280" }}>({poolB.length})</span></div>
+              <ul style={{ margin: 0, paddingLeft: 16 }}>{(poolB || []).map((n, i) => <li key={i}>{n}</li>)}</ul>
+            </div>
+            {noPool && noPool.length ? (
+              <div style={{ flex: 1, padding: 12, borderRadius: 10, border: "1px solid #eef2f7", background: "#fff" }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>No Pool <span style={{ color: "#6b7280" }}>({noPool.length})</span></div>
+                <ul style={{ margin: 0, paddingLeft: 16 }}>{noPool.map((n, i) => <li key={i}>{n}</li>)}</ul>
+              </div>
+            ) : null}
           </div>
         </div>
+      );
+    } else {
+      return null;
+    }
+  };
 
-        <div style={tileStyle} onClick={() => onOpen("teams")}>
-          <img src={imgScore} alt="Teams" style={tileImgStyle} />
-          <div style={tileBodyStyle}>
-            <div style={{ fontWeight: 700 }}>Teams</div>
-            <div style={{ color: "#6b7280", fontSize: 13 }}>Players & pairs by category</div>
-          </div>
+  return (
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onBack} style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e6edf8" }}>Back</button>
+        <h2 style={{ margin: 0 }}>Teams</h2>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <h3>Singles</h3>
+        {Object.keys(singles).length === 0 ? <div style={{ color: "#9ca3af" }}>No players found</div> : Object.entries(singles).map(([cat, arr]) => renderCategory(cat, arr))}
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <h3>Doubles</h3>
+        {Object.keys(doubles).length === 0 ? <div style={{ color: "#9ca3af" }}>No pairs found</div> : Object.entries(doubles).map(([cat, arr]) => renderCategory(cat, arr))}
+      </div>
+    </div>
+  );
+}
+
+function FixturesPage({ onBack, fixtures }) {
+  const active = (fixtures || []).filter(f => f.status === "active");
+  const upcoming = (fixtures || []).filter(f => !f.status || f.status === "upcoming");
+  const completed = (fixtures || []).filter(f => f.status === "completed");
+
+  return (
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onBack} style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e6edf8" }}>Back</button>
+        <h2 style={{ margin: 0 }}>Fixtures & Scores</h2>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <div style={{ marginBottom: 12 }}>
+          <h4>Active</h4>
+          {active.length === 0 ? <div style={{ color: "#9ca3af" }}>No live match.</div> : active.map(f => (
+            <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
+              <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
+              <div style={{ color: "#6b7280", fontSize: 13 }}>{new Date(f.start).toLocaleString()}</div>
+            </div>
+          ))}
         </div>
 
-        <div style={tileStyle} onClick={() => onOpen("fixtures")}>
-          <img src={imgSettings} alt="Fixtures" style={tileImgStyle} />
-          <div style={tileBodyStyle}>
-            <div style={{ fontWeight: 700 }}>Fixture / Scores</div>
-            <div style={{ color: "#6b7280", fontSize: 13 }}>Live, upcoming and completed</div>
-          </div>
+        <div style={{ marginBottom: 12 }}>
+          <h4>Upcoming</h4>
+          {upcoming.length === 0 ? <div style={{ color: "#9ca3af" }}>No upcoming fixtures.</div> : upcoming.map(f => (
+            <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
+              <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")} <span style={{ color: "#6b7280", fontSize: 12, marginLeft: 8 }}>{f.mode}</span></div>
+              <div style={{ color: "#6b7280", fontSize: 13 }}>{new Date(f.start).toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <h4>Completed</h4>
+          {completed.length === 0 ? <div style={{ color: "#9ca3af" }}>No completed fixtures</div> : completed.map(f => (
+            <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
+              <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
+              <div style={{ color: "#6b7280", fontSize: 13 }}>
+                {f.winner ? "Winner: " + f.winner : ""}
+                {f.scoreline ? " • " + f.scoreline : ""}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -80,227 +223,52 @@ function ViewerMenu({ onOpen }) {
 }
 
 export default function Viewer() {
-  const [page, setPage] = useState("menu");
+  const [page, setPage] = useState("menu"); // 'menu' | 'rules' | 'teams' | 'fixtures'
   const [players, setPlayers] = useState({ singles: {}, doubles: {} });
   const [fixtures, setFixtures] = useState([]);
-  const [matches, setMatches] = useState([]);
-  const [loading, setLoading] = useState({ players: true, fixtures: true, matches: true });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      // fetch players
-      try {
-        const p = await fetchJson("/api/players");
-        if (!alive) return;
-        // tolerate legacy where players might be [] or { singles:[], doubles:[] } or new shape
-        const singles = p?.singles ?? p?.singles_list ?? p ?? {};
-        const doubles = p?.doubles ?? p?.doubles_list ?? {};
-        setPlayers({ singles, doubles });
-      } catch (e) {
-        console.warn("Failed loading players", e);
-        setPlayers({ singles: {}, doubles: {} });
-      } finally {
-        if (alive) setLoading(s => ({ ...s, players: false }));
-      }
-
-      // fetch fixtures + matches in parallel
-      try {
-        const [fx, ms] = await Promise.allSettled([fetchJson("/api/fixtures"), fetchJson("/api/matches")]);
-        if (!alive) return;
-        if (fx.status === "fulfilled") setFixtures(Array.isArray(fx.value) ? fx.value : []);
-        else setFixtures([]);
-        if (ms.status === "fulfilled") setMatches(Array.isArray(ms.value) ? ms.value : []);
-        else setMatches([]);
-      } catch (e) {
-        console.warn("Failed fixtures/matches", e);
-        setFixtures([]);
-        setMatches([]);
-      } finally {
-        if (alive) setLoading(s => ({ ...s, fixtures: false, matches: false }));
-      }
+      setLoading(true);
+      const [p, fx] = await Promise.all([
+        fetchJsonNoThrow("/api/players"),
+        fetchJsonNoThrow("/api/fixtures"),
+      ]);
+      if (!alive) return;
+      if (p) setPlayers(p);
+      if (fx) setFixtures(fx);
+      setLoading(false);
     })();
 
-    // auto-refresh every 12s
+    // refresh periodically so viewer stays live
     const iv = setInterval(async () => {
       try {
-        const [fx, ms] = await Promise.all([fetchJson("/api/fixtures"), fetchJson("/api/matches")]);
-        setFixtures(Array.isArray(fx) ? fx : []);
-        setMatches(Array.isArray(ms) ? ms : []);
-      } catch {}
-    }, 12000);
+        const [p, fx] = await Promise.all([
+          fetchJsonNoThrow("/api/players"),
+          fetchJsonNoThrow("/api/fixtures"),
+        ]);
+        if (p) setPlayers(p);
+        if (fx) setFixtures(fx);
+      } catch (e) { /* ignore */ }
+    }, 10000);
 
     return () => { alive = false; clearInterval(iv); };
   }, []);
 
-  function renderBackHeader(title) {
+  if (loading) {
     return (
-      <div style={{ ...containerStyle, display: "flex", alignItems: "center", gap: 12 }}>
-        <button className="btn" onClick={() => setPage("menu")} style={{ padding: "8px 10px", borderRadius: 10 }}>Back</button>
-        <h2 style={{ margin: 0 }}>{title}</h2>
+      <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
+        <div style={{ padding: 12, borderRadius: 10, border: "1px solid #eef2f7", background: "#fff" }}>Loading…</div>
       </div>
     );
   }
 
-  /* ----------------- TEAMS VIEW ----------------- */
-  function TeamsView() {
-    // players.singles and players.doubles are objects keyed by category -> array
-    const singles = players.singles ?? {};
-    const doubles = players.doubles ?? {};
-
-    // helper to decide whether a category needs pool split
-    const categoryHasPools = (arr) => {
-      if (!Array.isArray(arr) || arr.length === 0) return false;
-      // if any entry is object with pool A/B -> treat as pool-based
-      return arr.some(item => (typeof item === "object" && (item.pool === "A" || item.pool === "B" || (item.pool && String(item.pool).toUpperCase() === "A") || (item.pool && String(item.pool).toUpperCase() === "B"))));
-    };
-
-    const renderCategory = (cat, rawArr) => {
-      const arr = normalizeEntries(rawArr);
-      const hasPools = arr.some(e => e.pool === "A" || e.pool === "B");
-      if (!hasPools) {
-        // plain list
-        return (
-          <div key={cat} style={{ ...cardStyle, marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 700 }}>{cat}</div>
-              <div style={{ color: "#6b7280" }}>{arr.length}</div>
-            </div>
-            <ul style={{ marginTop: 8, marginLeft: 16 }}>
-              {arr.map((p, i) => <li key={i}>{p.name}</li>)}
-            </ul>
-          </div>
-        );
-      } else {
-        // poolified display: pool A / pool B / no-pool
-        const poolA = arr.filter(x => x.pool === "A").map(x => x.name);
-        const poolB = arr.filter(x => x.pool === "B").map(x => x.name);
-        const noPool = arr.filter(x => !x.pool).map(x => x.name);
-
-        return (
-          <div key={cat} style={{ ...cardStyle, marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontWeight: 700 }}>{cat}</div>
-              <div style={{ color: "#6b7280" }}>{arr.length} total</div>
-            </div>
-
-            <div style={{ display: "flex", gap: 12 }}>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool A <span style={{ color: "#6b7280" }}>({poolA.length})</span></div>
-                {poolA.length ? <ul style={{ marginLeft: 16 }}>{poolA.map((n,i)=>(<li key={i}>{n}</li>))}</ul> : <div style={{ color: "#9ca3af" }}>No players</div>}
-              </div>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool B <span style={{ color: "#6b7280" }}>({poolB.length})</span></div>
-                {poolB.length ? <ul style={{ marginLeft: 16 }}>{poolB.map((n,i)=>(<li key={i}>{n}</li>))}</ul> : <div style={{ color: "#9ca3af" }}>No players</div>}
-              </div>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>No Pool <span style={{ color: "#6b7280" }}>({noPool.length})</span></div>
-                {noPool.length ? <ul style={{ marginLeft: 16 }}>{noPool.map((n,i)=>(<li key={i}>{n}</li>))}</ul> : <div style={{ color: "#9ca3af" }}>No players</div>}
-              </div>
-            </div>
-          </div>
-        );
-      }
-    };
-
-    const singlesCats = Object.keys(singles || {});
-    const doublesCats = Object.keys(doubles || {});
-
-    return (
-      <div style={containerStyle}>
-        <h3 style={{ marginTop: 0 }}>Teams</h3>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Singles</div>
-            {singlesCats.length === 0 ? <div style={{ color: "#9ca3af" }}>No singles categories</div> : singlesCats.map(cat => renderCategory(cat, singles[cat]))}
-          </div>
-
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 8, marginTop: 12 }}>Doubles</div>
-            {doublesCats.length === 0 ? <div style={{ color: "#9ca3af" }}>No doubles categories</div> : doublesCats.map(cat => renderCategory(cat, doubles[cat]))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ----------------- FIXTURES VIEW ----------------- */
-  function FixturesView() {
-    const active = fixtures.filter(f => f.status === "active");
-    const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
-    const completed = fixtures.filter(f => f.status === "completed");
-
-    return (
-      <div style={containerStyle}>
-        <h3 style={{ marginTop: 0 }}>Fixture / Scores</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-          <div style={cardStyle}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Active</div>
-            {active.length ? active.map(f => (
-              <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
-                <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{new Date(f.start).toLocaleString()}</div>
-              </div>
-            )) : <div style={{ color: "#9ca3af" }}>No live match</div>}
-          </div>
-
-          <div style={cardStyle}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Upcoming</div>
-            {upcoming.length ? upcoming.map(f => (
-              <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
-                <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{new Date(f.start).toLocaleString()}</div>
-              </div>
-            )) : <div style={{ color: "#9ca3af" }}>No upcoming fixtures</div>}
-          </div>
-
-          <div style={cardStyle}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Completed</div>
-            {completed.length ? completed.map(f => (
-              <div key={f.id} style={{ padding: 8, borderBottom: "1px solid #eef2f7" }}>
-                <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-                <div style={{ color: "#6b7280", fontSize: 13 }}> {f.winner ? Winner: ${f.winner} : ""} {f.scoreline ? ` • ${f.scoreline}` : ""}</div>
-              </div>
-            )) : <div style={{ color: "#9ca3af" }}>No completed fixtures</div>}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ----------------- RULES VIEW ----------------- */
-  function RulesView() {
-    return (
-      <div style={containerStyle}>
-        <h3 style={{ marginTop: 0 }}>Rules</h3>
-        <div style={cardStyle}>
-          <h4 style={{ marginTop: 0 }}>Qualifiers and Semifinal Matches Format</h4>
-          <ol>
-            <li><strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.</li>
-            <li><strong>Tiebreak at 3-3</strong> — At 3-3 a tiebreak is played to 5 points; 4-4 is next-point-wins.</li>
-            <li><strong>No-adv scoring</strong> — At deuce the next point decides the game.</li>
-          </ol>
-
-          <h4>Final Matches format</h4>
-          <ol>
-            <li>One full set — standard 6-games with tie-break.</li>
-            <li>Limited deuce points — at most 3 deuce points; thereafter next point decides the game.</li>
-          </ol>
-        </div>
-      </div>
-    );
-  }
-
-  /* ---------- MAIN render ---------- */
-  if (page === "menu") {
-    return <ViewerMenu onOpen={setPage} />;
-  }
-
-  // dedicated pages
-  if (page === "rules") return (<div>{renderBackHeader("Rules")}<RulesView/></div>);
-  if (page === "teams") return (<div>{renderBackHeader("Teams")}<TeamsView/></div>);
-  if (page === "fixtures") return (<div>{renderBackHeader("Fixture / Scores")}<FixturesView/></div>);
+  if (page === "menu") return <Menu onOpen={setPage} />;
+  if (page === "rules") return <RulesPage onBack={() => setPage("menu")} />;
+  if (page === "teams") return <TeamsPage onBack={() => setPage("menu")} players={players} />;
+  if (page === "fixtures") return <FixturesPage onBack={() => setPage("menu")} fixtures={fixtures} />;
 
   return null;
 }
