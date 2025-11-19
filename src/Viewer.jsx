@@ -191,7 +191,7 @@ export default function Viewer() {
   if (page === "menu") {
     return (
       <div style={{ padding: 28 }}>
-        <h1 style={{ margin: 0 }}>Viewer</h1>
+        <h1 style={{ margin: 0 }}>RNW Tennis Tourenament 2025</h1>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
         <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap" }}>
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
