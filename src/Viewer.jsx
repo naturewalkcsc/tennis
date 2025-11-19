@@ -145,7 +145,7 @@ export default function Viewer() {
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool A</div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {groups.A.map((n, i) => (
-                    <li key={a-${i}}>{n}</li>
+                    <li key={'a-${i}'}>{n}</li>
                   ))}
                 </ul>
               </div>
@@ -155,7 +155,7 @@ export default function Viewer() {
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool B</div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {groups.B.map((n, i) => (
-                    <li key={b-${i}}>{n}</li>
+                    <li key={'b-${i}'}>{n}</li>
                   ))}
                 </ul>
               </div>
@@ -165,7 +165,7 @@ export default function Viewer() {
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>No Pool</div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {groups.none.map((n, i) => (
-                    <li key={n-${i}}>{n}</li>
+                    <li key={'n-${i}'}>{n}</li>
                   ))}
                 </ul>
               </div>
@@ -174,7 +174,7 @@ export default function Viewer() {
         ) : (
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {entries.map((e, i) => (
-              <li key={p-${i}}>{e.name}</li>
+              <li key={'p-${i}'}>{e.name}</li>
             ))}
           </ul>
         )}
