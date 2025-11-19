@@ -237,46 +237,148 @@ export default function Viewer() {
   }
 
   // TEAMS PAGE
-  if (page === "teams") {
-    return (
-      <div style={{ padding: 24 }}>
-        <div style={{ marginBottom: 12 }}>
-          <button onClick={() => setPage("menu")} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e6edf8", background: "white" }}>
-            Back
-          </button>
-        </div>
-        <h2>Teams</h2>
+{page === "teams" && (
+  <div className="card">
+    <h3>Teams / Players</h3>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
-          <div>
-            <div style={{ marginBottom: 8, fontSize: 18, fontWeight: 700 }}>Singles</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {loadingPlayers ? (
-                <div>Loading players…</div>
-              ) : Object.keys(players.singles).length === 0 ? (
-                <div style={{ color: "#9ca3af" }}>No singles categories</div>
-              ) : (
-                Object.entries(players.singles).map(([cat, arr]) => renderCategory(cat, arr))
+    <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+
+      {/* ---------------------- SINGLES ---------------------- */}
+      <div style={{ flex: 1, minWidth: 300 }}>
+        <h4>Singles</h4>
+
+        {Object.entries(players.singles || {}).map(([cat, arr]) => {
+          // Group by pool
+          const groups = { A: [], B: [], none: [] };
+          arr.forEach((p) => {
+            if (p.pool === "Pool A") groups.A.push(p.name);
+            else if (p.pool === "Pool B") groups.B.push(p.name);
+            else groups.none.push(p.name);
+          });
+
+          return (
+            <div
+              key={cat}
+              style={{
+                background: "#fef9c3",
+                padding: 12,
+                borderRadius: 10,
+                marginBottom: 12,
+                border: "1px solid #fcd34d"
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                {cat} ({arr.length})
+              </div>
+
+              {/* POOL A */}
+              {groups.A.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontWeight: 600 }}>Pool A</div>
+                  <ul>
+                    {groups.A.map((n, i) => (
+                      <li key={"pa-" + i}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* POOL B */}
+              {groups.B.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontWeight: 600 }}>Pool B</div>
+                  <ul>
+                    {groups.B.map((n, i) => (
+                      <li key={"pb-" + i}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* NO POOL */}
+              {groups.none.length > 0 && (
+                <div>
+                  <div style={{ fontWeight: 600 }}>No Pool</div>
+                  <ul>
+                    {groups.none.map((n, i) => (
+                      <li key={"np-" + i}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
-          </div>
-
-          <div>
-            <div style={{ marginBottom: 8, fontSize: 18, fontWeight: 700 }}>Doubles</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {loadingPlayers ? (
-                <div>Loading players…</div>
-              ) : Object.keys(players.doubles).length === 0 ? (
-                <div style={{ color: "#9ca3af" }}>No doubles categories</div>
-              ) : (
-                Object.entries(players.doubles).map(([cat, arr]) => renderCategory(cat, arr))
-              )}
-            </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
-    );
-  }
+
+      {/* ---------------------- DOUBLES ---------------------- */}
+      <div style={{ flex: 1, minWidth: 300 }}>
+        <h4>Doubles</h4>
+
+        {Object.entries(players.doubles || {}).map(([cat, arr]) => {
+          const groups = { A: [], B: [], none: [] };
+
+          arr.forEach((p) => {
+            if (p.pool === "Pool A") groups.A.push(p.name);
+            else if (p.pool === "Pool B") groups.B.push(p.name);
+            else groups.none.push(p.name);
+          });
+
+          return (
+            <div
+              key={cat}
+              style={{
+                background: "#e0f2fe",
+                padding: 12,
+                borderRadius: 10,
+                marginBottom: 12,
+                border: "1px solid #7dd3fc"
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                {cat} ({arr.length})
+              </div>
+
+              {groups.A.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontWeight: 600 }}>Pool A</div>
+                  <ul>
+                    {groups.A.map((n, i) => (
+                      <li key={"da-" + i}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {groups.B.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontWeight: 600 }}>Pool B</div>
+                  <ul>
+                    {groups.B.map((n, i) => (
+                      <li key={"db-" + i}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {groups.none.length > 0 && (
+                <div>
+                  <div style={{ fontWeight: 600 }}>No Pool</div>
+                  <ul>
+                    {groups.none.map((n, i) => (
+                      <li key={"dn-" + i}>{n}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+    </div>
+  </div>
+)}
 
   // FIXTURES PAGE
   if (page === "fixtures") {
