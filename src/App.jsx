@@ -166,29 +166,20 @@ function ManagePlayers({ onBack }) {
 
   // Helpers to migrate legacy arrays to new object format
   const migrateIfNeeded = (raw) => {
-    // Expecting raw = { singles: {...} or [] , doubles: {...} or [] }
     const out = { singles: {}, doubles: {} };
 
-    // helper to convert to object mapping category -> [{name,pool}]
     const toMap = (val) => {
       if (!val) return {};
-      // if val is array -> legacy global list? we will put into "Women's Singles" default bucket
       if (Array.isArray(val)) {
-        // fallback: put everything into "Women's Singles" as legacy fallback
         return { [SINGLES_CATEGORIES_ORDER[0]]: val.map((n) => ({ name: n, pool: "No Pool" })) };
       }
-      // if object mapping categories -> array of strings or array of objects
       const map = {};
       for (const [k, arr] of Object.entries(val)) {
         if (!arr) continue;
-        if (!Array.isArray(arr)) {
-          // unexpected, skip
-          continue;
-        }
+        if (!Array.isArray(arr)) continue;
         map[k] = arr.map((el) => {
           if (typeof el === "string") return { name: el, pool: "No Pool" };
           if (typeof el === "object" && el !== null) {
-            // if already object with name & pool, honor it; if only name property exists that's fine
             return { name: String(el.name || el.label || ""), pool: String(el.pool || "No Pool") };
           }
           return { name: String(el), pool: "No Pool" };
@@ -204,25 +195,17 @@ function ManagePlayers({ onBack }) {
 
   // Local draft helpers
   const saveDraft = (obj) => {
-    try {
-      localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify(obj));
-    } catch (e) {}
+    try { localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify(obj)); } catch (e) {}
   };
   const loadDraft = () => {
-    try {
-      const s = localStorage.getItem(LS_PLAYERS_DRAFT);
-      return s ? JSON.parse(s) : null;
-    } catch (e) { return null; }
+    try { const s = localStorage.getItem(LS_PLAYERS_DRAFT); return s ? JSON.parse(s) : null; } catch (e) { return null; }
   };
-  const clearDraft = () => {
-    try { localStorage.removeItem(LS_PLAYERS_DRAFT); } catch (e) {}
-  };
+  const clearDraft = () => { try { localStorage.removeItem(LS_PLAYERS_DRAFT); } catch (e) {} };
 
   React.useEffect(() => {
     let alive = true;
     (async () => {
       setLoading(true);
-      // prefer draft if present
       const draft = loadDraft();
       if (draft) {
         if (!alive) return;
@@ -235,7 +218,6 @@ function ManagePlayers({ onBack }) {
         const obj = await apiPlayersGet();
         if (!alive) return;
         const migrated = migrateIfNeeded(obj || { singles: {}, doubles: {} });
-        // Ensure categories present (so UI shows empty boxes)
         SINGLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.singles[c]) migrated.singles[c] = []; });
         DOUBLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.doubles[c]) migrated.doubles[c] = []; });
         setPlayers(migrated);
@@ -249,10 +231,11 @@ function ManagePlayers({ onBack }) {
     return () => { alive = false; };
   }, []);
 
+  // markDirty now only sets flags & saves draft (DO NOT call setPlayers here)
   const markDirty = (newPlayers) => {
     setDirty(true);
     saveDraft(newPlayers);
-    setPlayers(newPlayers);
+    // don't setPlayers here — updateCategory handles state update
   };
 
   // Generic updater for a particular category (type = 'singles' or 'doubles', category = string)
@@ -263,12 +246,14 @@ function ManagePlayers({ onBack }) {
       const updated = updater(arr.slice());
       if (type === "singles") copy.singles[category] = updated;
       else copy.doubles[category] = updated;
+      // save draft & dirty flag (but do not call setPlayers here — this function is inside setPlayers and will return copy)
+      // markDirty(copy) will save draft and mark dirty (without resetting players)
       markDirty(copy);
       return copy;
     });
   };
 
-  // add player/pair
+  // add / update / delete helpers
   const addItem = (type, category, name = "New Player", pool = "No Pool") => {
     updateCategory(type, category, (arr) => {
       arr.push({ name, pool });
@@ -277,14 +262,16 @@ function ManagePlayers({ onBack }) {
   };
   const updateItem = (type, category, idx, patch) => {
     updateCategory(type, category, (arr) => {
-      arr[idx] = { ...arr[idx], ...patch };
-      return arr;
+      const copy = arr.slice();
+      copy[idx] = { ...copy[idx], ...patch };
+      return copy;
     });
   };
   const deleteItem = (type, category, idx) => {
     updateCategory(type, category, (arr) => {
-      arr.splice(idx, 1);
-      return arr;
+      const copy = arr.slice();
+      copy.splice(idx, 1);
+      return copy;
     });
   };
 
@@ -292,7 +279,6 @@ function ManagePlayers({ onBack }) {
     setSaving(true);
     setError("");
     try {
-      // The server expects JSON. We will send object mapping category->array of objects {name,pool}
       await apiPlayersSet({ singles: players.singles, doubles: players.doubles });
       setDirty(false);
       clearDraft();
@@ -327,7 +313,7 @@ function ManagePlayers({ onBack }) {
     }
   };
 
-  // UI render helpers
+  // UI render helpers (use index from map for stable index operations)
   const CategoryCard = ({ type, category, arr }) => {
     // Group by pool for display
     const pooled = {};
@@ -339,7 +325,9 @@ function ManagePlayers({ onBack }) {
     return (
       <div className="card category-card" style={{ padding: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 700 }}>{category} <span style={{ fontWeight: 400, fontSize: 12, color: "#6b7280", marginLeft: 8 }}>({arr.length})</span></div>
+          <div style={{ fontWeight: 700 }}>
+            {category} <span style={{ fontWeight: 400, fontSize: 12, color: "#6b7280", marginLeft: 8 }}>({arr.length})</span>
+          </div>
           <div>
             <button className="btn ghost" onClick={() => addItem(type, category, "New Player", "No Pool")}>+ Add</button>
           </div>
@@ -347,34 +335,51 @@ function ManagePlayers({ onBack }) {
         <div style={{ marginTop: 10 }}>
           {POOLS.map((pool) => {
             const list = pooled[pool] || [];
-            if (list.length === 0 && pool !== "No Pool") return null; // hide empty pools except "No Pool" maybe show counts
+            if (list.length === 0 && pool !== "No Pool") return null;
             return (
               <div key={pool} style={{ marginBottom: 10 }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>{pool === "No Pool" ? "" : pool}</div>
                 <ul style={{ marginLeft: 18 }}>
-                  {list.map((it, idx) => {
-                    // Need to compute original index within arr for update/delete.
-                    // Find index of this exact element by name+pool (there may be duplicates but ok).
-                    const originalIndex = arr.findIndex((x) => x === it);
-                    return (
-                      <li key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                        <input
-                          value={it.name}
-                          onChange={(e) => updateItem(type, category, originalIndex, { name: e.target.value })}
-                          style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
-                        />
-                        <select
-                          value={it.pool || "No Pool"}
-                          onChange={(e) => updateItem(type, category, originalIndex, { pool: e.target.value })}
-                          style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
-                        >
-                          {POOLS.map((p) => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                        <button className="btn ghost" title="Delete" onClick={() => deleteItem(type, category, originalIndex)}>🗑️</button>
-                      </li>
-                    );
-                  })}
-                  {list.length === 0 && <div style={{ color: "#6b7280", fontSize: 13 }}>No entries</div>}
+                  {list.length === 0 ? (
+                    <div style={{ color: "#6b7280", fontSize: 13 }}>No entries</div>
+                  ) : (
+                    list.map((it, idx) => {
+                      // compute index within the original arr: find nth occurrence of same object by name+pool
+                      // safer approach: calculate index using a simple scan matching name+pool ignoring identity
+                      const originalIndex = arr.findIndex((x, i) => x.name === it.name && (x.pool || "No Pool") === (it.pool || "No Pool") && i >= 0);
+                      // BUT better: use idx relative to the filtered list and map back — we'll compute index by searching forward from 0 and counting matches
+                      let matchIndex = -1;
+                      let count = 0;
+                      for (let i = 0; i < arr.length; i++) {
+                        if ( (arr[i].pool || "No Pool") === (pool || "No Pool") ) {
+                          if (count === idx) {
+                            matchIndex = i;
+                            break;
+                          }
+                          count++;
+                        }
+                      }
+                      const useIndex = matchIndex >= 0 ? matchIndex : originalIndex;
+
+                      return (
+                        <li key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <input
+                            value={it.name}
+                            onChange={(e) => updateItem(type, category, useIndex, { name: e.target.value })}
+                            style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
+                          />
+                          <select
+                            value={it.pool || "No Pool"}
+                            onChange={(e) => updateItem(type, category, useIndex, { pool: e.target.value })}
+                            style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
+                          >
+                            {POOLS.map((p) => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                          <button className="btn ghost" title="Delete" onClick={() => deleteItem(type, category, useIndex)}>🗑️</button>
+                        </li>
+                      );
+                    })
+                  )}
                 </ul>
               </div>
             );
@@ -383,6 +388,43 @@ function ManagePlayers({ onBack }) {
       </div>
     );
   };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      {toast && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-emerald-600 text-white shadow-lg">Players saved</div>}
+      <div className="flex items-center gap-3 mb-6">
+        <button className="btn ghost" onClick={onBack}>◀️ Back</button>
+        <h2 className="text-xl font-bold">Manage Players</h2>
+        <div className="ml-auto flex items-center gap-2">
+          <button className="btn secondary" onClick={doRefresh}><span>⟳</span> Refresh</button>
+          <button className="btn" onClick={doSave} disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
+        </div>
+      </div>
+
+      {error && <div className="card" style={{ background: "#fff1f2", color: "#991b1b", borderColor: "#fecaca" }}>{error}</div>}
+
+      {loading ? <div className="card">Loading players…</div> : (
+        <>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <h3 style={{ margin: "8px 0 10px" }}>Singles</h3>
+              {SINGLES_CATEGORIES_ORDER.map((cat) => (
+                <CategoryCard key={cat} type="singles" category={cat} arr={(players.singles && players.singles[cat]) || []} />
+              ))}
+            </div>
+            <div>
+              <h3 style={{ margin: "8px 0 10px" }}>Doubles</h3>
+              {DOUBLES_CATEGORIES_ORDER.map((cat) => (
+                <CategoryCard key={cat} type="doubles" category={cat} arr={(players.doubles && players.doubles[cat]) || []} />
+              ))}
+            </div>
+          </div>
+          <div className="text-xs text-zinc-500 mt-3">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</div>
+        </>
+      )}
+    </div>
+  );
+}
 
   return (
     <div className="max-w-4xl mx-auto p-6">
