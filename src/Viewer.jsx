@@ -16,7 +16,7 @@ const buster = () => '?t=${Date.now()}';
 
 async function fetchJson(url) {
   const res = await fetch(url + buster(), { cache: "no-store" });
-  if (!res.ok) throw new Error(${url} failed: ${res.status});
+  if (!res.ok) throw new Error('${url} failed: ${res.status}');
   return await res.json();
 }
 
