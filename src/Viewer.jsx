@@ -275,20 +275,79 @@ export default function Viewer() {
           </button>
         </div>
         <h2 style={{ marginTop: 0 }}>Match Rules & Formats</h2>
-        <div style={{ marginTop: 12, background: "white", padding: 16, borderRadius: 10, border: "1px solid #e6edf8", boxShadow: "0 6px 18px rgba(8,35,64,0.04)" }}>
-          <h3>Qualifiers and Semifinal Matches Format:</h3>
-          <ol>
-            <li><strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.</li>
-            <li><strong>Tiebreak at 3–3</strong> — At 3–3 a tiebreak is played to 5 points; at 4–4 next point wins.</li>
-            <li><strong>No-adv scoring</strong> — Next point after deuce decides the game.</li>
-          </ol>
-          <h3>Final Matches format:</h3>
-          <ol>
-            <li>One full set — Standard set (6 games) and tie-break as usual.</li>
-            <li>Limited Deuce Points — Max 3 deuce points; on the 4th deuce point the next point decides the game.</li>
-          </ol>
-        </div>
+        <h2>Match Rules & Formats</h2>
+
+<div style={{ marginTop: 12, background: "white", padding: 16, borderRadius: 10, border: "1px solid #e6edf8", lineHeight: 1.55 }}>
+
+  <h3 style={{ marginTop: 0 }}>Qualifiers and Semifinal Matches Format:</h3>
+  <ol>
+    <li><strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.</li>
+    <li><strong>Tiebreak at 3–3</strong> — Tiebreak to 5 points; at 4–4 next point wins.</li>
+    <li><strong>No-adv scoring</strong> — Next point after deuce decides the game.</li>
+  </ol>
+
+  <h3 style={{ marginTop: 20 }}>Final Matches Format:</h3>
+  <ol>
+    <li>One full set — Standard 6-game set with tie-break.</li>
+    <li>Limited Deuce Points — Max 3 deuce points; at 4th deuce, next point wins.</li>
+  </ol>
+
+  <hr style={{ margin: "20px 0" }}/>
+
+  <h2 style={{ marginTop: 0 }}>Format</h2>
+
+  <h3>Singles Format (Champions A, Champions B, Women and Kids)</h3>
+  <ul>
+    <li><strong>Champions A:</strong> Two pools — A & B. Top 2 from each reach SF. Winners reach Finals.</li>
+    <li><strong>Champions B:</strong> Single pool (Round Robin). Top 2 reach Finals.</li>
+    <li><strong>Women Singles:</strong> Two pools — pool winners play Finals.</li>
+    <li><strong>Kids Singles:</strong> Single pool, top 2 play Finals.</li>
+  </ul>
+
+  <h3>Doubles Format (Champions A, Champions B, Women’s, Combination, Kids)</h3>
+  <ul>
+    <li><strong>Champions A:</strong> Round Robin — top 2 reach Finals.</li>
+    <li><strong>Champions B:</strong> Round Robin — top 2 reach Finals.</li>
+    <li><strong>Women’s Doubles:</strong> Round Robin — top 2 reach Finals.</li>
+    <li><strong>Combination Doubles:</strong> Two pools — top 2 each reach SF.</li>
+    <li><strong>Kids Doubles:</strong> Only 4 players — straight Finals.</li>
+  </ul>
+
+  <hr style={{ margin: "20px 0" }}/>
+
+  <h2 style={{ marginTop: 0 }}>Very Important Rules</h2>
+
+  <ul>
+    <li>Players must be in proper attire with tennis shoes.</li>
+    <li>Players must warm up & report 10 minutes before match.</li>
+    <li>Absence beyond 10 minutes = walkover (organizing committee decides).</li>
+    <li>Tennis rules apply except modified deuce: <strong>One Deuce + Golden Point</strong> (Finals: win by 2).</li>
+    <li>Fast-Four format for qualifiers & SF. Finals are 6-game sets.</li>
+    <li>Tie-breaker requires difference of <strong>TWO points</strong>.</li>
+    <li>Win = 1 point; Loss = 0 points.</li>
+    <li>Chair umpire may override line umpire calls. Final decision by referee.</li>
+    <li>Walkovers only per Organizing Committee discretion.</li>
+    <li>Two new sets of Slazenger Championship/Equivalent balls per day.</li>
+    <li>Players should bring own water, towels, caps.</li>
+    <li>Court switch after first 2 games; then 1 minute break each side after every match.</li>
+    <li>Rain / wet court may delay schedule.</li>
+  </ul>
+
+  <h3 style={{ marginTop: 20 }}>Tie Resolution:</h3>
+  <ul>
+    <li>Overall set points</li>
+    <li>Net game difference (won – conceded)</li>
+    <li>Organisers’ decision final for disputes</li>
+  </ul>
+
+  <div style={{ marginTop: 12, fontStyle: "italic", color: "#555" }}>
+    (Organising Committee and CSC 4.0)
+  </div>
+
+</div>
+
       </div>
+
     );
   }
 
