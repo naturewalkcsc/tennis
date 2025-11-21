@@ -367,31 +367,51 @@ function ManagePlayers({ onBack }) {
 
 /* ---------------------- Fixtures admin (simplified) ---------------------- */
 /* ----------------- Fixtures (create/list/remove) ----------------- */
-const FixturesAdmin = ({ onBack }) => {
+/* Fixtures component — replace the existing Fixtures in your App.jsx with this */
+const SINGLES_CATEGORIES_ORDER = [
+  "Women's Singles",
+  "Kid's Singles",
+  "NW Team (A) Singles",
+  "NW Team (B) Singles"
+];
+
+const DOUBLES_CATEGORIES_ORDER = [
+  "Women's Doubles",
+  "Kid's Doubles",
+  "NW Team (A) Doubles",
+  "NW Team (B) Doubles",
+  "Mixed Doubles"
+];
+
+const Fixtures = ({ onBack }) => {
   const [players, setPlayers] = useState({ singles: {}, doubles: {} });
-  const [mode, setMode] = useState("singles");
+  const [mode, setMode] = useState("singles"); // 'singles' or 'doubles'
+  const [category, setCategory] = useState(SINGLES_CATEGORIES_ORDER[0]);
   const [a, setA] = useState("");
   const [b, setB] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const p = await apiPlayersGet();
-        if (alive) setPlayers(p || { singles: {}, doubles: {} });
+        if (alive && p) {
+          // migrate earlier formats if needed (players.singles may be object maps)
+          setPlayers(p);
+        }
       } catch (e) {
-        console.warn("Load players failed", e);
-        if (alive) setPlayers({ singles: {}, doubles: {} });
+        // ignore - maybe KV is off
       }
       try {
         const fx = await apiFixturesList();
-        if (alive) setList(fx);
+        if (alive && fx) setList(fx);
       } catch (e) {
-        console.warn("Load fixtures failed", e);
+        // ignore
       } finally {
         if (alive) setLoading(false);
       }
@@ -399,38 +419,77 @@ const FixturesAdmin = ({ onBack }) => {
     return () => { alive = false; };
   }, []);
 
-  // NORMALIZE players -> array of names for select options
-  const normalizedOptions = (() => {
+  // When mode changes, reset category to first item in that set
+  useEffect(() => {
+    if (mode === "singles") setCategory(SINGLES_CATEGORIES_ORDER[0]);
+    else setCategory(DOUBLES_CATEGORIES_ORDER[0]);
+    setA("");
+    setB("");
+  }, [mode]);
+
+  // pick options depending on current category and mode
+  const categoryOptions = (() => {
+    if (!players) return [];
     if (mode === "singles") {
-      // players.singles is expected to be object: { category: [ {name,pool}, ... ], ... }
-      return Object.values(players.singles || {}).flat().map(item => (typeof item === 'string' ? item : (item?.name || '')));
+      // players.singles is expected to be an object: { "Women's Singles": [{name,pool}, ...], ...}
+      const arr = (players.singles && players.singles[category]) || [];
+      return arr.map((it) => (typeof it === "string" ? it : it?.name || ""));
     } else {
-      return Object.values(players.doubles || {}).flat().map(item => (typeof item === 'string' ? item : (item?.name || '')));
+      const arr = (players.doubles && players.doubles[category]) || [];
+      return arr.map((it) => (typeof it === "string" ? it : it?.name || ""));
     }
   })();
-
-  const options = Array.from(new Set(normalizedOptions)).filter(n => n); // unique non-empty
 
   const canAdd = a && b && a !== b && date && time;
 
   const add = async (e) => {
     e.preventDefault();
-    const start = new Date(`${date}T${time}:00`).getTime();
-    const payload = { id: crypto.randomUUID(), mode, sides: [a, b], start, status: "upcoming" };
-    await apiFixturesAdd(payload);
-    setList(prev => [...prev, payload].sort((x, y) => x.start - y.start));
-    setA(""); setB(""); setDate(""); setTime("");
+    try {
+      const start = new Date(`${date}T${time}:00`).getTime();
+      const payload = {
+        id: crypto.randomUUID(),
+        mode,
+        category,
+        sides: [a, b],
+        start,
+        status: "upcoming"
+      };
+      await apiFixturesAdd(payload);
+      setList(prev => [...prev, payload].sort((x,y) => x.start - y.start));
+      setA(""); setB(""); setDate(""); setTime("");
+    } catch (err) {
+      setError("Add fixture failed");
+      console.error(err);
+    }
   };
+
   const remove = async (id) => {
-    await apiFixturesRemove(id);
-    setList(prev => prev.filter(f => f.id !== id));
+    try {
+      await apiFixturesRemove(id);
+      setList(prev => prev.filter(f => f.id !== id));
+    } catch (err) {
+      setError("Remove failed");
+    }
   };
+
   const clear = async () => {
     if (!confirm("Clear ALL fixtures?")) return;
-    await apiFixturesClear();
-    setList([]);
+    try {
+      await apiFixturesClear();
+      setList([]);
+    } catch (err) {
+      setError("Clear failed");
+    }
   };
-  const refresh = async () => { setList(await apiFixturesList()); };
+
+  const refresh = async () => {
+    try {
+      const fx = await apiFixturesList();
+      setList(fx || []);
+    } catch {
+      setError("Refresh failed");
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -442,6 +501,8 @@ const FixturesAdmin = ({ onBack }) => {
           <Button variant="secondary" onClick={clear}>Clear All</Button>
         </div>
       </div>
+
+      {error && <Card className="p-4 mb-4 text-red-700 bg-red-50 border border-red-200 rounded-xl">{error}</Card>}
 
       {loading ? (
         <Card className="p-5 text-center text-zinc-500">Loading…</Card>
@@ -459,28 +520,46 @@ const FixturesAdmin = ({ onBack }) => {
               </div>
 
               <div>
+                <div className="text-sm mb-1">Category</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={category} onChange={(e) => setCategory(e.target.value)}>
+                  {(mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map((c) => (
+                    <option value={c} key={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
+                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={(e) => setA(e.target.value)}>
                   <option value="">Choose…</option>
-                  {options.map(name => <option key={name} value={name}>{name}</option>)}
+                  {categoryOptions.length === 0 ? <option value="" disabled>No entries in selected category</option> :
+                    categoryOptions.map((name) => <option key={name} value={name}>{name}</option>)
+                  }
                 </select>
               </div>
 
               <div>
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
+                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={(e) => setB(e.target.value)}>
                   <option value="">Choose…</option>
-                  {options.map(name => <option key={name} value={name}>{name}</option>)}
+                  {categoryOptions.length === 0 ? <option value="" disabled>No entries in selected category</option> :
+                    categoryOptions.map((name) => <option key={name} value={name}>{name}</option>)
+                  }
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div><div className="text-sm mb-1">Date</div><input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} /></div>
-                <div><div className="text-sm mb-1">Time</div><input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} /></div>
-              </div>
-
-              <div className="md:col-span-4">
-                <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
+              <div className="md:col-span-4 grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-sm text-zinc-600 mb-1">Date</div>
+                  <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={(e)=>setDate(e.target.value)} />
+                </div>
+                <div>
+                  <div className="text-sm text-zinc-600 mb-1">Time</div>
+                  <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={(e)=>setTime(e.target.value)} />
+                </div>
+                <div className="md:col-span-2 mt-2">
+                  <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
+                </div>
               </div>
             </form>
           </Card>
@@ -492,20 +571,17 @@ const FixturesAdmin = ({ onBack }) => {
               {list.map(f => (
                 <Card key={f.id} className="p-4 flex items-center gap-4">
                   <div className="flex-1">
-                    <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}{" "}
-                      <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>
+                    <div className="font-semibold">
+                      {f.sides?.[0]} vs {f.sides?.[1]}
+                      {f.category ? <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.category}</span> : <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>}
                     </div>
                     <div className="text-sm text-zinc-500">
                       {new Date(f.start).toLocaleString()}
-                      {f.status === "active" && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-emerald-600">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live
-                        </span>
-                      )}
+                      {f.status === "active" && <span className="ml-2 inline-flex items-center gap-1 text-emerald-600"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live</span>}
                       {f.status === "completed" && <span className="ml-2 text-zinc-500 text-xs">(completed)</span>}
                     </div>
                   </div>
-                  <Button variant="ghost" onClick={() => remove(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
+                  <Button variant="ghost" onClick={()=>remove(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
                 </Card>
               ))}
             </div>
