@@ -383,7 +383,7 @@ const DOUBLES_CATEGORIES_ORDER = [
   "Mixed Doubles"
 ];
 
-const Fixtures = ({ onBack }) => {
+const FixturesAdmin = ({ onBack }) => {
   const [players, setPlayers] = useState({ singles: {}, doubles: {} });
   const [mode, setMode] = useState("singles"); // 'singles' or 'doubles'
   const [category, setCategory] = useState(SINGLES_CATEGORIES_ORDER[0]);
