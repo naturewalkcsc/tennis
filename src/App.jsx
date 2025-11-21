@@ -139,109 +139,302 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
 
 /* ---------------------- Manage Players (admin) ---------------------- */
 function ManagePlayers({ onBack }) {
-  const SINGLES_CATEGORIES_ORDER = [
+  const SINGLES = [
     "Women's Singles",
     "Kid's Singles",
     "NW Team (A) Singles",
-    "NW Team (B) Singles"
+    "NW Team (B) Singles",
   ];
-  const DOUBLES_CATEGORIES_ORDER = [
+
+  const DOUBLES = [
     "Women's Doubles",
     "Kid's Doubles",
     "NW Team (A) Doubles",
     "NW Team (B) Doubles",
-    "Mixed Doubles"
+    "Mixed Doubles",
   ];
 
   const POOLS = ["No Pool", "Pool A", "Pool B"];
 
-  const LS_PLAYERS_DRAFT = "LS_PLAYERS_DRAFT_v2";
-
   const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
-  const [dirty, setDirty] = React.useState(false);
-  const [error, setError] = React.useState("");
-  const [toast, setToast] = React.useState(false);
 
-  // Helpers to migrate legacy arrays to new object format
-  const migrateIfNeeded = (raw) => {
-    // Expecting raw = { singles: {...} or [] , doubles: {...} or [] }
+  // ---- Load players ----
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const raw = await apiPlayersGet();
+        const fixed = normalize(raw);
+        setPlayers(fixed);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // ---- Normalize DB structure ----
+  function normalize(raw) {
     const out = { singles: {}, doubles: {} };
 
-    // helper to convert to object mapping category -> [{name,pool}]
-    const toMap = (val) => {
-      if (!val) return {};
-      // if val is array -> legacy global list? we will put into "Women's Singles" default bucket
-      if (Array.isArray(val)) {
-        // fallback: put everything into "Women's Singles" as legacy fallback
-        return { [SINGLES_CATEGORIES_ORDER[0]]: val.map((n) => ({ name: n, pool: "No Pool" })) };
-      }
-      // if object mapping categories -> array of strings or array of objects
-      const map = {};
-      for (const [k, arr] of Object.entries(val)) {
-        if (!arr) continue;
-        if (!Array.isArray(arr)) {
-          // unexpected, skip
-          continue;
-        }
-        map[k] = arr.map((el) => {
-          if (typeof el === "string") return { name: el, pool: "No Pool" };
-          if (typeof el === "object" && el !== null) {
-            // if already object with name & pool, honor it; if only name property exists that's fine
-            return { name: String(el.name || el.label || ""), pool: String(el.pool || "No Pool") };
-          }
-          return { name: String(el), pool: "No Pool" };
-        });
-      }
-      return map;
+    const fixCategory = (obj, list) => {
+      list.forEach((cat) => {
+        out[obj][cat] =
+          raw?.[obj]?.[cat]?.map((p) => ({
+            id: p.id || crypto.randomUUID(),
+            name: p.name || "",
+            pool: p.pool || "No Pool",
+          })) || [];
+      });
     };
 
-    out.singles = toMap(raw.singles);
-    out.doubles = toMap(raw.doubles);
+    fixCategory("singles", SINGLES);
+    fixCategory("doubles", DOUBLES);
+
     return out;
-  };
+  }
 
-  // Local draft helpers
-  const saveDraft = (obj) => {
-    try {
-      localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify(obj));
-    } catch (e) {}
-  };
-  const loadDraft = () => {
-    try {
-      const s = localStorage.getItem(LS_PLAYERS_DRAFT);
-      return s ? JSON.parse(s) : null;
-    } catch (e) { return null; }
-  };
-  const clearDraft = () => {
-    try { localStorage.removeItem(LS_PLAYERS_DRAFT); } catch (e) {}
-  };
+  // ---- Add item ----
+  function addPlayer(type, category) {
+    setPlayers((prev) => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        [category]: [
+          ...prev[type][category],
+          { id: crypto.randomUUID(), name: "", pool: "No Pool" },
+        ],
+      },
+    }));
+  }
 
+  // ---- Update single player without re-render storm ----
+  function updatePlayer(type, category, id, patch) {
+    setPlayers((prev) => {
+      const updated = prev[type][category].map((p) =>
+        p.id === id ? { ...p, ...patch } : p
+      );
+      return {
+        ...prev,
+        [type]: { ...prev[type], [category]: updated },
+      };
+    });
+  }
+
+  // ---- Delete player ----
+  function deletePlayer(type, category, id) {
+    setPlayers((prev) => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        [category]: prev[type][category].filter((p) => p.id !== id),
+      },
+    }));
+  }
+
+  // ---- Save to Upstash ----
+  async function savePlayers() {
+    setSaving(true);
+    try {
+      await apiPlayersSet(players);
+      alert("Saved successfully");
+    } catch (e) {
+      alert("Save failed");
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ---- Beautiful category box ----
+  function Category({ title, type, items }) {
+    return (
+      <div
+        style={{
+          background: "white",
+          padding: 14,
+          borderRadius: 8,
+          border: "1px solid #e5e7eb",
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div style={{ fontWeight: 700 }}>{title}</div>
+          <button onClick={() => addPlayer(type, title)}>+ Add</button>
+        </div>
+
+        {/* Render by pools */}
+        {["Pool A", "Pool B", "No Pool"].map((pool) => {
+          const list = items.filter((p) => p.pool === pool);
+          if (list.length === 0) return null;
+
+          return (
+            <div key={pool} style={{ marginTop: 10 }}>
+              {pool !== "No Pool" && (
+                <div style={{ fontWeight: 600 }}>{pool}</div>
+              )}
+
+              {list.map((p) => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <input
+                    value={p.name}
+                    onChange={(e) =>
+                      updatePlayer(type, title, p.id, { name: e.target.value })
+                    }
+                    style={{
+                      flex: 1,
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #e5e7eb",
+                    }}
+                  />
+
+                  <select
+                    value={p.pool}
+                    onChange={(e) =>
+                      updatePlayer(type, title, p.id, { pool: e.target.value })
+                    }
+                    style={{
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #e5e7eb",
+                    }}
+                  >
+                    {POOLS.map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                  </select>
+
+                  <button onClick={() => deletePlayer(type, title, p.id)}>
+                    🗑️
+                  </button>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (loading) return <div>Loading players…</div>;
+
+  return (
+    <div style={{ padding: 24 }}>
+      <button onClick={onBack}>◀ Back</button>
+      <h2>Manage Players</h2>
+
+      <h3>Singles</h3>
+      {SINGLES.map((cat) => (
+        <Category
+          key={cat}
+          title={cat}
+          type="singles"
+          items={players.singles[cat]}
+        />
+      ))}
+
+      <h3>Doubles</h3>
+      {DOUBLES.map((cat) => (
+        <Category
+          key={cat}
+          title={cat}
+          type="doubles"
+          items={players.doubles[cat]}
+        />
+      ))}
+
+      <button
+        disabled={saving}
+        onClick={savePlayers}
+        style={{ marginTop: 20, padding: "10px 16px" }}
+      >
+        {saving ? "Saving…" : "Save Changes"}
+      </button>
+    </div>
+  );
+}
+
+/* ---------------------- Fixtures admin (simplified) ---------------------- */
+/* ----------------- Fixtures (create/list/remove) ----------------- */
+/* Fixtures component — replace the existing Fixtures in your App.jsx with this */
+const SINGLES_CATEGORIES_ORDER = [
+  "Women's Singles",
+  "Kid's Singles",
+  "NW Team (A) Singles",
+  "NW Team (B) Singles"
+];
+
+const DOUBLES_CATEGORIES_ORDER = [
+  "Women's Doubles",
+  "Kid's Doubles",
+  "NW Team (A) Doubles",
+  "NW Team (B) Doubles",
+  "Mixed Doubles"
+];
+
+const FixturesAdmin = ({ onBack }) => {
+  const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
+  const [mode, setMode] = React.useState("singles");
+  const [category, setCategory] = React.useState(SINGLES_CATEGORIES_ORDER[0]);
+  const [a, setA] = React.useState("");
+  const [b, setB] = React.useState("");
+  const [date, setDate] = React.useState("");
+  const [time, setTime] = React.useState("");
+  const [list, setList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [editingId, setEditingId] = React.useState(null);
+  const [editState, setEditState] = React.useState({ category: "", a: "", b: "", date: "", time: "" });
+
+  // load players + fixtures on mount
   React.useEffect(() => {
     let alive = true;
     (async () => {
-      setLoading(true);
-      // prefer draft if present
-      const draft = loadDraft();
-      if (draft) {
-        if (!alive) return;
-        setPlayers(draft);
-        setDirty(true);
-        setLoading(false);
-        return;
-      }
       try {
-        const obj = await apiPlayersGet();
-        if (!alive) return;
-        const migrated = migrateIfNeeded(obj || { singles: {}, doubles: {} });
-        // Ensure categories present (so UI shows empty boxes)
-        SINGLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.singles[c]) migrated.singles[c] = []; });
-        DOUBLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.doubles[c]) migrated.doubles[c] = []; });
-        setPlayers(migrated);
+        const p = await apiPlayersGet();
+        if (alive) {
+          // if players saved as arrays (legacy), normalize to categories if needed
+          const normalized = { singles: {}, doubles: {} };
+          // if p.singles is object-like with categories, use as is; else fallback
+          if (p && p.singles && typeof p.singles === "object" && !Array.isArray(p.singles)) {
+            normalized.singles = p.singles;
+          } else if (Array.isArray(p.singles)) {
+            normalized.singles = { [SINGLES_CATEGORIES_ORDER[0]]: p.singles.map(n => (typeof n === "string" ? { name: n } : n)) };
+          }
+          if (p && p.doubles && typeof p.doubles === "object" && !Array.isArray(p.doubles)) {
+            normalized.doubles = p.doubles;
+          } else if (Array.isArray(p.doubles)) {
+            normalized.doubles = { [DOUBLES_CATEGORIES_ORDER[0]]: p.doubles.map(n => (typeof n === "string" ? { name: n } : n)) };
+          }
+
+          // ensure all categories exist so selects show empty lists rather than undefined
+          SINGLES_CATEGORIES_ORDER.forEach(c => { if (!normalized.singles[c]) normalized.singles[c] = []; });
+          DOUBLES_CATEGORIES_ORDER.forEach(c => { if (!normalized.doubles[c]) normalized.doubles[c] = []; });
+
+          setPlayers(normalized);
+          // default category set based on mode
+          setCategory(mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]);
+        }
       } catch (e) {
+        // ignore — admin can add players manually
         console.warn("Could not load players", e);
-        setError("Could not load players (KV off?). You can edit and Save to retry.");
+      }
+
+      try {
+        const fx = await apiFixturesList();
+        if (alive) setList(Array.isArray(fx) ? fx : []);
+      } catch (e) {
+        console.warn("Could not load fixtures", e);
       } finally {
         if (alive) setLoading(false);
       }
@@ -249,233 +442,106 @@ function ManagePlayers({ onBack }) {
     return () => { alive = false; };
   }, []);
 
-  const markDirty = (newPlayers) => {
-    setDirty(true);
-    saveDraft(newPlayers);
-    setPlayers(newPlayers);
-  };
-
-  // Generic updater for a particular category (type = 'singles' or 'doubles', category = string)
-  const updateCategory = (type, category, updater) => {
-    setPlayers((prev) => {
-      const copy = { singles: { ...prev.singles }, doubles: { ...prev.doubles } };
-      const arr = (type === "singles" ? copy.singles[category] : copy.doubles[category]) || [];
-      const updated = updater(arr.slice());
-      if (type === "singles") copy.singles[category] = updated;
-      else copy.doubles[category] = updated;
-      markDirty(copy);
-      return copy;
-    });
-  };
-
-  // add player/pair
-  const addItem = (type, category, name = "New Player", pool = "No Pool") => {
-    updateCategory(type, category, (arr) => {
-      arr.push({ name, pool });
-      return arr;
-    });
-  };
-  const updateItem = (type, category, idx, patch) => {
-    updateCategory(type, category, (arr) => {
-      arr[idx] = { ...arr[idx], ...patch };
-      return arr;
-    });
-  };
-  const deleteItem = (type, category, idx) => {
-    updateCategory(type, category, (arr) => {
-      arr.splice(idx, 1);
-      return arr;
-    });
-  };
-
-  const doSave = async () => {
-    setSaving(true);
-    setError("");
-    try {
-      // The server expects JSON. We will send object mapping category->array of objects {name,pool}
-      await apiPlayersSet({ singles: players.singles, doubles: players.doubles });
-      setDirty(false);
-      clearDraft();
-      setToast(true);
-      setTimeout(() => setToast(false), 1100);
-    } catch (e) {
-      console.error(e);
-      setError("Save failed. Make sure KV is configured. Draft saved locally.");
-      saveDraft(players);
-      setDirty(true);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const doRefresh = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const obj = await apiPlayersGet();
-      const migrated = migrateIfNeeded(obj || { singles: {}, doubles: {} });
-      SINGLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.singles[c]) migrated.singles[c] = []; });
-      DOUBLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.doubles[c]) migrated.doubles[c] = []; });
-      setPlayers(migrated);
-      setDirty(false);
-      clearDraft();
-    } catch (e) {
-      console.error(e);
-      setError("Refresh failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // UI render helpers
-  const CategoryCard = ({ type, category, arr }) => {
-    // Group by pool for display
-    const pooled = {};
-    (arr || []).forEach((it) => {
-      const pool = it.pool || "No Pool";
-      if (!pooled[pool]) pooled[pool] = [];
-      pooled[pool].push(it);
-    });
-    return (
-      <div className="card category-card" style={{ padding: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 700 }}>{category} <span style={{ fontWeight: 400, fontSize: 12, color: "#6b7280", marginLeft: 8 }}>({arr.length})</span></div>
-          <div>
-            <button className="btn ghost" onClick={() => addItem(type, category, "New Player", "No Pool")}>+ Add</button>
-          </div>
-        </div>
-        <div style={{ marginTop: 10 }}>
-          {POOLS.map((pool) => {
-            const list = pooled[pool] || [];
-            if (list.length === 0 && pool !== "No Pool") return null; // hide empty pools except "No Pool" maybe show counts
-            return (
-              <div key={pool} style={{ marginBottom: 10 }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>{pool === "No Pool" ? "" : pool}</div>
-                <ul style={{ marginLeft: 18 }}>
-                  {list.map((it, idx) => {
-                    // Need to compute original index within arr for update/delete.
-                    // Find index of this exact element by name+pool (there may be duplicates but ok).
-                    const originalIndex = arr.findIndex((x) => x === it);
-                    return (
-                      <li key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                        <input
-                          value={it.name}
-                          onChange={(e) => updateItem(type, category, originalIndex, { name: e.target.value })}
-                          style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
-                        />
-                        <select
-                          value={it.pool || "No Pool"}
-                          onChange={(e) => updateItem(type, category, originalIndex, { pool: e.target.value })}
-                          style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
-                        >
-                          {POOLS.map((p) => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                        <button className="btn ghost" title="Delete" onClick={() => deleteItem(type, category, originalIndex)}>🗑️</button>
-                      </li>
-                    );
-                  })}
-                  {list.length === 0 && <div style={{ color: "#6b7280", fontSize: 13 }}>No entries</div>}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      {toast && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-emerald-600 text-white shadow-lg">Players saved</div>}
-      <div className="flex items-center gap-3 mb-6">
-        <button className="btn ghost" onClick={onBack}>◀ Back</button>
-        <h2 className="text-xl font-bold">Manage Players</h2>
-        <div className="ml-auto flex items-center gap-2">
-          <button className="btn secondary" onClick={doRefresh}><span>⟳</span> Refresh</button>
-          <button className="btn" onClick={doSave} disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
-        </div>
-      </div>
-
-      {error && <div className="card" style={{ background: "#fff1f2", color: "#991b1b", borderColor: "#fecaca" }}>{error}</div>}
-
-      {loading ? <div className="card">Loading players…</div> : (
-        <>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <h3 style={{ margin: "8px 0 10px" }}>Singles</h3>
-              {SINGLES_CATEGORIES_ORDER.map((cat) => (
-                <CategoryCard key={cat} type="singles" category={cat} arr={(players.singles && players.singles[cat]) || []} />
-              ))}
-            </div>
-            <div>
-              <h3 style={{ margin: "8px 0 10px" }}>Doubles</h3>
-              {DOUBLES_CATEGORIES_ORDER.map((cat) => (
-                <CategoryCard key={cat} type="doubles" category={cat} arr={(players.doubles && players.doubles[cat]) || []} />
-              ))}
-            </div>
-          </div>
-          <div className="text-xs text-zinc-500 mt-3">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ---------------------- Fixtures admin (simplified) ---------------------- */
-function FixturesAdmin({ onBack }) {
-  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
-  const [mode, setMode] = useState("singles");
-  const [category, setCategory] = useState("");
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const SINGLES_ORDER = ["Women's Singles","Kid's Singles","NW Team (A) Singles","NW Team (B) Singles"];
-  const DOUBLES_ORDER = ["Women's Doubles","Kid's Doubles","NW Team (A) Doubles","NW Team (B) Doubles","Mixed Doubles"];
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const rawPlayers = await apiPlayersGet();
-        const norm = normalizePlayers(rawPlayers);
-        if (!alive) return;
-        setPlayers(norm);
-        // pick first category by default if available
-        const defaults = mode === "singles" ? (SINGLES_ORDER.find(k => (norm.singles[k]||[]).length>0) || Object.keys(norm.singles)[0]) : (DOUBLES_ORDER.find(k => (norm.doubles[k]||[]).length>0) || Object.keys(norm.doubles)[0]);
-        setCategory(defaults || "");
-      } catch (e) {
-        console.error(e);
-      }
-      try { const fx = await apiFixturesList(); if (alive) setList(fx || []); } catch { }
-      finally { if (alive) setLoading(false); }
-    })();
-    return () => { alive = false; };
+  // recompute options for sides when category or mode changes
+  const categories = mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER;
+  React.useEffect(() => {
+    // set default category when mode changes
+    setCategory(mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]);
+    // reset a/b
+    setA("");
+    setB("");
   }, [mode]);
 
-  const optionsForCategory = (mode === "singles") ? (players.singles[category] || []) : (players.doubles[category] || []);
-  const canAdd = category && a && b && a !== b && date && time;
+  // flatten player list for chosen category (each player may be object {name,...} or string)
+  const optionsForCategory = (mode, category) => {
+    const map = mode === "singles" ? players.singles : players.doubles;
+    const arr = (map && map[category]) || [];
+    return arr.map(el => (typeof el === "string" ? el : (el && el.name ? el.name : ""))).filter(Boolean);
+  };
+
+  const canAdd = a && b && a !== b && date && time;
 
   const add = async (e) => {
-    e.preventDefault();
-    const payload = { id: crypto.randomUUID(), mode, category, sides: [a, b], start: new Date(`${date}T${time}:00`).getTime(), status: "upcoming" };
+    e && e.preventDefault();
+    const start = new Date(`${date}T${time}:00`).getTime();
+    const payload = {
+      id: crypto.randomUUID(),
+      mode,
+      category,
+      sides: [a, b],
+      start,
+      status: "upcoming"
+    };
     await apiFixturesAdd(payload);
-    setList(prev => [...prev, payload].sort((x,y) => x.start - y.start));
+    setList(prev => [...prev, payload].sort((x, y) => (x.start || 0) - (y.start || 0)));
     setA(""); setB(""); setDate(""); setTime("");
   };
 
-  const remove = async (id) => { await apiFixturesRemove(id); setList(prev => prev.filter(f => f.id !== id)); };
+  const remove = async (id) => {
+    if (!confirm("Remove this fixture?")) return;
+    await apiFixturesRemove(id);
+    setList(prev => prev.filter(f => f.id !== id));
+  };
+
+  const clearAll = async () => {
+    if (!confirm("Clear ALL fixtures?")) return;
+    await apiFixturesClear();
+    setList([]);
+  };
+
+  const refresh = async () => {
+    const fx = await apiFixturesList();
+    setList(Array.isArray(fx) ? fx : []);
+  };
+
+  // start editing a fixture inline
+  const beginEdit = (fx) => {
+    setEditingId(fx.id);
+    const dt = fx.start ? new Date(fx.start) : new Date();
+    const yyyy = dt.toISOString().slice(0,10);
+    const hhmm = dt.toTimeString().slice(0,5);
+    setEditState({
+      category: fx.category || (fx.mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]),
+      a: (fx.sides && fx.sides[0]) || "",
+      b: (fx.sides && fx.sides[1]) || "",
+      date: yyyy,
+      time: hhmm
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditState({ category: "", a: "", b: "", date: "", time: "" });
+  };
+
+  const saveEdit = async (id) => {
+    const { category: cat, a: A, b: B, date: D, time: T } = editState;
+    if (!cat || !A || !B || A === B || !D || !T) {
+      alert("Please provide valid category, distinct sides and date/time.");
+      return;
+    }
+    const start = new Date(`${D}T${T}:00`).getTime();
+    const patch = { category: cat, sides: [A,B], start };
+    await apiFixturesUpdate(id, patch);
+    // update locally
+    setList(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f).sort((x, y) => (x.start || 0) - (y.start || 0)));
+    cancelEdit();
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
         <h2 className="text-xl font-bold">Fixtures</h2>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" onClick={refresh}><RefreshCw className="w-4 h-4" /> Refresh</Button>
+          <Button variant="secondary" onClick={clearAll}>Clear All</Button>
+        </div>
       </div>
 
-      {loading ? <Card className="p-5 text-center text-zinc-500">Loading…</Card> : (
+      {loading ? (
+        <Card className="p-5 text-center text-zinc-500">Loading…</Card>
+      ) : (
         <>
           <Card className="p-5 mb-6">
             <div className="font-semibold mb-3">Schedule a Match</div>
@@ -483,16 +549,23 @@ function FixturesAdmin({ onBack }) {
               <div className="md:col-span-1">
                 <div className="text-sm mb-1">Type</div>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode==="singles"} onChange={() => { setMode("singles"); setCategory(""); }} /> Singles</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode==="doubles"} onChange={() => { setMode("doubles"); setCategory(""); }} /> Doubles</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
+                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
                 </div>
               </div>
 
               <div>
                 <div className="text-sm mb-1">Category</div>
                 <select className="w-full rounded-xl border px-3 py-2" value={category} onChange={e => setCategory(e.target.value)}>
+                  {(mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
                   <option value="">Choose…</option>
-                  { (mode === "singles" ? SINGLES_ORDER : DOUBLES_ORDER).map(k => <option key={k} value={k}>{k}</option>) }
+                  {optionsForCategory(mode, category).map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
 
@@ -500,18 +573,18 @@ function FixturesAdmin({ onBack }) {
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
                 <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
                   <option value="">Choose…</option>
-                  {optionsForCategory.map(o => <option key={o} value={o}>{o}</option>)}
+                  {optionsForCategory(mode, category).map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="md:col-span-2 grid grid-cols-2 gap-2">
                 <div>
                   <div className="text-sm mb-1">Date</div>
-                  <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e=>setDate(e.target.value)} />
+                  <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} />
                 </div>
                 <div>
                   <div className="text-sm mb-1">Time</div>
-                  <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e=>setTime(e.target.value)} />
+                  <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} />
                 </div>
               </div>
 
@@ -521,15 +594,68 @@ function FixturesAdmin({ onBack }) {
             </form>
           </Card>
 
-          {list.length === 0 ? <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card> : (
+          {list.length === 0 ? (
+            <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card>
+          ) : (
             <div className="space-y-3">
-              {list.map(f => (
-                <Card key={f.id} className="p-4 flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode || f.category || "—"}</span></div>
-                    <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()} {f.status === "active" && (<span className="ml-2 text-emerald-600">Live</span>)}</div>
+              {list.sort((x,y)=> (x.start||0)-(y.start||0)).map(f => (
+                <Card key={f.id} className="p-4">
+                  <div style={{display:'flex', alignItems:'center', gap:12}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:600}}>
+                        {(f.sides||[]).join(" vs ")}{" "}
+                        <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}{f.category ? ` • ${f.category}` : ''}</span>
+                      </div>
+                      <div style={{color:"#6b7280", fontSize:13}}>
+                        {f.winner ? `Winner: ${f.winner}` : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}
+                      </div>
+                      <div style={{marginTop:6, color:"#6b7280"}}>{f.start ? new Date(f.start).toLocaleString() : ""}</div>
+                    </div>
+
+                    <div style={{display:'flex', gap:8}}>
+                      <Button variant="ghost" onClick={() => beginEdit(f)}>Edit</Button>
+                      <Button variant="ghost" onClick={() => remove(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
+                    </div>
                   </div>
-                  <Button variant="ghost" onClick={() => remove(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
+
+                  {editingId === f.id && (
+                    <div style={{marginTop:12, borderTop:"1px dashed #e6edf3", paddingTop:12}}>
+                      <div className="grid md:grid-cols-4 gap-3">
+                        <div>
+                          <div className="text-sm mb-1">Category</div>
+                          <select className="w-full rounded-xl border px-3 py-2" value={editState.category} onChange={e => setEditState(s => ({...s, category: e.target.value}))}>
+                            {(f.mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <div className="text-sm mb-1">Side A</div>
+                          <input className="w-full rounded-xl border px-3 py-2" value={editState.a} onChange={e => setEditState(s=>({...s, a: e.target.value}))} />
+                        </div>
+
+                        <div>
+                          <div className="text-sm mb-1">Side B</div>
+                          <input className="w-full rounded-xl border px-3 py-2" value={editState.b} onChange={e => setEditState(s=>({...s, b: e.target.value}))} />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <div className="text-sm mb-1">Date</div>
+                            <input type="date" className="w-full rounded-xl border px-3 py-2" value={editState.date} onChange={e => setEditState(s=>({...s, date: e.target.value}))} />
+                          </div>
+                          <div>
+                            <div className="text-sm mb-1">Time</div>
+                            <input type="time" className="w-full rounded-xl border px-3 py-2" value={editState.time} onChange={e => setEditState(s=>({...s, time: e.target.value}))} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{marginTop:8, display:'flex', gap:8}}>
+                        <Button onClick={() => saveEdit(f.id)}>Save</Button>
+                        <Button variant="secondary" onClick={cancelEdit}>Cancel</Button>
+                      </div>
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>
@@ -538,8 +664,7 @@ function FixturesAdmin({ onBack }) {
       )}
     </div>
   );
-}
-
+};
 /* ---------------------- StartFromFixtures (admin start) ---------------------- */
 function StartFromFixtures({ onBack, onStartScoring }) {
   const [mode, setMode] = useState("singles");
