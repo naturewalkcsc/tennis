@@ -5,11 +5,15 @@ import imgSettings from "./Settings.jpg";
 
 /**
  * Viewer.jsx
- * - Menu (3 image tiles) -> separate pages with Back button
- * - Teams page: categories with colored cards; supports pool A/B/no-pool
- * - Fixtures page: day-wise grouped table, active/upcoming/completed split
  *
- * Endpoints expected:
+ * Changes made:
+ * - Removed grouping by day in fixtures view.
+ * - Made fixture date/time more prominent (bolder/darker).
+ * - Added color palette to Teams category cards.
+ * - Fixed cache-buster and fetch error template strings.
+ * - Stable keys and no template errors in JSX.
+ *
+ * Expects API endpoints:
  *  GET /api/players  -> { singles: { "Category": [ ... ] }, doubles: { "Category": [ ... ] } }
  *  GET /api/fixtures -> [ { id, mode, sides, start, status, winner, scoreline }, ... ]
  */
@@ -36,7 +40,6 @@ function Tile({ img, title, subtitle, onClick }) {
         textAlign: "left",
         padding: 0,
         width: 360,
-        boxShadow: "0 6px 16px rgba(16,24,40,0.06)",
       }}
     >
       <div style={{ height: 140, overflow: "hidden" }}>
@@ -54,18 +57,8 @@ function Tile({ img, title, subtitle, onClick }) {
   );
 }
 
-/* simple color palette for category cards (will cycle if more categories exist) */
-const CATEGORY_COLORS = [
-  { bg: "#e9f8ef", border: "#d6f0dc" }, // pale green
-  { bg: "#eaf6ff", border: "#d9ecff" }, // pale blue
-  { bg: "#fff4e9", border: "#feedd8" }, // pale peach
-  { bg: "#f6ecff", border: "#f0e3ff" }, // pale purple
-  { bg: "#fff7e9", border: "#fff0d6" }, // pale yellow
-];
-
-/* normalize players map: accepts string array or object array */
+/** Normalize players map so every entry is { name: string, pool: string } */
 function normalizePlayersMap(playersMap) {
-  // playersMap: { category: [item] } ; item may be string or {name, pool}
   const out = {};
   for (const cat of Object.keys(playersMap || {})) {
     const arr = playersMap[cat] || [];
@@ -83,25 +76,14 @@ function normalizePlayersMap(playersMap) {
   return out;
 }
 
-/* group fixtures by date (locale date string) */
-function groupFixturesByDay(fixtures) {
-  const map = {};
-  for (const f of (fixtures || [])) {
-    const d = f.start ? new Date(f.start) : null;
-    const key = d ? d.toLocaleDateString() : "No Date";
-    if (!map[key]) map[key] = [];
-    map[key].push(f);
-  }
-  // return sorted by date ascending
-  const entries = Object.entries(map).sort((a, b) => {
-    if (a[0] === "No Date") return 1;
-    if (b[0] === "No Date") return -1;
-    const da = new Date(a[0]);
-    const db = new Date(b[0]);
-    return da - db;
-  });
-  return entries;
-}
+// small color palette for category cards (cycles)
+const CARD_COLORS = [
+  { bg: "#e6fff0", border: "#d1f7df" },
+  { bg: "#fff6e6", border: "#fdeacb" },
+  { bg: "#eef6ff", border: "#d9eaff" },
+  { bg: "#fff0f6", border: "#f7d9e9" },
+  { bg: "#f0fff5", border: "#dbffea" },
+];
 
 export default function Viewer() {
   const [page, setPage] = useState("menu"); // menu | rules | teams | fixtures
@@ -146,9 +128,9 @@ export default function Viewer() {
     };
   }, []);
 
-  /* Teams rendering */
-  const renderCategory = (catName, entries, index) => {
-    // entries: array of {name,pool}
+  // Teams helpers
+  const renderCategory = (catName, entries, idx) => {
+    // entries: array of {name, pool}
     const groups = { A: [], B: [], none: [] };
     for (const e of entries) {
       const pool = (e.pool || "none").toString().toLowerCase();
@@ -156,17 +138,22 @@ export default function Viewer() {
       else if (pool === "b" || pool === "pool b") groups.B.push(e.name);
       else groups.none.push(e.name);
     }
+
     const showPools = groups.A.length > 0 || groups.B.length > 0;
-    const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+    const color = CARD_COLORS[idx % CARD_COLORS.length];
+
     return (
       <div
         key={catName}
         style={{
           background: color.bg,
-          borderRadius: 12,
+          borderRadius: 10,
           padding: 14,
           border: `1px solid ${color.border}`,
-          minHeight: 110,
+          minHeight: 90,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -177,15 +164,13 @@ export default function Viewer() {
         {entries.length === 0 ? (
           <div style={{ color: "#9ca3af" }}>No players</div>
         ) : showPools ? (
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ display: "flex", gap: 12 }}>
             {groups.A.length > 0 && (
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool A</div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {groups.A.map((n, i) => (
-                    <li key={`a-${i}`} style={{ marginBottom: 6 }}>
-                      {n}
-                    </li>
+                    <li key={`a-${catName}-${i}`}>{n}</li>
                   ))}
                 </ul>
               </div>
@@ -195,21 +180,17 @@ export default function Viewer() {
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>Pool B</div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {groups.B.map((n, i) => (
-                    <li key={`b-${i}`} style={{ marginBottom: 6 }}>
-                      {n}
-                    </li>
+                    <li key={`b-${catName}-${i}`}>{n}</li>
                   ))}
                 </ul>
               </div>
             )}
             {groups.none.length > 0 && (
-              <div style={{ flex: groups.A.length + groups.B.length > 0 ? 1 : "auto" }}>
+              <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>No Pool</div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {groups.none.map((n, i) => (
-                    <li key={`n-${i}`} style={{ marginBottom: 6 }}>
-                      {n}
-                    </li>
+                    <li key={`n-${catName}-${i}`}>{n}</li>
                   ))}
                 </ul>
               </div>
@@ -218,9 +199,7 @@ export default function Viewer() {
         ) : (
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {entries.map((e, i) => (
-              <li key={`p-${i}`} style={{ marginBottom: 6 }}>
-                {e.name}
-              </li>
+              <li key={`p-${catName}-${i}`}>{e.name}</li>
             ))}
           </ul>
         )}
@@ -228,43 +207,12 @@ export default function Viewer() {
     );
   };
 
-  /* Fixtures rendering - group by day and display a table per day */
-  const groupedByDay = groupFixturesByDay(fixtures);
+  // Fixtures (no grouping by day)
+  const activeFixtures = fixtures.filter((f) => f.status === "active");
+  const upcomingFixtures = fixtures.filter((f) => !f.status || f.status === "upcoming");
+  const completedFixtures = fixtures.filter((f) => f.status === "completed");
 
-  const renderDayTable = (dateLabel, dayFixtures) => {
-    // sort dayFixtures by start time
-    const sorted = (dayFixtures || []).slice().sort((a, b) => {
-      const ta = a.start ? new Date(a.start).getTime() : 0;
-      const tb = b.start ? new Date(b.start).getTime() : 0;
-      return ta - tb;
-    });
-
-    return (
-      <div key={dateLabel} style={{ marginBottom: 18 }}>
-        <h4 style={{ margin: "8px 0 12px" }}>{dateLabel}</h4>
-        <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #eef4fb", background: "white" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 120px 1fr", gap: 0, padding: "8px 12px", background: "#fafcff", borderBottom: "1px solid #eef4fb", fontWeight: 600 }}>
-            <div>Match</div>
-            <div>Time</div>
-            <div>Result</div>
-          </div>
-          {sorted.map((f) => (
-            <div key={f.id} style={{ display: "grid", gridTemplateColumns: "2fr 120px 1fr", gap: 0, padding: "12px", borderBottom: "1px solid #f3f6fb", alignItems: "center" }}>
-              <div style={{ fontWeight: 600 }}>{(f.sides || []).join(" vs ")}</div>
-              <div style={{ color: "#6b7280" }}>{f.start ? new Date(f.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
-              <div style={{ textAlign: "right", color: f.status === "active" ? "#16a34a" : "#374151" }}>
-                {f.status === "active" ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><span style={{ width:10,height:10,borderRadius:20,background:"#16a34a",display:"inline-block" }} /> Live</span> : ""}
-                {f.status === "completed" ? <span>Winner: {f.winner || "-"} {f.scoreline ? ` • ${f.scoreline}` : ""}</span> : ""}
-                {(!f.status || f.status === "upcoming") ? <span style={{ color: "#6b7280" }}>{f.mode || ""}</span> : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // Menu
+  // MENU
   if (page === "menu") {
     return (
       <div style={{ padding: 28 }}>
@@ -279,7 +227,7 @@ export default function Viewer() {
     );
   }
 
-  // RULES PAGE
+  // RULES
   if (page === "rules") {
     return (
       <div style={{ padding: 24 }}>
@@ -288,19 +236,14 @@ export default function Viewer() {
             Back
           </button>
         </div>
+
         <h2>Match Rules & Formats</h2>
         <div style={{ marginTop: 12, background: "white", padding: 16, borderRadius: 10, border: "1px solid #e6edf8" }}>
           <h3>Qualifiers and Semifinal Matches Format:</h3>
           <ol>
-            <li>
-              <strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.
-            </li>
-            <li>
-              <strong>Tiebreak at 3–3</strong> — At 3–3 a tiebreak is played. Tiebreak to 5 points; at 4–4 next point wins.
-            </li>
-            <li>
-              <strong>No-adv scoring</strong> — Next point after deuce decides the game. Receiver chooses the receiving side.
-            </li>
+            <li><strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.</li>
+            <li><strong>Tiebreak at 3–3</strong> — At 3–3 a tiebreak is played. Tiebreak to 5 points; at 4–4 next point wins.</li>
+            <li><strong>No-adv scoring</strong> — Next point after deuce decides the game.</li>
           </ol>
 
           <h3>Final Matches format:</h3>
@@ -313,7 +256,7 @@ export default function Viewer() {
     );
   }
 
-  // TEAMS PAGE
+  // TEAMS
   if (page === "teams") {
     return (
       <div style={{ padding: 24 }}>
@@ -322,6 +265,7 @@ export default function Viewer() {
             Back
           </button>
         </div>
+
         <h2>Teams</h2>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }}>
@@ -330,10 +274,10 @@ export default function Viewer() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {loadingPlayers ? (
                 <div>Loading players…</div>
-              ) : Object.keys(players.singles || {}).length === 0 ? (
+              ) : Object.keys(players.singles).length === 0 ? (
                 <div style={{ color: "#9ca3af" }}>No singles categories</div>
               ) : (
-                Object.entries(players.singles).map(([cat, arr], idx) => renderCategory(cat, arr, idx))
+                Object.entries(players.singles).map(([cat, arr], i) => renderCategory(cat, arr, i))
               )}
             </div>
           </div>
@@ -343,10 +287,10 @@ export default function Viewer() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {loadingPlayers ? (
                 <div>Loading players…</div>
-              ) : Object.keys(players.doubles || {}).length === 0 ? (
+              ) : Object.keys(players.doubles).length === 0 ? (
                 <div style={{ color: "#9ca3af" }}>No doubles categories</div>
               ) : (
-                Object.entries(players.doubles).map(([cat, arr], idx) => renderCategory(cat, arr, idx + 10))
+                Object.entries(players.doubles).map(([cat, arr], i) => renderCategory(cat, arr, i + 5))
               )}
             </div>
           </div>
@@ -355,7 +299,7 @@ export default function Viewer() {
     );
   }
 
-  // FIXTURES PAGE (day-wise)
+  // FIXTURES (no grouped by day)
   if (page === "fixtures") {
     return (
       <div style={{ padding: 24 }}>
@@ -364,38 +308,45 @@ export default function Viewer() {
             Back
           </button>
         </div>
-        <h2>Fixtures & Scores</h2>
 
-        <div style={{ display: "flex", gap: 16, marginTop: 12, alignItems: "flex-start" }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Grouped by Day</div>
-              {loadingFixtures ? (
-                <div>Loading fixtures…</div>
-              ) : groupedByDay.length === 0 ? (
-                <div style={{ color: "#9ca3af" }}>No fixtures</div>
-              ) : (
-                groupedByDay.map(([dateLabel, dayFixtures]) => renderDayTable(dateLabel, dayFixtures))
-              )}
+        <h2>Fixtures & Scores</h2>
+        <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+          <div style={{ flex: 1, background: "white", padding: 12, borderRadius: 10, border: "1px solid #e6edf8" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Active</div>
+            {activeFixtures.length === 0 ? <div style={{ color: "#9ca3af" }}>No active fixtures</div> :
+              activeFixtures.map((f) => (
+                <div key={f.id} style={{ padding: 12, borderBottom: "1px solid #eef2f7", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{(f.sides || []).join(" vs ")}</div>
+                    <div style={{ color: "#374151", fontSize: 14, marginTop: 4 }}>{f.start ? new Date(f.start).toLocaleString() : ""}</div>
+                    <div style={{ marginTop: 6, color: "#6b7280" }}>{f.mode}</div>
+                  </div>
+                </div>
+              ))
+            }
+
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Upcoming</div>
+              {upcomingFixtures.length === 0 ? <div style={{ color: "#9ca3af" }}>No upcoming fixtures</div> : upcomingFixtures.map((f) => (
+                <div key={f.id} style={{ padding: 12, borderBottom: "1px solid #eef2f7" }}>
+                  <div style={{ fontWeight: 700 }}>{(f.sides || []).join(" vs ")}</div>
+                  <div style={{ color: "#374151", fontSize: 14, marginTop: 4 }}>{f.start ? new Date(f.start).toLocaleString() : "Invalid Date"}</div>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div style={{ width: 420 }}>
-            <div style={{ background: "white", padding: 12, borderRadius: 10, border: "1px solid #e6edf8" }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Summary</div>
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ fontWeight: 600 }}>Active</div>
-                <div style={{ color: "#6b7280" }}>{fixtures.filter((f) => f.status === "active").length} active</div>
+          <div style={{ width: 420, background: "white", padding: 12, borderRadius: 10, border: "1px solid #e6edf8" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Completed</div>
+            {completedFixtures.length === 0 ? <div style={{ color: "#9ca3af" }}>No completed fixtures</div> : completedFixtures.map((f) => (
+              <div key={f.id} style={{ padding: 12, borderBottom: "1px solid #eef2f7" }}>
+                <div style={{ fontWeight: 700 }}>{(f.sides || []).join(" vs ")}</div>
+                <div style={{ color: "#374151", fontSize: 14, marginTop: 4 }}>
+                  {f.winner ? `Winner: ${f.winner}` : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}
+                </div>
+                <div style={{ marginTop: 6, color: "#6b7280" }}>{f.start ? new Date(f.start).toLocaleString() : ""}</div>
               </div>
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ fontWeight: 600 }}>Upcoming</div>
-                <div style={{ color: "#6b7280" }}>{fixtures.filter((f) => !f.status || f.status === "upcoming").length} upcoming</div>
-              </div>
-              <div>
-                <div style={{ fontWeight: 600 }}>Completed</div>
-                <div style={{ color: "#6b7280" }}>{fixtures.filter((f) => f.status === "completed").length} completed</div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
