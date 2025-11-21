@@ -1,9 +1,7 @@
 import React, { useState } from "react";
-import Card from "./CardFallback"; // explained below — optional
+import Card from "./Card";     // <-- This exists
+import Button from "./Button"; // <-- This exists
 
-// Simple self-contained AdminLogin component used by App.jsx.
-// If you don't want a separate Card component, ignore Card import and
-// replace <Card> with a <div className="..."> wrapper in App.
 export default function AdminLogin({ onOk }) {
   const [u, setU] = useState("admin");
   const [p, setP] = useState("");
@@ -11,25 +9,26 @@ export default function AdminLogin({ onOk }) {
 
   const submit = (e) => {
     e.preventDefault();
-    // default admin credentials (same as in your main App file)
     if (u === "admin" && p === "rnwtennis123$") {
       localStorage.setItem("lt_admin", "1");
-      if (typeof onOk === "function") onOk();
+      onOk();
     } else {
       setErr("Invalid credentials");
     }
   };
 
   return (
-    <div className="app-bg">
-      <div className="max-w-sm mx-auto p-6">
+    <div className="app-bg min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold">Admin Login</h1>
-          <div className="text-sm text-zinc-600">Default: admin / rnwtennis123$</div>
+          <div className="text-sm text-zinc-600">
+            Default: <b>admin / rnwtennis123$</b>
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow border border-zinc-200 p-4">
-          <form onSubmit={submit} className="space-y-3">
+        <Card className="p-5">
+          <form onSubmit={submit} className="space-y-4">
             <div>
               <div className="text-sm mb-1">Username</div>
               <input
@@ -51,11 +50,11 @@ export default function AdminLogin({ onOk }) {
 
             {err && <div className="text-sm text-red-600">{err}</div>}
 
-            <button type="submit" className="w-full px-4 py-3 rounded-xl bg-green-600 text-white">
+            <Button type="submit" className="w-full">
               Enter Admin
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
       </div>
     </div>
   );
