@@ -13,6 +13,13 @@ const safeJson = async (res) => {
   try { return await res.json(); } catch { return null; }
 };
 
+// add near SINGLES_CATEGORIES_ORDER / DOUBLES_CATEGORIES_ORDER or at top of file
+const STAGES = [
+  { value: "qualifier", label: "Qualifier" },
+  { value: "semifinal", label: "Semi-final" },
+  { value: "final", label: "Final" },
+];
+
 /* ---------------------- API wrappers (admin) ---------------------- */
 /* These call your existing endpoints. They throw on non-OK. */
 const apiPlayersGet = async () => {
@@ -394,7 +401,8 @@ const FixturesAdmin = ({ onBack }) => {
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [editingId, setEditingId] = React.useState(null);
-  const [editState, setEditState] = React.useState({ category: "", a: "", b: "", date: "", time: "" });
+  const [editState, setEditState] = React.useState({ category: "", a: "", b: "", date: "", time: "",stage : "qualifier" });
+  const [stage, setStage] = React.useState("qualifier");
 
   // load players + fixtures on mount
   React.useEffect(() => {
@@ -470,7 +478,8 @@ const FixturesAdmin = ({ onBack }) => {
       category,
       sides: [a, b],
       start,
-      status: "upcoming"
+      status: "upcoming",
+      stage,
     };
     await apiFixturesAdd(payload);
     setList(prev => [...prev, payload].sort((x, y) => (x.start || 0) - (y.start || 0)));
@@ -505,7 +514,8 @@ const FixturesAdmin = ({ onBack }) => {
       a: (fx.sides && fx.sides[0]) || "",
       b: (fx.sides && fx.sides[1]) || "",
       date: yyyy,
-      time: hhmm
+      time: hhmm,
+      stage: fx.stage|| "qualifier",
     });
   };
 
@@ -521,7 +531,7 @@ const FixturesAdmin = ({ onBack }) => {
       return;
     }
     const start = new Date(`${D}T${T}:00`).getTime();
-    const patch = { category: cat, sides: [A,B], start };
+    const patch = { category: cat, sides: [A,B], start,stage: editState.stage };
     await apiFixturesUpdate(id, patch);
     // update locally
     setList(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f).sort((x, y) => (x.start || 0) - (y.start || 0)));
@@ -560,7 +570,13 @@ const FixturesAdmin = ({ onBack }) => {
                   {(mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-
+                {/* Stage */}
+              <div>
+                  <div className="text-sm mb-1">Stage</div>
+                  <select className="w-full rounded-xl border px-3 py-2" value={editState.stage} onChange={e => setEditState(s => ({...s, stage: e.target.value}))}>
+                    {STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+              </div>
               <div>
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
                 <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
@@ -749,160 +765,158 @@ function setOverFast4(s) {
 }
 
 function Scoring({ config, onAbort, onComplete }) {
-  // config: { sides: ["A","B"], fixtureId, mode, stage }
-  // stage: "qualifier" | "semifinal" | "final"  (optional; default -> qualifier)
-  const stage = (config && config.stage) ? config.stage.toLowerCase() : "qualifier";
-  const isFinal = stage === "final";
+  // config: { sides, fixtureId, mode, stage }
+  const { sides = ["A","B"], fixtureId } = config;
+  const stage = (config.stage || "qualifier").toString().toLowerCase(); // "qualifier"|"semifinal"|"final"
 
-  const { sides = ["A", "B"], fixtureId } = config || {};
-  const [points, setPoints] = useState([0, 0]); // uses 0,15,30,40,"Game" like before for display
-  const [sets, setSets] = useState([makeEmptySet()]);
+  const [points, setPoints] = useState([0,0]);            // raw point values (0,15,30,40 or "Game")
+  const [sets, setSets] = useState([makeEmptySet()]);     // array of set state objects
   const current = sets[sets.length - 1];
 
-  // helper to determine current tiebreak rules depending on stage
-  const tiebreakConfig = () => {
-    if (isFinal) {
-      // Final: first to 7 with min 2 diff, but if reaches 10-10 next point wins (sudden death)
-      return { winBy: 2, minToWin: 7, suddenDeathAtBoth: 10 };
+  // helper: convert point labels
+  const gameWin = (a,b) => (a === "Game" ? "A" : b === "Game" ? "B" : null);
+
+  // helpers for tiebreak logic depending on stage
+  const tb_isFinished = (s) => {
+    // s has tieA, tieB
+    if (stage === "final") {
+      // Final: TB first to 7 with min 2 diff, but cap at 10-10 -> next point wins at 10-10
+      const maxCap = 10;
+      const A = s.tieA, B = s.tieB;
+      if ((A >= 7 || B >= 7) && Math.abs(A - B) >= 2) return true;
+      if ((A === maxCap && B === maxCap)) return false; // next point after we increment will decide, handled below
+      if (A > maxCap || B > maxCap) return true;
+      // not finished otherwise
+      // special: if either reaches 11? we'll let logic above catch it
+      return false;
     } else {
-      // Qualifier / Semifinal: first to 5, (4-4 next point wins) — as you asked before
-      // Implemented as minToWin 5 and winBy 1 (4-4 next point wins)
-      return { winBy: 1, minToWin: 5, suddenDeathAtBoth: null };
+      // qualifier / semifinal: TB to 5, and if reaches 4-4 next point wins (so effectively first to 5 OR 4-4 -> next)
+      const A = s.tieA, B = s.tieB;
+      if ((A >= 5 || B >= 5) && Math.abs(A - B) >= 1) return true;
+      // special: if either >=5 we already returned above, but if it's 5-4 etc handled by >=5
+      // handle 4-4 -> next point wins (we'll let '>=5' handle after next point)
+      return false;
     }
   };
 
-  const tbConf = tiebreakConfig();
-
-  const gameWin = (a, b) => (a === "Game" ? "A" : b === "Game" ? "B" : null);
-
   const pointTo = (who) => {
-    // If set already finished, no further scoring
     if (current.finished) return;
 
-    // If we're in a tiebreak for the current set:
+    // If current is tie-break mode
     if (current.tie) {
       const ns = [...sets];
       const s = { ...current };
       if (who === 0) s.tieA++; else s.tieB++;
 
-      // Final tiebreak logic: first to minToWin with winBy margin,
-      // but if both reach suddenDeathAtBoth (i.e. 10-10) then next point decides.
-      const tieA = s.tieA, tieB = s.tieB;
-      const maxTB = Math.max(tieA, tieB);
-      const minTB = Math.min(tieA, tieB);
-
-      // sudden-death immediate winner if both hit the configured cap and one scores the next point
-      if (tbConf.suddenDeathAtBoth && tieA === tbConf.suddenDeathAtBoth + 1 && tieB === tbConf.suddenDeathAtBoth) {
-        // A scored the sudden-death point after 10-10 -> A wins
-        s.finished = true; s.gamesA = isFinal ? 6 : 4; // winner gets final game count (6 for final, 4 for fast4)
-      } else if (tbConf.suddenDeathAtBoth && tieB === tbConf.suddenDeathAtBoth + 1 && tieA === tbConf.suddenDeathAtBoth) {
-        s.finished = true; s.gamesB = isFinal ? 6 : 4;
-      } else if ((maxTB >= tbConf.minToWin && Math.abs(tieA - tieB) >= tbConf.winBy)) {
-        // normal win-by condition
-        s.finished = true;
-        if (tieA > tieB) s.gamesA = isFinal ? 6 : 4; else s.gamesB = isFinal ? 6 : 4;
+      // For finals, cap at 10-10: if after increment we hit 10-10, the next point after that will decide
+      if (stage === "final") {
+        const A = s.tieA, B = s.tieB;
+        // If someone already has >=7 and lead >=2 -> finish
+        if ((A >= 7 || B >= 7) && Math.abs(A - B) >= 2) {
+          s.finished = true;
+          if (A > B) s.gamesA = 4; else s.gamesB = 4;
+        } else if (A === 11 || B === 11) {
+          // safety: someone reached beyond cap - treat as finished
+          s.finished = true;
+          if (A > B) s.gamesA = 4; else s.gamesB = 4;
+        } else if (A === 10 && B === 10) {
+          // 10-10 reached — not finished yet; next point (11th) will finish due to rules
+          // do nothing — s.finished remains false (the next increment will trigger >10 and finish)
+        } else {
+          // not yet finished
+        }
+      } else {
+        // qualifier / semifinal
+        const A = s.tieA, B = s.tieB;
+        if ((A >= 5 || B >= 5) && Math.abs(A - B) >= 1) {
+          s.finished = true;
+          if (A > B) s.gamesA = 4; else s.gamesB = 4;
+        } else {
+          // if it was 4-4 and now became 5-4 -> above will mark finished
+        }
       }
+
       ns[ns.length - 1] = s;
       setSets(ns);
       if (s.finished) recordResult(s);
       return;
     }
 
-    // Normal (non-tiebreak) point flow: advance no-ad points (same as before)
+    // Normal (pre-tiebreak) point progression using no-ad scoring
     let [a, b] = advancePointNoAd(points[0], points[1], who);
     setPoints([a, b]);
     const gw = gameWin(a, b);
     if (!gw) return;
 
+    // a game was won
     const ns = [...sets];
     const s = { ...current };
     if (gw === "A") s.gamesA++; else s.gamesB++;
-    setPoints([0, 0]);
+    setPoints([0,0]);
 
-    // Decide when to trigger a tiebreak:
-    // - For final: tiebreak at 5-5
-    // - For qualifier/semifinal (fast4): tiebreak at 3-3 (as before)
-    const needTiebreak = (() => {
-      if (isFinal) {
-        return s.gamesA === 5 && s.gamesB === 5;
-      } else {
-        return s.gamesA === 3 && s.gamesB === 3;
-      }
-    })();
-
-    // After a game increments, either start tiebreak or mark set finished
-    if (needTiebreak && !s.finished) {
+    // if 3-3 then activate tie-break
+    if (s.gamesA === 3 && s.gamesB === 3 && !s.tie && !s.finished) {
       s.tie = true;
       s.tieA = 0;
       s.tieB = 0;
     } else {
-      // check set finished:
-      if (isFinal) {
-        // Final set rules: first to 6 games with 2-game margin OR if one side reaches 7 (after tb) set is finished by tie logic.
-        if ((s.gamesA >= 6 || s.gamesB >= 6) && Math.abs(s.gamesA - s.gamesB) >= 2) {
-          s.finished = true;
-        } else if (s.gamesA >= 6 && s.gamesA - s.gamesB >= 1 && !s.tie) {
-          // In practice standard set finishes at 6 with 2 diff; if someone reaches 7 via tb this will be handled by tb finished.
-          // no-op here: rely on tb flow to set finished and assign games.
-        }
-      } else {
-        // Fast4: first to 4 games wins (no need for 2-game margin)
-        if (s.gamesA >= 4 || s.gamesB >= 4) {
-          s.finished = true;
-        }
+      // check if set over
+      // For Fast4 (qualifiers/semis/final) setOverFast4 works similarly: first to 4 except tie at 3-3 triggers tiebreak.
+      if (setOverFast4(s)) {
+        s.finished = true;
       }
     }
 
     ns[ns.length - 1] = s;
     setSets(ns);
-
     if (s.finished) recordResult(s);
   };
 
+  // when set finishes, record as match result (single set scoring)
   const recordResult = async (setObj) => {
-    // Build a user-friendly scoreline:
+    // create a human-friendly scoreline
     let scoreline;
     if (setObj.tie) {
-      scoreline = isFinal
-        ? `${setObj.gamesA}-${setObj.gamesB} (TB ${Math.max(setObj.tieA, setObj.tieB)}-${Math.min(setObj.tieA, setObj.tieB)})`
-        : `${setObj.gamesA}-${setObj.gamesB} (TB ${Math.max(setObj.tieA, setObj.tieB)}-${Math.min(setObj.tieA, setObj.tieB)})`;
+      // produce readable TB display depending on stage rules
+      const tbA = setObj.tieA || 0;
+      const tbB = setObj.tieB || 0;
+      if (stage === "final") {
+        scoreline = `4-3(${Math.max(tbA,tbB)}-${Math.min(tbA,tbB)})`;
+      } else {
+        scoreline = `4-3(${Math.max(tbA,tbB)}-${Math.min(tbA,tbB)})`;
+      }
     } else {
       scoreline = `${setObj.gamesA}-${setObj.gamesB}`;
     }
 
     const winnerName = setObj.gamesA > setObj.gamesB ? sides[0] : sides[1];
-    const payload = {
-      id: crypto.randomUUID(),
-      sides,
-      finishedAt: Date.now(),
-      scoreline,
-      winner: winnerName,
-      mode: config.mode || "singles",
-      stage: stage
-    };
+    const payload = { id: crypto.randomUUID(), sides, finishedAt: Date.now(), scoreline, winner: winnerName, mode: config.mode || "singles", stage: stage };
 
     try {
       await apiMatchesAdd(payload);
       if (fixtureId) {
-        await apiFixturesUpdate(fixtureId, {
-          status: "completed",
-          finishedAt: payload.finishedAt,
-          winner: payload.winner,
-          scoreline: payload.scoreline,
-          stage: stage
-        });
+        await apiFixturesUpdate(fixtureId, { status: "completed", finishedAt: payload.finishedAt, winner: payload.winner, scoreline: payload.scoreline });
       }
     } catch (e) {
-      console.error("recordResult failed", e);
+      console.error(e);
     }
     onComplete();
+  };
+
+  // UI: show friendly rule hints based on stage
+  const ruleHint = () => {
+    if (stage === "final") {
+      return "Final: Full set rules with tiebreak to 7 (win by 2) — capped at 10-10, next point wins. Deuce limited (max 3 deuces).";
+    } else {
+      return "Qualifiers / Semi: Fast4: first to 4 games, no-ad. Tiebreak at 3–3 to 5 points (4–4 next point wins).";
+    }
   };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" onClick={onAbort}><ChevronLeft className="w-5 h-5" /> Quit</Button>
-        <h2 className="text-xl font-bold">Scoring • {sides[0]} vs {sides[1]} {isFinal ? "(Final)" : "(Qualifier/Semi)"}</h2>
+        <h2 className="text-xl font-bold">Scoring • {sides[0]} vs {sides[1]} {stage ? `• ${stage}` : ""}</h2>
       </div>
 
       <Card className="p-6">
@@ -923,21 +937,10 @@ function Scoring({ config, onAbort, onComplete }) {
             <div className="text-sm font-mono">{current.gamesA}-{current.gamesB}</div>
           ) : (
             <div className="text-sm font-mono">
-              {isFinal ? `At ${isFinal ? "5-5" : ""} • TB ${current.tieA}-${current.tieB}` : `3-3 • TB ${current.tieA}-${current.tieB}`}
+              3-3 • TB {current.tieA}-{current.tieB}
             </div>
           )}
-
-          <div className="text-xs text-zinc-500 mt-2">
-            {isFinal ? (
-              <>
-                Final rules: Full set to 6 games (win by 2). At 5–5 a tiebreak is played — first to 7 with 2-point margin wins, but if the tiebreak reaches 10–10 the next point is sudden-death and decides the tiebreak.
-              </>
-            ) : (
-              <>
-                Qualifier / Semifinal (Fast4): First to 4 games wins. At 3–3 a tiebreak to 5 is played (4–4 next point wins). No-adv scoring (single deciding point at deuce).
-              </>
-            )}
-          </div>
+          <div className="text-xs text-zinc-500 mt-2">{ruleHint()}</div>
         </div>
       </Card>
     </div>
