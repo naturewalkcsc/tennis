@@ -383,8 +383,6 @@ const DOUBLES_CATEGORIES_ORDER = [
   "Mixed Doubles"
 ];
 
-// Replace existing Fixtures component with this code
-const FixturesAdmin = ({ onBack }) => {
 /* ---------- Fixtures component (replace existing Fixtures) ---------- */
 // Place near other components in App.jsx. Requires apiPlayersGet, apiFixturesList, apiFixturesAdd, apiFixturesRemove, apiFixturesClear, apiFixturesUpdate to be present.
 
