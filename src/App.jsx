@@ -697,7 +697,8 @@ function StartFromFixtures({ onBack, onStartScoring }) {
       }
       await apiFixturesUpdate(fx.id, patch);
       if (typeof onStartScoring === "function") {
-        onStartScoring({ mode: fx.mode, sides: fx.sides, startingServer: 0, fixtureId: fx.id });
+        //onStartScoring({ mode: fx.mode, sides: fx.sides, startingServer: 0, fixtureId: fx.id });
+        onStartScoring({ mode: fx.mode, sides: fx.sides, startingServer: 0, fixtureId: fx.id, stage: fx.stage || "qualifier" });
       } else {
         alert("Started: " + (fx.sides?.join(" vs ") || ""));
       }
@@ -746,60 +747,198 @@ function setOverFast4(s) {
     return false;
   }
 }
+
 function Scoring({ config, onAbort, onComplete }) {
-  const { sides = ["A","B"], fixtureId } = config;
-  const [points, setPoints] = useState([0,0]);
+  // config: { sides: ["A","B"], fixtureId, mode, stage }
+  // stage: "qualifier" | "semifinal" | "final"  (optional; default -> qualifier)
+  const stage = (config && config.stage) ? config.stage.toLowerCase() : "qualifier";
+  const isFinal = stage === "final";
+
+  const { sides = ["A", "B"], fixtureId } = config || {};
+  const [points, setPoints] = useState([0, 0]); // uses 0,15,30,40,"Game" like before for display
   const [sets, setSets] = useState([makeEmptySet()]);
   const current = sets[sets.length - 1];
 
-  const gameWin = (a,b) => (a === "Game" ? "A" : b === "Game" ? "B" : null);
+  // helper to determine current tiebreak rules depending on stage
+  const tiebreakConfig = () => {
+    if (isFinal) {
+      // Final: first to 7 with min 2 diff, but if reaches 10-10 next point wins (sudden death)
+      return { winBy: 2, minToWin: 7, suddenDeathAtBoth: 10 };
+    } else {
+      // Qualifier / Semifinal: first to 5, (4-4 next point wins) — as you asked before
+      // Implemented as minToWin 5 and winBy 1 (4-4 next point wins)
+      return { winBy: 1, minToWin: 5, suddenDeathAtBoth: null };
+    }
+  };
+
+  const tbConf = tiebreakConfig();
+
+  const gameWin = (a, b) => (a === "Game" ? "A" : b === "Game" ? "B" : null);
 
   const pointTo = (who) => {
+    // If set already finished, no further scoring
     if (current.finished) return;
+
+    // If we're in a tiebreak for the current set:
     if (current.tie) {
-      const ns = [...sets]; const s = {...current};
+      const ns = [...sets];
+      const s = { ...current };
       if (who === 0) s.tieA++; else s.tieB++;
-      // tiebreak: first to 5 (no win-by-2) but if 4-4 then next point wins (we enforce by checking >=5 or 4-4 next)
-      if ( (s.tieA >= 5 || s.tieB >=5) || (Math.max(s.tieA,s.tieB) >=4 && Math.abs(s.tieA - s.tieB) >=1) ) {
+
+      // Final tiebreak logic: first to minToWin with winBy margin,
+      // but if both reach suddenDeathAtBoth (i.e. 10-10) then next point decides.
+      const tieA = s.tieA, tieB = s.tieB;
+      const maxTB = Math.max(tieA, tieB);
+      const minTB = Math.min(tieA, tieB);
+
+      // sudden-death immediate winner if both hit the configured cap and one scores the next point
+      if (tbConf.suddenDeathAtBoth && tieA === tbConf.suddenDeathAtBoth + 1 && tieB === tbConf.suddenDeathAtBoth) {
+        // A scored the sudden-death point after 10-10 -> A wins
+        s.finished = true; s.gamesA = isFinal ? 6 : 4; // winner gets final game count (6 for final, 4 for fast4)
+      } else if (tbConf.suddenDeathAtBoth && tieB === tbConf.suddenDeathAtBoth + 1 && tieA === tbConf.suddenDeathAtBoth) {
+        s.finished = true; s.gamesB = isFinal ? 6 : 4;
+      } else if ((maxTB >= tbConf.minToWin && Math.abs(tieA - tieB) >= tbConf.winBy)) {
+        // normal win-by condition
         s.finished = true;
-        if (s.tieA > s.tieB) s.gamesA = 4; else s.gamesB = 4;
+        if (tieA > tieB) s.gamesA = isFinal ? 6 : 4; else s.gamesB = isFinal ? 6 : 4;
       }
-      ns[ns.length - 1] = s; setSets(ns);
+      ns[ns.length - 1] = s;
+      setSets(ns);
       if (s.finished) recordResult(s);
       return;
     }
-    let [a,b] = advancePointNoAd(points[0], points[1], who);
-    setPoints([a,b]);
-    const gw = gameWin(a,b);
+
+    // Normal (non-tiebreak) point flow: advance no-ad points (same as before)
+    let [a, b] = advancePointNoAd(points[0], points[1], who);
+    setPoints([a, b]);
+    const gw = gameWin(a, b);
     if (!gw) return;
-    const ns = [...sets]; const s = {...current};
+
+    const ns = [...sets];
+    const s = { ...current };
     if (gw === "A") s.gamesA++; else s.gamesB++;
-    setPoints([0,0]);
-    if (s.gamesA === 3 && s.gamesB === 3 && !s.tie && !s.finished) {
-      s.tie = true; s.tieA = 0; s.tieB = 0;
-    } else if (setOverFast4(s)) {
-      s.finished = true;
+    setPoints([0, 0]);
+
+    // Decide when to trigger a tiebreak:
+    // - For final: tiebreak at 5-5
+    // - For qualifier/semifinal (fast4): tiebreak at 3-3 (as before)
+    const needTiebreak = (() => {
+      if (isFinal) {
+        return s.gamesA === 5 && s.gamesB === 5;
+      } else {
+        return s.gamesA === 3 && s.gamesB === 3;
+      }
+    })();
+
+    // After a game increments, either start tiebreak or mark set finished
+    if (needTiebreak && !s.finished) {
+      s.tie = true;
+      s.tieA = 0;
+      s.tieB = 0;
+    } else {
+      // check set finished:
+      if (isFinal) {
+        // Final set rules: first to 6 games with 2-game margin OR if one side reaches 7 (after tb) set is finished by tie logic.
+        if ((s.gamesA >= 6 || s.gamesB >= 6) && Math.abs(s.gamesA - s.gamesB) >= 2) {
+          s.finished = true;
+        } else if (s.gamesA >= 6 && s.gamesA - s.gamesB >= 1 && !s.tie) {
+          // In practice standard set finishes at 6 with 2 diff; if someone reaches 7 via tb this will be handled by tb finished.
+          // no-op here: rely on tb flow to set finished and assign games.
+        }
+      } else {
+        // Fast4: first to 4 games wins (no need for 2-game margin)
+        if (s.gamesA >= 4 || s.gamesB >= 4) {
+          s.finished = true;
+        }
+      }
     }
-    ns[ns.length - 1] = s; setSets(ns);
+
+    ns[ns.length - 1] = s;
+    setSets(ns);
+
     if (s.finished) recordResult(s);
   };
 
   const recordResult = async (setObj) => {
-    const scoreline = setObj.tie ? `4-3(${Math.max(setObj.tieA,setObj.tieB)}-${Math.min(setObj.tieA,setObj.tieB)})` : `${setObj.gamesA}-${setObj.gamesB}`;
+    // Build a user-friendly scoreline:
+    let scoreline;
+    if (setObj.tie) {
+      scoreline = isFinal
+        ? `${setObj.gamesA}-${setObj.gamesB} (TB ${Math.max(setObj.tieA, setObj.tieB)}-${Math.min(setObj.tieA, setObj.tieB)})`
+        : `${setObj.gamesA}-${setObj.gamesB} (TB ${Math.max(setObj.tieA, setObj.tieB)}-${Math.min(setObj.tieA, setObj.tieB)})`;
+    } else {
+      scoreline = `${setObj.gamesA}-${setObj.gamesB}`;
+    }
+
     const winnerName = setObj.gamesA > setObj.gamesB ? sides[0] : sides[1];
-    const payload = { id: crypto.randomUUID(), sides, finishedAt: Date.now(), scoreline, winner: winnerName, mode: config.mode || "singles" };
-    try { await apiMatchesAdd(payload); if (fixtureId) await apiFixturesUpdate(fixtureId, { status: "completed", finishedAt: payload.finishedAt, winner: payload.winner, scoreline: payload.scoreline }); }
-    catch (e) { console.error(e); }
+    const payload = {
+      id: crypto.randomUUID(),
+      sides,
+      finishedAt: Date.now(),
+      scoreline,
+      winner: winnerName,
+      mode: config.mode || "singles",
+      stage: stage
+    };
+
+    try {
+      await apiMatchesAdd(payload);
+      if (fixtureId) {
+        await apiFixturesUpdate(fixtureId, {
+          status: "completed",
+          finishedAt: payload.finishedAt,
+          winner: payload.winner,
+          scoreline: payload.scoreline,
+          stage: stage
+        });
+      }
+    } catch (e) {
+      console.error("recordResult failed", e);
+    }
     onComplete();
   };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onAbort}><ChevronLeft className="w-5 h-5" /> Quit</Button><h2 className="text-xl font-bold">Scoring • {sides[0]} vs {sides[1]}</h2></div>
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onAbort}><ChevronLeft className="w-5 h-5" /> Quit</Button>
+        <h2 className="text-xl font-bold">Scoring • {sides[0]} vs {sides[1]} {isFinal ? "(Final)" : "(Qualifier/Semi)"}</h2>
+      </div>
+
       <Card className="p-6">
-        <div className="grid grid-cols-3 gap-4 items-center"><div className="text-right text-3xl font-bold">{String(points[0])}</div><div className="text-center">—</div><div className="text-3xl font-bold">{String(points[1])}</div></div>
-        <div className="mt-6 grid grid-cols-2 gap-4"><Button onClick={()=>pointTo(0)} className="w-full">Point {sides[0]}</Button><Button onClick={()=>pointTo(1)} className="w-full">Point {sides[1]}</Button></div>
-        <div className="mt-6"><div className="font-semibold mb-2">Set</div>{!current.tie ? <div className="text-sm font-mono">{current.gamesA}-{current.gamesB}</div> : <div className="text-sm font-mono">3-3 • TB {current.tieA}-{current.tieB}</div>}<div className="text-xs text-zinc-500 mt-2">Fast4: first to 4 games; no-ad at deuce; tiebreak to 5 at 3–3 (4–4 next point wins).</div></div>
+        <div className="grid grid-cols-3 gap-4 items-center">
+          <div className="text-right text-3xl font-bold">{String(points[0])}</div>
+          <div className="text-center">—</div>
+          <div className="text-3xl font-bold">{String(points[1])}</div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <Button onClick={() => pointTo(0)} className="w-full">Point {sides[0]}</Button>
+          <Button onClick={() => pointTo(1)} className="w-full">Point {sides[1]}</Button>
+        </div>
+
+        <div className="mt-6">
+          <div className="font-semibold mb-2">Set</div>
+          {!current.tie ? (
+            <div className="text-sm font-mono">{current.gamesA}-{current.gamesB}</div>
+          ) : (
+            <div className="text-sm font-mono">
+              {isFinal ? `At ${isFinal ? "5-5" : ""} • TB ${current.tieA}-${current.tieB}` : `3-3 • TB ${current.tieA}-${current.tieB}`}
+            </div>
+          )}
+
+          <div className="text-xs text-zinc-500 mt-2">
+            {isFinal ? (
+              <>
+                Final rules: Full set to 6 games (win by 2). At 5–5 a tiebreak is played — first to 7 with 2-point margin wins, but if the tiebreak reaches 10–10 the next point is sudden-death and decides the tiebreak.
+              </>
+            ) : (
+              <>
+                Qualifier / Semifinal (Fast4): First to 4 games wins. At 3–3 a tiebreak to 5 is played (4–4 next point wins). No-adv scoring (single deciding point at deuce).
+              </>
+            )}
+          </div>
+        </div>
       </Card>
     </div>
   );
