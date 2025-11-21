@@ -1,1 +1,0 @@
-// ResultsAdmin placeholder
