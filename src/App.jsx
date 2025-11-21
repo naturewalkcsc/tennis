@@ -385,38 +385,76 @@ const DOUBLES_CATEGORIES_ORDER = [
 
 // Replace existing Fixtures component with this code
 const FixturesAdmin = ({ onBack }) => {
-  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
-  const [mode, setMode] = useState("singles");
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
+/* ---------- Fixtures component (replace existing Fixtures) ---------- */
+// Place near other components in App.jsx. Requires apiPlayersGet, apiFixturesList, apiFixturesAdd, apiFixturesRemove, apiFixturesClear, apiFixturesUpdate to be present.
 
-  // for editing existing entries
-  const [editingId, setEditingId] = useState(null);
-  const [editState, setEditState] = useState(null); // { mode, category, a, b, date, time }
+const SINGLES_CATEGORIES_ORDER = [
+  "Women's Singles",
+  "Kid's Singles",
+  "NW Team (A) Singles",
+  "NW Team (B) Singles"
+];
 
-  useEffect(() => {
+const DOUBLES_CATEGORIES_ORDER = [
+  "Women's Doubles",
+  "Kid's Doubles",
+  "NW Team (A) Doubles",
+  "NW Team (B) Doubles",
+  "Mixed Doubles"
+];
+
+const FixturesAdmin = ({ onBack }) => {
+  const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
+  const [mode, setMode] = React.useState("singles");
+  const [category, setCategory] = React.useState(SINGLES_CATEGORIES_ORDER[0]);
+  const [a, setA] = React.useState("");
+  const [b, setB] = React.useState("");
+  const [date, setDate] = React.useState("");
+  const [time, setTime] = React.useState("");
+  const [list, setList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [editingId, setEditingId] = React.useState(null);
+  const [editState, setEditState] = React.useState({ category: "", a: "", b: "", date: "", time: "" });
+
+  // load players + fixtures on mount
+  React.useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const p = await apiPlayersGet();
         if (alive) {
-          // ensure expected shape: categories -> arrays
-          setPlayers(p || { singles: {}, doubles: {} });
+          // if players saved as arrays (legacy), normalize to categories if needed
+          const normalized = { singles: {}, doubles: {} };
+          // if p.singles is object-like with categories, use as is; else fallback
+          if (p && p.singles && typeof p.singles === "object" && !Array.isArray(p.singles)) {
+            normalized.singles = p.singles;
+          } else if (Array.isArray(p.singles)) {
+            normalized.singles = { [SINGLES_CATEGORIES_ORDER[0]]: p.singles.map(n => (typeof n === "string" ? { name: n } : n)) };
+          }
+          if (p && p.doubles && typeof p.doubles === "object" && !Array.isArray(p.doubles)) {
+            normalized.doubles = p.doubles;
+          } else if (Array.isArray(p.doubles)) {
+            normalized.doubles = { [DOUBLES_CATEGORIES_ORDER[0]]: p.doubles.map(n => (typeof n === "string" ? { name: n } : n)) };
+          }
+
+          // ensure all categories exist so selects show empty lists rather than undefined
+          SINGLES_CATEGORIES_ORDER.forEach(c => { if (!normalized.singles[c]) normalized.singles[c] = []; });
+          DOUBLES_CATEGORIES_ORDER.forEach(c => { if (!normalized.doubles[c]) normalized.doubles[c] = []; });
+
+          setPlayers(normalized);
+          // default category set based on mode
+          setCategory(mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]);
         }
       } catch (e) {
-        console.warn("Players load failed", e);
-        setPlayers({ singles: {}, doubles: {} });
+        // ignore — admin can add players manually
+        console.warn("Could not load players", e);
       }
+
       try {
         const fx = await apiFixturesList();
         if (alive) setList(Array.isArray(fx) ? fx : []);
       } catch (e) {
-        console.warn("Fixtures load failed", e);
-        setList([]);
+        console.warn("Could not load fixtures", e);
       } finally {
         if (alive) setLoading(false);
       }
@@ -424,126 +462,90 @@ const FixturesAdmin = ({ onBack }) => {
     return () => { alive = false; };
   }, []);
 
-  // options for the current new-fixture form
-  const options = mode === "singles" ? (players.singles ? Object.values(players.singles).flat().map(x => typeof x === 'string' ? x : x.name) : []) : (players.doubles ? Object.values(players.doubles).flat().map(x => typeof x === 'string' ? x : x.name) : []);
+  // recompute options for sides when category or mode changes
+  const categories = mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER;
+  React.useEffect(() => {
+    // set default category when mode changes
+    setCategory(mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]);
+    // reset a/b
+    setA("");
+    setB("");
+  }, [mode]);
+
+  // flatten player list for chosen category (each player may be object {name,...} or string)
+  const optionsForCategory = (mode, category) => {
+    const map = mode === "singles" ? players.singles : players.doubles;
+    const arr = (map && map[category]) || [];
+    return arr.map(el => (typeof el === "string" ? el : (el && el.name ? el.name : ""))).filter(Boolean);
+  };
+
   const canAdd = a && b && a !== b && date && time;
 
   const add = async (e) => {
-    e.preventDefault();
+    e && e.preventDefault();
     const start = new Date(`${date}T${time}:00`).getTime();
-    // store category on fixture where possible (derive default category if only global list exists)
     const payload = {
       id: crypto.randomUUID(),
       mode,
+      category,
       sides: [a, b],
       start,
-      status: "upcoming",
-      // if you want to save category for this fixture: omit if not available
+      status: "upcoming"
     };
-    try {
-      await apiFixturesAdd(payload);
-      setList(prev => [...prev, payload].sort((x, y) => x.start - y.start));
-      setA(""); setB(""); setDate(""); setTime("");
-    } catch (err) {
-      console.error("Add fixture failed", err);
-      alert("Add failed");
-    }
+    await apiFixturesAdd(payload);
+    setList(prev => [...prev, payload].sort((x, y) => (x.start || 0) - (y.start || 0)));
+    setA(""); setB(""); setDate(""); setTime("");
   };
 
   const remove = async (id) => {
     if (!confirm("Remove this fixture?")) return;
-    try {
-      await apiFixturesRemove(id);
-      setList(prev => prev.filter(f => f.id !== id));
-    } catch (e) {
-      console.error(e);
-      alert("Remove failed");
-    }
+    await apiFixturesRemove(id);
+    setList(prev => prev.filter(f => f.id !== id));
   };
 
   const clearAll = async () => {
     if (!confirm("Clear ALL fixtures?")) return;
-    try {
-      await apiFixturesClear();
-      setList([]);
-    } catch (e) {
-      console.error(e);
-      alert("Clear failed");
-    }
+    await apiFixturesClear();
+    setList([]);
   };
 
   const refresh = async () => {
-    try {
-      const fx = await apiFixturesList();
-      setList(Array.isArray(fx) ? fx : []);
-    } catch (e) {
-      console.warn("Refresh failed", e);
-    }
+    const fx = await apiFixturesList();
+    setList(Array.isArray(fx) ? fx : []);
   };
 
-  // -------------------- Edit flow --------------------
-  // Start editing an existing fixture
-  const startEdit = (f) => {
-    setEditingId(f.id);
-    const dt = f.start ? new Date(f.start) : new Date();
-    const isoDate = dt.toISOString().slice(0, 10);
-    const isoTime = dt.toTimeString().slice(0,5);
+  // start editing a fixture inline
+  const beginEdit = (fx) => {
+    setEditingId(fx.id);
+    const dt = fx.start ? new Date(fx.start) : new Date();
+    const yyyy = dt.toISOString().slice(0,10);
+    const hhmm = dt.toTimeString().slice(0,5);
     setEditState({
-      id: f.id,
-      mode: f.mode || "singles",
-      category: f.category || "", // may be undefined for legacy entries
-      a: f.sides?.[0] || "",
-      b: f.sides?.[1] || "",
-      date: isoDate,
-      time: isoTime,
-      status: f.status || "upcoming",
+      category: fx.category || (fx.mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]),
+      a: (fx.sides && fx.sides[0]) || "",
+      b: (fx.sides && fx.sides[1]) || "",
+      date: yyyy,
+      time: hhmm
     });
   };
 
-  // Cancel edit
   const cancelEdit = () => {
     setEditingId(null);
-    setEditState(null);
+    setEditState({ category: "", a: "", b: "", date: "", time: "" });
   };
 
-  // Save edited fixture
-  const saveEdit = async () => {
-    if (!editState) return;
-    const start = new Date(`${editState.date}T${editState.time}:00`).getTime();
-    const patch = {
-      mode: editState.mode,
-      sides: [editState.a, editState.b],
-      start,
-      status: editState.status,
-      category: editState.category || undefined, // update category if provided
-    };
-    try {
-      await apiFixturesUpdate(editState.id, patch);
-      // update locally
-      setList(prev => {
-        const copy = prev.map(f => f.id === editState.id ? { ...f, ...patch } : f);
-        return copy.sort((x, y) => (x.start || 0) - (y.start || 0));
-      });
-      cancelEdit();
-    } catch (e) {
-      console.error("Edit save failed", e);
-      alert("Save failed");
+  const saveEdit = async (id) => {
+    const { category: cat, a: A, b: B, date: D, time: T } = editState;
+    if (!cat || !A || !B || A === B || !D || !T) {
+      alert("Please provide valid category, distinct sides and date/time.");
+      return;
     }
-  };
-
-  // Render helper: category options according to mode
-  const categoriesForMode = (m) => m === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER;
-
-  // For edit form side options: use players map for the selected category (if available)
-  const sideOptionsForEdit = (m, cat) => {
-    if (!players) return [];
-    if (m === "singles") {
-      const arr = (players.singles && players.singles[cat]) || [];
-      return arr.map(it => typeof it === "string" ? it : it.name);
-    } else {
-      const arr = (players.doubles && players.doubles[cat]) || [];
-      return arr.map(it => typeof it === "string" ? it : it.name);
-    }
+    const start = new Date(`${D}T${T}:00`).getTime();
+    const patch = { category: cat, sides: [A,B], start };
+    await apiFixturesUpdate(id, patch);
+    // update locally
+    setList(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f).sort((x, y) => (x.start || 0) - (y.start || 0)));
+    cancelEdit();
   };
 
   return (
@@ -561,7 +563,6 @@ const FixturesAdmin = ({ onBack }) => {
         <Card className="p-5 text-center text-zinc-500">Loading…</Card>
       ) : (
         <>
-          {/* Add form */}
           <Card className="p-5 mb-6">
             <div className="font-semibold mb-3">Schedule a Match</div>
             <form onSubmit={add} className="grid md:grid-cols-4 gap-4">
@@ -575,8 +576,8 @@ const FixturesAdmin = ({ onBack }) => {
 
               <div>
                 <div className="text-sm mb-1">Category</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={/* no category stored for new fixture by default */ ""} onChange={()=>{}}>
-                  <option value="">(will be assigned at admin edit)</option>
+                <select className="w-full rounded-xl border px-3 py-2" value={category} onChange={e => setCategory(e.target.value)}>
+                  {(mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
 
@@ -584,27 +585,26 @@ const FixturesAdmin = ({ onBack }) => {
                 <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
                 <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
                   <option value="">Choose…</option>
-                  {options.map(o => <option key={o} value={o}>{o}</option>)}
+                  {optionsForCategory(mode, category).map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
+                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
+                  <option value="">Choose…</option>
+                  {optionsForCategory(mode, category).map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+
+              <div className="md:col-span-2 grid grid-cols-2 gap-2">
                 <div>
-                  <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
-                  <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
-                    <option value="">Choose…</option>
-                    {options.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
+                  <div className="text-sm mb-1">Date</div>
+                  <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} />
                 </div>
-                <div className="md:col-span-1 grid grid-cols-2 gap-2">
-                  <div>
-                    <div className="text-sm mb-1">Date</div>
-                    <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} />
-                  </div>
-                  <div>
-                    <div className="text-sm mb-1">Time</div>
-                    <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} />
-                  </div>
+                <div>
+                  <div className="text-sm mb-1">Time</div>
+                  <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} />
                 </div>
               </div>
 
@@ -614,87 +614,70 @@ const FixturesAdmin = ({ onBack }) => {
             </form>
           </Card>
 
-          {/* Fixtures list (with inline edit) */}
           {list.length === 0 ? (
             <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card>
           ) : (
             <div className="space-y-3">
-              {list.map(f => {
-                const isEditing = editingId === f.id;
-                // if editing, show edit form; else show row
-                if (isEditing && editState) {
-                  const cats = categoriesForMode(editState.mode);
-                  const sideOptions = sideOptionsForEdit(editState.mode, editState.category || cats[0]);
-                  return (
-                    <Card key={f.id} className="p-4">
-                      <div className="grid md:grid-cols-3 gap-3 items-end">
-                        <div>
-                          <div className="text-sm mb-1">Mode</div>
-                          <div className="flex gap-3">
-                            <label><input type="radio" checked={editState.mode === "singles"} onChange={() => setEditState(s => ({ ...s, mode: "singles", category: "" }))} /> Singles</label>
-                            <label><input type="radio" checked={editState.mode === "doubles"} onChange={() => setEditState(s => ({ ...s, mode: "doubles", category: "" }))} /> Doubles</label>
-                          </div>
-                        </div>
+              {list.sort((x,y)=> (x.start||0)-(y.start||0)).map(f => (
+                <Card key={f.id} className="p-4">
+                  <div style={{display:'flex', alignItems:'center', gap:12}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:600}}>
+                        {(f.sides||[]).join(" vs ")}{" "}
+                        <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}{f.category ? ` • ${f.category}` : ''}</span>
+                      </div>
+                      <div style={{color:"#6b7280", fontSize:13}}>
+                        {f.winner ? `Winner: ${f.winner}` : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}
+                      </div>
+                      <div style={{marginTop:6, color:"#6b7280"}}>{f.start ? new Date(f.start).toLocaleString() : ""}</div>
+                    </div>
 
+                    <div style={{display:'flex', gap:8}}>
+                      <Button variant="ghost" onClick={() => beginEdit(f)}>Edit</Button>
+                      <Button variant="ghost" onClick={() => remove(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
+                    </div>
+                  </div>
+
+                  {editingId === f.id && (
+                    <div style={{marginTop:12, borderTop:"1px dashed #e6edf3", paddingTop:12}}>
+                      <div className="grid md:grid-cols-4 gap-3">
                         <div>
                           <div className="text-sm mb-1">Category</div>
-                          <select className="w-full rounded-xl border px-3 py-2" value={editState.category || ""} onChange={e => setEditState(s => ({ ...s, category: e.target.value }))}>
-                            <option value="">(choose)</option>
-                            {categoriesForMode(editState.mode).map(c => <option key={c} value={c}>{c}</option>)}
+                          <select className="w-full rounded-xl border px-3 py-2" value={editState.category} onChange={e => setEditState(s => ({...s, category: e.target.value}))}>
+                            {(f.mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
 
                         <div>
-                          <div className="text-sm mb-1">Start (date/time)</div>
-                          <div className="flex gap-2">
-                            <input type="date" className="rounded-xl border px-3 py-2" value={editState.date} onChange={e => setEditState(s => ({ ...s, date: e.target.value }))} />
-                            <input type="time" className="rounded-xl border px-3 py-2" value={editState.time} onChange={e => setEditState(s => ({ ...s, time: e.target.value }))} />
-                          </div>
+                          <div className="text-sm mb-1">Side A</div>
+                          <input className="w-full rounded-xl border px-3 py-2" value={editState.a} onChange={e => setEditState(s=>({...s, a: e.target.value}))} />
                         </div>
 
-                        <div className="md:col-span-3 grid md:grid-cols-3 gap-3">
+                        <div>
+                          <div className="text-sm mb-1">Side B</div>
+                          <input className="w-full rounded-xl border px-3 py-2" value={editState.b} onChange={e => setEditState(s=>({...s, b: e.target.value}))} />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <div className="text-sm mb-1">Side A</div>
-                            <select className="w-full rounded-xl border px-3 py-2" value={editState.a} onChange={e => setEditState(s => ({ ...s, a: e.target.value }))}>
-                              <option value="">Choose…</option>
-                              {sideOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                            </select>
+                            <div className="text-sm mb-1">Date</div>
+                            <input type="date" className="w-full rounded-xl border px-3 py-2" value={editState.date} onChange={e => setEditState(s=>({...s, date: e.target.value}))} />
                           </div>
                           <div>
-                            <div className="text-sm mb-1">Side B</div>
-                            <select className="w-full rounded-xl border px-3 py-2" value={editState.b} onChange={e => setEditState(s => ({ ...s, b: e.target.value }))}>
-                              <option value="">Choose…</option>
-                              {sideOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                            </select>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button variant="secondary" onClick={saveEdit}>Save</Button>
-                            <Button variant="ghost" onClick={cancelEdit}>Cancel</Button>
+                            <div className="text-sm mb-1">Time</div>
+                            <input type="time" className="w-full rounded-xl border px-3 py-2" value={editState.time} onChange={e => setEditState(s=>({...s, time: e.target.value}))} />
                           </div>
                         </div>
                       </div>
-                    </Card>
-                  );
-                }
 
-                return (
-                  <Card key={f.id} className="p-4 flex items-center gap-4">
-                    <div className="flex-1">
-                      <div className="font-semibold">
-                        {f.sides?.[0]} vs {f.sides?.[1]}{" "}
-                        <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span>
-                        {f.category ? <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-50 text-zinc-500">{f.category}</span> : null}
+                      <div style={{marginTop:8, display:'flex', gap:8}}>
+                        <Button onClick={() => saveEdit(f.id)}>Save</Button>
+                        <Button variant="secondary" onClick={cancelEdit}>Cancel</Button>
                       </div>
-                      <div className="text-sm text-zinc-500">{f.start ? new Date(f.start).toLocaleString() : ""}{f.status === "active" ? " • Live" : f.status === "completed" ? " • Completed" : ""}</div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" onClick={() => startEdit(f)}>Edit</Button>
-                      <Button variant="ghost" onClick={() => remove(f.id)} title="Remove"><X className="w-4 h-4"/></Button>
-                    </div>
-                  </Card>
-                );
-              })}
+                  )}
+                </Card>
+              ))}
             </div>
           )}
         </>
@@ -702,7 +685,6 @@ const FixturesAdmin = ({ onBack }) => {
     </div>
   );
 };
-
 /* ---------------------- StartFromFixtures (admin start) ---------------------- */
 function StartFromFixtures({ onBack, onStartScoring }) {
   const [mode, setMode] = useState("singles");
