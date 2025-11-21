@@ -266,32 +266,104 @@ export default function Viewer() {
   }
 
   // RULES PAGE
-  if (page === "rules") {
-    return (
-      <div style={{ padding: 24 }}>
-        <div style={{ marginBottom: 12 }}>
-          <button onClick={() => setPage("menu")} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e6edf8", background: "white" }}>
-            ← Back
-          </button>
-        </div>
-        <h2 style={{ marginTop: 0 }}>Match Rules & Formats</h2>
-        <div style={{ marginTop: 12, background: "white", padding: 16, borderRadius: 10, border: "1px solid #e6edf8", boxShadow: "0 6px 18px rgba(8,35,64,0.04)" }}>
-          <h3>Qualifiers and Semifinal Matches Format:</h3>
-          <ol>
-            <li><strong>First to four games wins</strong> — First player/team to reach 4 games wins a set.</li>
-            <li><strong>Tiebreak at 3–3</strong> — At 3–3 a tiebreak is played to 5 points; at 4–4 next point wins.</li>
-            <li><strong>No-adv scoring</strong> — Next point after deuce decides the game.</li>
-          </ol>
-          <h3>Final Matches format:</h3>
-          <ol>
-            <li>One full set — Standard set (6 games) and tie-break as usual.</li>
-            <li>Limited Deuce Points — Max 3 deuce points; on the 4th deuce point the next point decides the game.</li>
-          </ol>
-        </div>
+// RULES PAGE
+if (page === "rules") {
+  return (
+    <div style={{ padding: 24 }}>
+      <div style={{ marginBottom: 12 }}>
+        <button
+          onClick={() => setPage("menu")}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "1px solid #e6edf8",
+            background: "white",
+          }}
+        >
+          Back
+        </button>
       </div>
-    );
-  }
 
+      <h2 style={{ marginBottom: 16 }}>Format</h2>
+
+      <div
+        style={{
+          marginTop: 12,
+          background: "white",
+          padding: 16,
+          borderRadius: 10,
+          border: "1px solid #e6edf8",
+          lineHeight: 1.6,
+        }}
+      >
+        <h3 style={{ fontWeight: 700, marginTop: 12 }}>
+          Singles Categories (Champions A, Champions B, Women and Kids)
+        </h3>
+        <ul style={{ paddingLeft: 22, marginTop: 6 }}>
+          <li>
+            <b>Champions A:</b> Two pools (A & B). Top two from each pool → semifinals → winners enter finals.
+          </li>
+          <li>
+            <b>Champions B:</b> Single pool, round-robin. Top two qualify for finals.
+          </li>
+          <li>
+            <b>Women Singles:</b> Two pools. First-place from each pool → finals.
+          </li>
+          <li>
+            <b>Kids Singles:</b> Single pool. Round robin → top two play finals.
+          </li>
+        </ul>
+
+        <h3 style={{ fontWeight: 700, marginTop: 20 }}>
+          Doubles Categories (Champions A, Champions B, Women’s, Combination, Kids)
+        </h3>
+        <ul style={{ paddingLeft: 22, marginTop: 6 }}>
+          <li>
+            <b>Champions A Doubles:</b> Round robin. Top two → finals.
+          </li>
+          <li>
+            <b>Champions B Doubles:</b> Round robin. Top two → finals.
+          </li>
+          <li>
+            <b>Women’s Doubles:</b> Round robin. Top two → finals.
+          </li>
+          <li>
+            <b>Combination Doubles:</b> Two pools. Top two from each → semifinals.
+          </li>
+          <li>
+            <b>Kids Doubles:</b> Only 4 players → straight finals.
+          </li>
+        </ul>
+
+        <h3 style={{ fontWeight: 700, marginTop: 24 }}>General Rules</h3>
+        <ul style={{ paddingLeft: 22, marginTop: 6 }}>
+          <li>Players must be in proper attire with tennis shoes.</li>
+          <li>Players must warm up & report 10 minutes before match.</li>
+          <li>Absence beyond 10 minutes = walkover (organizing committee decides).</li>
+          <li>Tennis rules apply with modified deuce: One Deuce + Golden Point.</li>
+          <li>Finals use standard deuce (win by 2 points).</li>
+          <li>Fast-Four format for qualifiers & semifinals.</li>
+          <li>Finals are 6-game sets.</li>
+          <li>Tie-breaker requires difference of TWO points.</li>
+          <li>Winning = 1 point, Losing = 0 points.</li>
+          <li>Umpire decisions are final; chair umpire can override line calls.</li>
+          <li>Walkovers per Organizing Committee discretion.</li>
+          <li>Two new sets of Slazenger/Equivalent balls will be used daily.</li>
+          <li>Players should bring water bottles, towels, caps.</li>
+          <li>After first 2 games, court change; then 1-minute breaks each side after every match.</li>
+          <li>If rain or wet courts: matches postponed as per committee discretion.</li>
+        </ul>
+
+        <h3 style={{ fontWeight: 700, marginTop: 24 }}>Tie Resolution</h3>
+        <ul style={{ paddingLeft: 22, marginTop: 6 }}>
+          <li>Overall set points.</li>
+          <li>Net games difference (won − conceded).</li>
+          <li>Organizing committee has final authority.</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
   // TEAMS PAGE
   if (page === "teams") {
     return (
