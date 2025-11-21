@@ -284,8 +284,6 @@ if (page === "rules") {
         </button>
       </div>
 
-      <h2 style={{ marginBottom: 16 }}>Format</h2>
-
       <div
         style={{
           marginTop: 12,
