@@ -383,24 +383,6 @@ const DOUBLES_CATEGORIES_ORDER = [
   "Mixed Doubles"
 ];
 
-/* ---------- Fixtures component (replace existing Fixtures) ---------- */
-// Place near other components in App.jsx. Requires apiPlayersGet, apiFixturesList, apiFixturesAdd, apiFixturesRemove, apiFixturesClear, apiFixturesUpdate to be present.
-
-const SINGLES_CATEGORIES_ORDER = [
-  "Women's Singles",
-  "Kid's Singles",
-  "NW Team (A) Singles",
-  "NW Team (B) Singles"
-];
-
-const DOUBLES_CATEGORIES_ORDER = [
-  "Women's Doubles",
-  "Kid's Doubles",
-  "NW Team (A) Doubles",
-  "NW Team (B) Doubles",
-  "Mixed Doubles"
-];
-
 const FixturesAdmin = ({ onBack }) => {
   const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
   const [mode, setMode] = React.useState("singles");
