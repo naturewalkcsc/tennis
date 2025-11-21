@@ -3,7 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.jsx";           // your admin app
-import Viewer from "./Viewer/Viewer"; // public viewer (adjust path if you placed Viewer.jsx elsewhere)
+import Viewer from "./components/Viewer/Viewer"; // public viewer (adjust path if you placed Viewer.jsx elsewhere)
 import "./index.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
