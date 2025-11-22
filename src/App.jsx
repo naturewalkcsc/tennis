@@ -1256,8 +1256,6 @@ function Scoring({ config, onAbort, onComplete }) {
     }
 
     // ----- Normal game mode -----
-    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use golden point from 2nd deuce
-
     let [pA, pB] = points;
     if (who === 0) pA += 1;
     else pB += 1;
@@ -1271,13 +1269,28 @@ function Scoring({ config, onAbort, onComplete }) {
     let winnerGame = null;
     if (pA >= 4 || pB >= 4) {
       const diff = Math.abs(pA - pB);
-      // Before (limitDeuces + 1)th deuce → need 2-point margin
-      // From (limitDeuces + 1)th deuce onward → golden point (1-point margin)
-      const threshold = newDeuceCount >= (limitDeuces + 1) ? 1 : 2;
-      if (diff >= threshold) {
-        winnerGame = pA > pB ? "A" : "B";
+
+      if (isQualifier) {
+        // Qualifiers: first deuce uses advantage; from second deuce onward, golden point
+        if (newDeuceCount >= 2) {
+          // Golden point: any 1-point lead at/after second deuce wins
+          if (diff >= 1) {
+            winnerGame = pA > pB ? "A" : "B";
+          }
+        } else {
+          // Before second deuce: need 2-point margin (traditional advantage)
+          if (diff >= 2) {
+            winnerGame = pA > pB ? "A" : "B";
+          }
+        }
+      } else {
+        // Semis / Finals / others: always traditional advantage (win by 2)
+        if (diff >= 2) {
+          winnerGame = pA > pB ? "A" : "B";
+        }
       }
     }
+
 
     if (!winnerGame) {
       // Game continues
