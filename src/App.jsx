@@ -1006,6 +1006,7 @@ function StartFromFixtures({ onBack, onStartScoring }) {
           sides: fx.sides,
           startingServer: 0,
           fixtureId: fx.id,
+          matchType: fx.matchType,
         });
       } else {
         alert("Started: " + (fx.sides?.join(" vs ") || ""));
@@ -1193,7 +1194,6 @@ function Scoring({ config, onAbort, onComplete }) {
     if (!current || current.finished) return;
 
     const isFinal = matchType === "final";
-    const isQualifier = (cfgMatchType || "").toLowerCase() === "qualifier";
 
     // ----- Tie-break mode -----
     if (current.tie) {
@@ -1256,44 +1256,28 @@ function Scoring({ config, onAbort, onComplete }) {
     }
 
     // ----- Normal game mode -----
+    const limitDeuces = isFinal ? 3 : 1; // # of deuces allowed before golden point
+
     let [pA, pB] = points;
     if (who === 0) pA += 1;
     else pB += 1;
 
     let newDeuceCount = deuceCount;
-    console.log(newDeuceCount);
     if (pA >= 3 && pB >= 3 && pA === pB) {
       // reached a deuce (>= 40-40)
       newDeuceCount += 1;
-      console.log("Increment newDeuceCount");
     }
 
     let winnerGame = null;
     if (pA >= 4 || pB >= 4) {
       const diff = Math.abs(pA - pB);
-
-      console.log(isQualifier)
-      if (isQualifier) {
-        // Qualifiers: first deuce uses advantage; from second deuce onward, golden point
-        if (newDeuceCount >= 2) {
-          // Golden point: any 1-point lead at/after second deuce wins
-          if (diff >= 1) {
-            winnerGame = pA > pB ? "A" : "B";
-          }
-        } else {
-          // Before second deuce: need 2-point margin (traditional advantage)
-          if (diff >= 2) {
-            winnerGame = pA > pB ? "A" : "B";
-          }
-        }
-      } else {
-        // Semis / Finals / others: always traditional advantage (win by 2)
-        if (diff >= 2) {
-          winnerGame = pA > pB ? "A" : "B";
-        }
+      // Before (limitDeuces + 1)th deuce → need 2-point margin
+      // From (limitDeuces + 1)th deuce onward → golden point (1-point margin)
+      const threshold = newDeuceCount >= (limitDeuces + 1) ? 1 : 2;
+      if (diff >= threshold) {
+        winnerGame = pA > pB ? "A" : "B";
       }
     }
-
 
     if (!winnerGame) {
       // Game continues
@@ -1345,48 +1329,13 @@ function Scoring({ config, onAbort, onComplete }) {
     if (s.finished) recordResult(s);
   };
 
-  const pA = points[0];
-  const pB = points[1];
-  const isFinalView = matchType === "final";
-  const isQualifierView = (cfgMatchType || "").toLowerCase() === "qualifier";
+  const displayPointsA = mapPointToTennis(points[0]);
+  const displayPointsB = mapPointToTennis(points[1]);
 
-  const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
-  // deuceCount is incremented every time we return to deuce (3–3, 4–4, 5–5, ...)
-  // For qualifiers: 1st deuce = normal advantage, 2nd deuce onwards = golden point
-  const isGoldenDeuce = isQualifierView && atDeuce && deuceCount >= 2;
-
-  let displayPointsA = mapPointToTennis(pA);
-  let displayPointsB = mapPointToTennis(pB);
-
-  if (!current.tie) {
-    if (atDeuce) {
-      // Always show 40–40 at deuce (even during golden point)
-      displayPointsA = 40;
-      displayPointsB = 40;
-    } else if (
-      pA >= 3 &&
-      pB >= 3 &&
-      Math.abs(pA - pB) === 1 &&
-      !isGoldenDeuce
-    ) {
-      // First deuce uses traditional advantage when applicable
-      if (pA > pB) {
-        displayPointsA = "Ad";
-        displayPointsB = 40;
-      } else {
-        displayPointsB = "Ad";
-        displayPointsA = 40;
-      }
-    }
-  }
-
-  const showGoldenBadge = isGoldenDeuce && !current.tie;
-
-  const description = isQualifierView
-    ? "Qualifier: Fast4 to 4 games. Tie-break to 5. First deuce uses advantage; from second deuce onward, golden point."
-    : isFinalView
-    ? "Final: one full set to 6 (win by 2). Tie-break to 7. Traditional advantage, no golden point."
-    : "Semifinal/Other: Fast4 to 4 games. Tie-break to 5. Traditional advantage, no golden point.";
+  const description =
+    matchType === "final"
+      ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Limited deuces: max 3; from 4th deuce onward, golden point."
+      : "Qualifiers / Semis: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Limited deuces: max 1; from 2nd deuce onward, golden point.";
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -1400,13 +1349,6 @@ function Scoring({ config, onAbort, onComplete }) {
         </h2>
       </div>
       <Card className="p-6">
-        {showGoldenBadge && (
-          <div className="mb-3 text-center">
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-semibold tracking-wide">
-              GOLDEN POINT
-            </span>
-          </div>
-        )}
         {/* Points */}
         <div className="grid grid-cols-3 gap-4 items-center">
           <div className="text-right text-3xl font-bold">{String(displayPointsA)}</div>
@@ -1858,3 +1800,4 @@ function Viewer() {
     </div>
   );
 }
+
