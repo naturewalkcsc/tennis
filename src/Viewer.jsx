@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
-
+import AttivoLogo from "./attivo_logo.png";
 /*
  Viewer.jsx
  - Menu with 3 image tiles (Rules, Teams, Fixture/Scores)
@@ -254,7 +254,30 @@ export default function Viewer() {
   if (page === "menu") {
     return (
       <div style={{ padding: 28 }}>
-        <h1 style={{ margin: 0 }}>RNW Tennis Tournament 2025</h1>
+
+<div style={{ textAlign: "center" }}>
+  <img
+    src={AttivoLogo}
+    style={{ width: 180, marginBottom: 12 }}
+    alt="Attivo Logo"
+  />
+  <div
+    style={{
+      marginBottom: 12,
+      fontSize: 18,
+      color: "#7D1E7E",
+      fontWeight: 600,
+    }}
+  >
+    Sponsored by Attivo
+  </div>
+</div>
+
+<h1 style={{ margin: 0, textAlign: "center" }}>
+  RNW Tennis Tournament 2025
+</h1>
+
+
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
         <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap" }}>
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
