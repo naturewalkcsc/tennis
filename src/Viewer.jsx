@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from "react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
-import imgSettings from "./Settings.jpg";
 import imgLive from "./LiveStreaming.png";
+import imgSettings from "./Settings.jpg";
 
 /*
  Viewer.jsx
@@ -267,10 +267,8 @@ export default function Viewer() {
     );
   }
 
-  }
 
   // RULES PAGE
-// RULES PAGE
 if (page === "rules") {
   return (
     <div style={{ padding: 24 }}>
