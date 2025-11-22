@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
-import AttivoLogo from "./attivo_logo.png";
+
 /*
  Viewer.jsx
  - Menu with 3 image tiles (Rules, Teams, Fixture/Scores)
@@ -254,30 +254,7 @@ export default function Viewer() {
   if (page === "menu") {
     return (
       <div style={{ padding: 28 }}>
-
-<div style={{ textAlign: "center" }}>
-  <img
-    src={AttivoLogo}
-    style={{ width: 180, marginBottom: 12 }}
-    alt="Attivo Logo"
-  />
-  <div
-    style={{
-      marginBottom: 12,
-      fontSize: 18,
-      color: "#7D1E7E",
-      fontWeight: 600,
-    }}
-  >
-    Sponsored by Attivo
-  </div>
-</div>
-
-<h1 style={{ margin: 0, textAlign: "center" }}>
-  RNW Tennis Tournament 2025
-</h1>
-
-
+        <h1 style={{ margin: 0 }}>RNW Tennis Tournament 2025</h1>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
         <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap" }}>
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
@@ -469,10 +446,16 @@ if (page === "rules") {
                           <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 12 }}>
                             <div style={{ color: "#6b7280", fontSize: 13 }}>{f.start ? new Date(f.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}</div>
                             <div style={{ color: "#475569", fontSize: 13 }}>{f.mode ? f.mode.toUpperCase() : ""}</div>
-                            <div style={{ padding: "2px 8px", borderRadius: 999, background: "#fef3c7", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-                              {f.matchType || "Qualifier"}
-                            </div>
-                            {f.status === "completed" && <div style={{ marginLeft: "auto", color: "#065f46", fontWeight: 700 }}>{f.winner ? `Winner: ${f.winner}` : ""} {f.scoreline ? ` • ${f.scoreline}` : ""}</div>}
+                            {f.status === "completed" && (
+                              <div style={{ marginLeft: "auto", color: "#065f46", fontWeight: 700 }}>
+                                {f.winner ? `Winner: ${f.winner}` : ""} {f.scoreline ? ` • ${f.scoreline}` : ""}
+                              </div>
+                            )}
+                            {f.status === "active" && f.scoreline && (
+                              <div style={{ marginLeft: "auto", color: "#047857", fontWeight: 600 }}>
+                                Score: {f.scoreline}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div style={{ minWidth: 110, textAlign: "right", color: "#475569", fontSize: 13 }}>
@@ -493,4 +476,3 @@ if (page === "rules") {
 
   return null;
 }
-
