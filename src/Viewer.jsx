@@ -403,7 +403,7 @@ if (page === "rules") {
     const activeMatches = fixtures.filter((f) => f.status === "active");
     const active = activeMatches[0];
 
-    const YOUTUBE_LIVE_EMBED_URL = "https://www.youtube.com/embed/REPLACE_WITH_VIDEO_ID?autoplay=1&mute=1";
+    const YOUTUBE_LIVE_EMBED_URL = "https://www.youtube.com/live/qiQ4cfJugVI";
 
     return (
       <div style={{ padding: 24 }}>
