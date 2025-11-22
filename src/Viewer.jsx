@@ -254,14 +254,14 @@ export default function Viewer() {
   // MENU
   if (page === "menu") {
     return (
-      <div style={{ padding: 28 }}>
-        <h1 style={{ margin: 0 }}>RNW Tennis Tournament 2025</h1>
+      <div style={{ padding: 28, textAlign: "center" }}>
+        <h1 style={{ margin: 0, textAlign: "center" }}>RNW Tennis Tournament 2025</h1>
         <div style={{ textAlign: "center", marginTop: 8 }}>
           <div style={{ fontSize: 14, color: "#7D1E7E", fontWeight: 600 }}>Sponsored by</div>
           <img src={AttivoLogo} style={{ width: 140, marginTop: 6 }} alt="Attivo Logo" />
         </div>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
-        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap" }}>
+        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
           <Tile img={imgScore} title="Teams" subtitle="View players by category" onClick={() => setPage("teams")} />
           <Tile img={imgSettings} title="Fixture/Scores" subtitle="Live, upcoming & recent results" onClick={() => setPage("fixtures")} />
