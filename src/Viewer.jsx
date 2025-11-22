@@ -403,7 +403,7 @@ if (page === "rules") {
     const active = activeMatches[0];
 
     const YOUTUBE_LIVE_EMBED_URL =
-      "https://www.youtube.com/embed/REPLACE_WITH_VIDEO_ID?autoplay=1&mute=1";
+      "https://www.youtube.com/embed/qiQ4cfJugVI?autoplay=1";
 
     return (
       <div
