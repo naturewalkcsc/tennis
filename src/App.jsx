@@ -13,6 +13,9 @@ const safeJson = async (res) => {
   try { return await res.json(); } catch { return null; }
 };
 
+const MATCH_TYPES = ["Qualifier", "Semifinal", "Final"];
+// ➜ ADD THIS:
+
 /* ---------------------- API wrappers (admin) ---------------------- */
 /* These call your existing endpoints. They throw on non-OK. */
 const apiPlayersGet = async () => {
@@ -139,249 +142,287 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
 
 /* ---------------------- Manage Players (admin) ---------------------- */
 function ManagePlayers({ onBack }) {
-  const SINGLES = [
+  const SINGLES_CATEGORIES_ORDER = [
     "Women's Singles",
     "Kid's Singles",
     "NW Team (A) Singles",
-    "NW Team (B) Singles",
+    "NW Team (B) Singles"
   ];
-
-  const DOUBLES = [
+  const DOUBLES_CATEGORIES_ORDER = [
     "Women's Doubles",
     "Kid's Doubles",
     "NW Team (A) Doubles",
     "NW Team (B) Doubles",
-    "Mixed Doubles",
+    "Mixed Doubles"
   ];
 
   const POOLS = ["No Pool", "Pool A", "Pool B"];
 
+  const LS_PLAYERS_DRAFT = "LS_PLAYERS_DRAFT_v2";
+
   const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  const [dirty, setDirty] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [toast, setToast] = React.useState(false);
 
-  // ---- Load players ----
-  React.useEffect(() => {
-    (async () => {
-      try {
-        const raw = await apiPlayersGet();
-        const fixed = normalize(raw);
-        setPlayers(fixed);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  // ---- Normalize DB structure ----
-  function normalize(raw) {
+  // Helpers to migrate legacy arrays to new object format
+  const migrateIfNeeded = (raw) => {
+    // Expecting raw = { singles: {...} or [] , doubles: {...} or [] }
     const out = { singles: {}, doubles: {} };
 
-    const fixCategory = (obj, list) => {
-      list.forEach((cat) => {
-        out[obj][cat] =
-          raw?.[obj]?.[cat]?.map((p) => ({
-            id: p.id || crypto.randomUUID(),
-            name: p.name || "",
-            pool: p.pool || "No Pool",
-          })) || [];
-      });
+    // helper to convert to object mapping category -> [{name,pool}]
+    const toMap = (val) => {
+      if (!val) return {};
+      // if val is array -> legacy global list? we will put into "Women's Singles" default bucket
+      if (Array.isArray(val)) {
+        // fallback: put everything into "Women's Singles" as legacy fallback
+        return { [SINGLES_CATEGORIES_ORDER[0]]: val.map((n) => ({ name: n, pool: "No Pool" })) };
+      }
+      // if object mapping categories -> array of strings or array of objects
+      const map = {};
+      for (const [k, arr] of Object.entries(val)) {
+        if (!arr) continue;
+        if (!Array.isArray(arr)) {
+          // unexpected, skip
+          continue;
+        }
+        map[k] = arr.map((el) => {
+          if (typeof el === "string") return { name: el, pool: "No Pool" };
+          if (typeof el === "object" && el !== null) {
+            // if already object with name & pool, honor it; if only name property exists that's fine
+            return { name: String(el.name || el.label || ""), pool: String(el.pool || "No Pool") };
+          }
+          return { name: String(el), pool: "No Pool" };
+        });
+      }
+      return map;
     };
 
-    fixCategory("singles", SINGLES);
-    fixCategory("doubles", DOUBLES);
-
+    out.singles = toMap(raw.singles);
+    out.doubles = toMap(raw.doubles);
     return out;
-  }
+  };
 
-  // ---- Add item ----
-  function addPlayer(type, category) {
-    setPlayers((prev) => ({
-      ...prev,
-      [type]: {
-        ...prev[type],
-        [category]: [
-          ...prev[type][category],
-          { id: crypto.randomUUID(), name: "", pool: "No Pool" },
-        ],
-      },
-    }));
-  }
-
-  // ---- Update single player without re-render storm ----
-  function updatePlayer(type, category, id, patch) {
-    setPlayers((prev) => {
-      const updated = prev[type][category].map((p) =>
-        p.id === id ? { ...p, ...patch } : p
-      );
-      return {
-        ...prev,
-        [type]: { ...prev[type], [category]: updated },
-      };
-    });
-  }
-
-  // ---- Delete player ----
-  function deletePlayer(type, category, id) {
-    setPlayers((prev) => ({
-      ...prev,
-      [type]: {
-        ...prev[type],
-        [category]: prev[type][category].filter((p) => p.id !== id),
-      },
-    }));
-  }
-
-  // ---- Save to Upstash ----
-  async function savePlayers() {
-    setSaving(true);
+  // Local draft helpers
+  const saveDraft = (obj) => {
     try {
-      await apiPlayersSet(players);
-      alert("Saved successfully");
+      localStorage.setItem(LS_PLAYERS_DRAFT, JSON.stringify(obj));
+    } catch (e) {}
+  };
+  const loadDraft = () => {
+    try {
+      const s = localStorage.getItem(LS_PLAYERS_DRAFT);
+      return s ? JSON.parse(s) : null;
+    } catch (e) { return null; }
+  };
+  const clearDraft = () => {
+    try { localStorage.removeItem(LS_PLAYERS_DRAFT); } catch (e) {}
+  };
+
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      // prefer draft if present
+      const draft = loadDraft();
+      if (draft) {
+        if (!alive) return;
+        setPlayers(draft);
+        setDirty(true);
+        setLoading(false);
+        return;
+      }
+      try {
+        const obj = await apiPlayersGet();
+        if (!alive) return;
+        const migrated = migrateIfNeeded(obj || { singles: {}, doubles: {} });
+        // Ensure categories present (so UI shows empty boxes)
+        SINGLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.singles[c]) migrated.singles[c] = []; });
+        DOUBLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.doubles[c]) migrated.doubles[c] = []; });
+        setPlayers(migrated);
+      } catch (e) {
+        console.warn("Could not load players", e);
+        setError("Could not load players (KV off?). You can edit and Save to retry.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const markDirty = (newPlayers) => {
+    setDirty(true);
+    saveDraft(newPlayers);
+    setPlayers(newPlayers);
+  };
+
+  // Generic updater for a particular category (type = 'singles' or 'doubles', category = string)
+  const updateCategory = (type, category, updater) => {
+    setPlayers((prev) => {
+      const copy = { singles: { ...prev.singles }, doubles: { ...prev.doubles } };
+      const arr = (type === "singles" ? copy.singles[category] : copy.doubles[category]) || [];
+      const updated = updater(arr.slice());
+      if (type === "singles") copy.singles[category] = updated;
+      else copy.doubles[category] = updated;
+      markDirty(copy);
+      return copy;
+    });
+  };
+
+  // add player/pair
+  const addItem = (type, category, name = "New Player", pool = "No Pool") => {
+    updateCategory(type, category, (arr) => {
+      arr.push({ name, pool });
+      return arr;
+    });
+  };
+  const updateItem = (type, category, idx, patch) => {
+    updateCategory(type, category, (arr) => {
+      arr[idx] = { ...arr[idx], ...patch };
+      return arr;
+    });
+  };
+  const deleteItem = (type, category, idx) => {
+    updateCategory(type, category, (arr) => {
+      arr.splice(idx, 1);
+      return arr;
+    });
+  };
+
+  const doSave = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      // The server expects JSON. We will send object mapping category->array of objects {name,pool}
+      await apiPlayersSet({ singles: players.singles, doubles: players.doubles });
+      setDirty(false);
+      clearDraft();
+      setToast(true);
+      setTimeout(() => setToast(false), 1100);
     } catch (e) {
-      alert("Save failed");
       console.error(e);
+      setError("Save failed. Make sure KV is configured. Draft saved locally.");
+      saveDraft(players);
+      setDirty(true);
     } finally {
       setSaving(false);
     }
-  }
+  };
 
-  // ---- Beautiful category box ----
-  function Category({ title, type, items }) {
+  const doRefresh = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const obj = await apiPlayersGet();
+      const migrated = migrateIfNeeded(obj || { singles: {}, doubles: {} });
+      SINGLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.singles[c]) migrated.singles[c] = []; });
+      DOUBLES_CATEGORIES_ORDER.forEach((c) => { if (!migrated.doubles[c]) migrated.doubles[c] = []; });
+      setPlayers(migrated);
+      setDirty(false);
+      clearDraft();
+    } catch (e) {
+      console.error(e);
+      setError("Refresh failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // UI render helpers
+  const CategoryCard = ({ type, category, arr }) => {
+    // Group by pool for display
+    const pooled = {};
+    (arr || []).forEach((it) => {
+      const pool = it.pool || "No Pool";
+      if (!pooled[pool]) pooled[pool] = [];
+      pooled[pool].push(it);
+    });
     return (
-      <div
-        style={{
-          background: "white",
-          padding: 14,
-          borderRadius: 8,
-          border: "1px solid #e5e7eb",
-          marginBottom: 16,
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <div style={{ fontWeight: 700 }}>{title}</div>
-          <button onClick={() => addPlayer(type, title)}>+ Add</button>
+      <div className="card category-card" style={{ padding: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 700 }}>{category} <span style={{ fontWeight: 400, fontSize: 12, color: "#6b7280", marginLeft: 8 }}>({arr.length})</span></div>
+          <div>
+            <button className="btn ghost" onClick={() => addItem(type, category, "New Player", "No Pool")}>+ Add</button>
+          </div>
         </div>
-
-        {/* Render by pools */}
-        {["Pool A", "Pool B", "No Pool"].map((pool) => {
-          const list = items.filter((p) => p.pool === pool);
-          if (list.length === 0) return null;
-
-          return (
-            <div key={pool} style={{ marginTop: 10 }}>
-              {pool !== "No Pool" && (
-                <div style={{ fontWeight: 600 }}>{pool}</div>
-              )}
-
-              {list.map((p) => (
-                <div
-                  key={p.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 8,
-                  }}
-                >
-                  <input
-                    value={p.name}
-                    onChange={(e) =>
-                      updatePlayer(type, title, p.id, { name: e.target.value })
-                    }
-                    style={{
-                      flex: 1,
-                      padding: "6px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #e5e7eb",
-                    }}
-                  />
-
-                  <select
-                    value={p.pool}
-                    onChange={(e) =>
-                      updatePlayer(type, title, p.id, { pool: e.target.value })
-                    }
-                    style={{
-                      padding: "6px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #e5e7eb",
-                    }}
-                  >
-                    {POOLS.map((opt) => (
-                      <option key={opt}>{opt}</option>
-                    ))}
-                  </select>
-
-                  <button onClick={() => deletePlayer(type, title, p.id)}>
-                    🗑️
-                  </button>
-                </div>
-              ))}
-            </div>
-          );
-        })}
+        <div style={{ marginTop: 10 }}>
+          {POOLS.map((pool) => {
+            const list = pooled[pool] || [];
+            if (list.length === 0 && pool !== "No Pool") return null; // hide empty pools except "No Pool" maybe show counts
+            return (
+              <div key={pool} style={{ marginBottom: 10 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{pool === "No Pool" ? "" : pool}</div>
+                <ul style={{ marginLeft: 18 }}>
+                  {list.map((it, idx) => {
+                    // Need to compute original index within arr for update/delete.
+                    // Find index of this exact element by name+pool (there may be duplicates but ok).
+                    const originalIndex = arr.findIndex((x) => x === it);
+                    return (
+                      <li key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <input
+                          value={it.name}
+                          onChange={(e) => updateItem(type, category, originalIndex, { name: e.target.value })}
+                          style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
+                        />
+                        <select
+                          value={it.pool || "No Pool"}
+                          onChange={(e) => updateItem(type, category, originalIndex, { pool: e.target.value })}
+                          style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #e6edf3" }}
+                        >
+                          {POOLS.map((p) => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <button className="btn ghost" title="Delete" onClick={() => deleteItem(type, category, originalIndex)}>🗑️</button>
+                      </li>
+                    );
+                  })}
+                  {list.length === 0 && <div style={{ color: "#6b7280", fontSize: 13 }}>No entries</div>}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
-  }
-
-  if (loading) return <div>Loading players…</div>;
+  };
 
   return (
-    <div style={{ padding: 24 }}>
-      <button onClick={onBack}>◀ Back</button>
-      <h2>Manage Players</h2>
+    <div className="max-w-4xl mx-auto p-6">
+      {toast && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-emerald-600 text-white shadow-lg">Players saved</div>}
+      <div className="flex items-center gap-3 mb-6">
+        <button className="btn ghost" onClick={onBack}>◀ Back</button>
+        <h2 className="text-xl font-bold">Manage Players</h2>
+        <div className="ml-auto flex items-center gap-2">
+          <button className="btn secondary" onClick={doRefresh}><span>⟳</span> Refresh</button>
+          <button className="btn" onClick={doSave} disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
+        </div>
+      </div>
 
-      <h3>Singles</h3>
-      {SINGLES.map((cat) => (
-        <Category
-          key={cat}
-          title={cat}
-          type="singles"
-          items={players.singles[cat]}
-        />
-      ))}
+      {error && <div className="card" style={{ background: "#fff1f2", color: "#991b1b", borderColor: "#fecaca" }}>{error}</div>}
 
-      <h3>Doubles</h3>
-      {DOUBLES.map((cat) => (
-        <Category
-          key={cat}
-          title={cat}
-          type="doubles"
-          items={players.doubles[cat]}
-        />
-      ))}
-
-      <button
-        disabled={saving}
-        onClick={savePlayers}
-        style={{ marginTop: 20, padding: "10px 16px" }}
-      >
-        {saving ? "Saving…" : "Save Changes"}
-      </button>
+      {loading ? <div className="card">Loading players…</div> : (
+        <>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <h3 style={{ margin: "8px 0 10px" }}>Singles</h3>
+              {SINGLES_CATEGORIES_ORDER.map((cat) => (
+                <CategoryCard key={cat} type="singles" category={cat} arr={(players.singles && players.singles[cat]) || []} />
+              ))}
+            </div>
+            <div>
+              <h3 style={{ margin: "8px 0 10px" }}>Doubles</h3>
+              {DOUBLES_CATEGORIES_ORDER.map((cat) => (
+                <CategoryCard key={cat} type="doubles" category={cat} arr={(players.doubles && players.doubles[cat]) || []} />
+              ))}
+            </div>
+          </div>
+          <div className="text-xs text-zinc-500 mt-3">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</div>
+        </>
+      )}
     </div>
   );
 }
-
-/* ---------------------- Fixtures admin (simplified) ---------------------- */
-/* ----------------- Fixtures (create/list/remove) ----------------- */
-/* Fixtures component — replace the existing Fixtures in your App.jsx with this */
-const SINGLES_CATEGORIES_ORDER = [
-  "Women's Singles",
-  "Kid's Singles",
-  "NW Team (A) Singles",
-  "NW Team (B) Singles"
-];
-
-const DOUBLES_CATEGORIES_ORDER = [
-  "Women's Doubles",
-  "Kid's Doubles",
-  "NW Team (A) Doubles",
-  "NW Team (B) Doubles",
-  "Mixed Doubles"
-];
 
 const FixturesAdmin = ({ onBack }) => {
   const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
@@ -391,10 +432,18 @@ const FixturesAdmin = ({ onBack }) => {
   const [b, setB] = React.useState("");
   const [date, setDate] = React.useState("");
   const [time, setTime] = React.useState("");
+  const [matchType, setMatchType] = React.useState("Qualifier");  // NEW
   const [list, setList] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [editingId, setEditingId] = React.useState(null);
-  const [editState, setEditState] = React.useState({ category: "", a: "", b: "", date: "", time: "" });
+  const [editState, setEditState] = React.useState({
+    category: "",
+    a: "",
+    b: "",
+    date: "",
+    time: "",
+    matchType: "Qualifier", // NEW
+  });
 
   // load players + fixtures on mount
   React.useEffect(() => {
@@ -409,17 +458,29 @@ const FixturesAdmin = ({ onBack }) => {
           if (p && p.singles && typeof p.singles === "object" && !Array.isArray(p.singles)) {
             normalized.singles = p.singles;
           } else if (Array.isArray(p.singles)) {
-            normalized.singles = { [SINGLES_CATEGORIES_ORDER[0]]: p.singles.map(n => (typeof n === "string" ? { name: n } : n)) };
+            normalized.singles = {
+              [SINGLES_CATEGORIES_ORDER[0]]: p.singles.map((n) =>
+                typeof n === "string" ? { name: n } : n
+              ),
+            };
           }
           if (p && p.doubles && typeof p.doubles === "object" && !Array.isArray(p.doubles)) {
             normalized.doubles = p.doubles;
           } else if (Array.isArray(p.doubles)) {
-            normalized.doubles = { [DOUBLES_CATEGORIES_ORDER[0]]: p.doubles.map(n => (typeof n === "string" ? { name: n } : n)) };
+            normalized.doubles = {
+              [DOUBLES_CATEGORIES_ORDER[0]]: p.doubles.map((n) =>
+                typeof n === "string" ? { name: n } : n
+              ),
+            };
           }
 
           // ensure all categories exist so selects show empty lists rather than undefined
-          SINGLES_CATEGORIES_ORDER.forEach(c => { if (!normalized.singles[c]) normalized.singles[c] = []; });
-          DOUBLES_CATEGORIES_ORDER.forEach(c => { if (!normalized.doubles[c]) normalized.doubles[c] = []; });
+          SINGLES_CATEGORIES_ORDER.forEach((c) => {
+            if (!normalized.singles[c]) normalized.singles[c] = [];
+          });
+          DOUBLES_CATEGORIES_ORDER.forEach((c) => {
+            if (!normalized.doubles[c]) normalized.doubles[c] = [];
+          });
 
           setPlayers(normalized);
           // default category set based on mode
@@ -439,7 +500,9 @@ const FixturesAdmin = ({ onBack }) => {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // recompute options for sides when category or mode changes
@@ -456,10 +519,14 @@ const FixturesAdmin = ({ onBack }) => {
   const optionsForCategory = (mode, category) => {
     const map = mode === "singles" ? players.singles : players.doubles;
     const arr = (map && map[category]) || [];
-    return arr.map(el => (typeof el === "string" ? el : (el && el.name ? el.name : ""))).filter(Boolean);
+    return arr
+      .map((el) =>
+        typeof el === "string" ? el : el && el.name ? el.name : ""
+      )
+      .filter(Boolean);
   };
 
-  const canAdd = a && b && a !== b && date && time;
+  const canAdd = a && b && a !== b && date && time && matchType;
 
   const add = async (e) => {
     e && e.preventDefault();
@@ -470,17 +537,24 @@ const FixturesAdmin = ({ onBack }) => {
       category,
       sides: [a, b],
       start,
-      status: "upcoming"
+      status: "upcoming",
+      matchType, // NEW
     };
     await apiFixturesAdd(payload);
-    setList(prev => [...prev, payload].sort((x, y) => (x.start || 0) - (y.start || 0)));
-    setA(""); setB(""); setDate(""); setTime("");
+    setList((prev) =>
+      [...prev, payload].sort((x, y) => (x.start || 0) - (y.start || 0))
+    );
+    setA("");
+    setB("");
+    setDate("");
+    setTime("");
+    setMatchType("Qualifier"); // reset
   };
 
   const remove = async (id) => {
     if (!confirm("Remove this fixture?")) return;
     await apiFixturesRemove(id);
-    setList(prev => prev.filter(f => f.id !== id));
+    setList((prev) => prev.filter((f) => f.id !== id));
   };
 
   const clearAll = async () => {
@@ -498,44 +572,69 @@ const FixturesAdmin = ({ onBack }) => {
   const beginEdit = (fx) => {
     setEditingId(fx.id);
     const dt = fx.start ? new Date(fx.start) : new Date();
-    const yyyy = dt.toISOString().slice(0,10);
-    const hhmm = dt.toTimeString().slice(0,5);
+    const yyyy = dt.toISOString().slice(0, 10);
+    const hhmm = dt.toTimeString().slice(0, 5);
     setEditState({
-      category: fx.category || (fx.mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]),
+      category:
+        fx.category ||
+        (fx.mode === "singles"
+          ? SINGLES_CATEGORIES_ORDER[0]
+          : DOUBLES_CATEGORIES_ORDER[0]),
       a: (fx.sides && fx.sides[0]) || "",
       b: (fx.sides && fx.sides[1]) || "",
       date: yyyy,
-      time: hhmm
+      time: hhmm,
+      matchType: fx.matchType || "Qualifier", // NEW: default if missing
     });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditState({ category: "", a: "", b: "", date: "", time: "" });
+    setEditState({
+      category: "",
+      a: "",
+      b: "",
+      date: "",
+      time: "",
+      matchType: "Qualifier",
+    });
   };
 
   const saveEdit = async (id) => {
-    const { category: cat, a: A, b: B, date: D, time: T } = editState;
-    if (!cat || !A || !B || A === B || !D || !T) {
-      alert("Please provide valid category, distinct sides and date/time.");
+    const { category: cat, a: A, b: B, date: D, time: T, matchType: MT } =
+      editState;
+    if (!cat || !A || !B || A === B || !D || !T || !MT) {
+      alert(
+        "Please provide valid category, distinct sides, date/time and match type."
+      );
       return;
     }
     const start = new Date(`${D}T${T}:00`).getTime();
-    const patch = { category: cat, sides: [A,B], start };
+    const patch = { category: cat, sides: [A, B], start, matchType: MT }; // NEW
     await apiFixturesUpdate(id, patch);
     // update locally
-    setList(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f).sort((x, y) => (x.start || 0) - (y.start || 0)));
+    setList((prev) =>
+      prev
+        .map((f) => (f.id === id ? { ...f, ...patch } : f))
+        .sort((x, y) => (x.start || 0) - (y.start || 0))
+    );
     cancelEdit();
   };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <Button variant="ghost" onClick={onBack}>
+          <ChevronLeft className="w-5 h-5" /> Back
+        </Button>
         <h2 className="text-xl font-bold">Fixtures</h2>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="secondary" onClick={refresh}><RefreshCw className="w-4 h-4" /> Refresh</Button>
-          <Button variant="secondary" onClick={clearAll}>Clear All</Button>
+          <Button variant="secondary" onClick={refresh}>
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </Button>
+          <Button variant="secondary" onClick={clearAll}>
+            Clear All
+          </Button>
         </div>
       </div>
 
@@ -543,121 +642,317 @@ const FixturesAdmin = ({ onBack }) => {
         <Card className="p-5 text-center text-zinc-500">Loading…</Card>
       ) : (
         <>
+          {/* Create fixture */}
           <Card className="p-5 mb-6">
             <div className="font-semibold mb-3">Schedule a Match</div>
             <form onSubmit={add} className="grid md:grid-cols-4 gap-4">
               <div className="md:col-span-1">
                 <div className="text-sm mb-1">Type</div>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "singles"} onChange={() => setMode("singles")} /> Singles</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode === "doubles"} onChange={() => setMode("doubles")} /> Doubles</label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mode"
+                      checked={mode === "singles"}
+                      onChange={() => setMode("singles")}
+                    />{" "}
+                    Singles
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mode"
+                      checked={mode === "doubles"}
+                      onChange={() => setMode("doubles")}
+                    />{" "}
+                    Doubles
+                  </label>
                 </div>
               </div>
 
               <div>
                 <div className="text-sm mb-1">Category</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={category} onChange={e => setCategory(e.target.value)}>
-                  {(mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map(c => <option key={c} value={c}>{c}</option>)}
+                <select
+                  className="w-full rounded-xl border px-3 py-2"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  {(mode === "singles"
+                    ? SINGLES_CATEGORIES_ORDER
+                    : DOUBLES_CATEGORIES_ORDER
+                  ).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <div className="text-sm mb-1">{mode === "singles" ? "Player 1" : "Team 1"}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={a} onChange={e => setA(e.target.value)}>
+                <div className="text-sm mb-1">
+                  {mode === "singles" ? "Player 1" : "Team 1"}
+                </div>
+                <select
+                  className="w-full rounded-xl border px-3 py-2"
+                  value={a}
+                  onChange={(e) => setA(e.target.value)}
+                >
                   <option value="">Choose…</option>
-                  {optionsForCategory(mode, category).map(o => <option key={o} value={o}>{o}</option>)}
+                  {optionsForCategory(mode, category).map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
+                <div className="text-sm mb-1">
+                  {mode === "singles" ? "Player 2" : "Team 2"}
+                </div>
+                <select
+                  className="w-full rounded-xl border px-3 py-2"
+                  value={b}
+                  onChange={(e) => setB(e.target.value)}
+                >
                   <option value="">Choose…</option>
-                  {optionsForCategory(mode, category).map(o => <option key={o} value={o}>{o}</option>)}
+                  {optionsForCategory(mode, category).map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div className="md:col-span-2 grid grid-cols-2 gap-2">
                 <div>
                   <div className="text-sm mb-1">Date</div>
-                  <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e => setDate(e.target.value)} />
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border px-3 py-2"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
                 </div>
                 <div>
                   <div className="text-sm mb-1">Time</div>
-                  <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e => setTime(e.target.value)} />
+                  <input
+                    type="time"
+                    className="w-full rounded-xl border px-3 py-2"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                  />
                 </div>
               </div>
 
+              {/* NEW: Match Type select */}
+              <div>
+                <div className="text-sm mb-1">Match Type</div>
+                <select
+                  className="w-full rounded-xl border px-3 py-2"
+                  value={matchType}
+                  onChange={(e) => setMatchType(e.target.value)}
+                >
+                  {MATCH_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="md:col-span-4">
-                <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
+                <Button type="submit" disabled={!canAdd}>
+                  <CalendarPlus className="w-4 h-4" /> Add Fixture
+                </Button>
               </div>
             </form>
           </Card>
 
+          {/* Fixtures list */}
           {list.length === 0 ? (
-            <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card>
+            <Card className="p-5 text-center text-zinc-500">
+              No fixtures yet.
+            </Card>
           ) : (
             <div className="space-y-3">
-              {list.sort((x,y)=> (x.start||0)-(y.start||0)).map(f => (
-                <Card key={f.id} className="p-4">
-                  <div style={{display:'flex', alignItems:'center', gap:12}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:600}}>
-                        {(f.sides||[]).join(" vs ")}{" "}
-                        <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}{f.category ? ` • ${f.category}` : ''}</span>
+              {list
+                .sort((x, y) => (x.start || 0) - (y.start || 0))
+                .map((f) => (
+                  <Card key={f.id} className="p-4">
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600 }}>
+                          {(f.sides || []).join(" vs ")}{" "}
+                          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">
+                            {f.matchType || "Qualifier"} {/* NEW badge */}
+                          </span>
+                          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">
+                            {f.mode}
+                            {f.category ? ` • ${f.category}` : ""}
+                          </span>
+                        </div>
+                        <div
+                          style={{ color: "#6b7280", fontSize: 13 }}
+                        >
+                          {f.winner ? `Winner: ${f.winner}` : ""}
+                          {f.scoreline ? ` • ${f.scoreline}` : ""}
+                        </div>
+                        <div
+                          style={{ marginTop: 6, color: "#6b7280" }}
+                        >
+                          {f.start
+                            ? new Date(f.start).toLocaleString()
+                            : ""}
+                        </div>
                       </div>
-                      <div style={{color:"#6b7280", fontSize:13}}>
-                        {f.winner ? `Winner: ${f.winner}` : ""}{f.scoreline ? ` • ${f.scoreline}` : ""}
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Button variant="ghost" onClick={() => beginEdit(f)}>
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => remove(f.id)}
+                          title="Remove"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <div style={{marginTop:6, color:"#6b7280"}}>{f.start ? new Date(f.start).toLocaleString() : ""}</div>
                     </div>
 
-                    <div style={{display:'flex', gap:8}}>
-                      <Button variant="ghost" onClick={() => beginEdit(f)}>Edit</Button>
-                      <Button variant="ghost" onClick={() => remove(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
-                    </div>
-                  </div>
-
-                  {editingId === f.id && (
-                    <div style={{marginTop:12, borderTop:"1px dashed #e6edf3", paddingTop:12}}>
-                      <div className="grid md:grid-cols-4 gap-3">
-                        <div>
-                          <div className="text-sm mb-1">Category</div>
-                          <select className="w-full rounded-xl border px-3 py-2" value={editState.category} onChange={e => setEditState(s => ({...s, category: e.target.value}))}>
-                            {(f.mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER).map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                        </div>
-
-                        <div>
-                          <div className="text-sm mb-1">Side A</div>
-                          <input className="w-full rounded-xl border px-3 py-2" value={editState.a} onChange={e => setEditState(s=>({...s, a: e.target.value}))} />
-                        </div>
-
-                        <div>
-                          <div className="text-sm mb-1">Side B</div>
-                          <input className="w-full rounded-xl border px-3 py-2" value={editState.b} onChange={e => setEditState(s=>({...s, b: e.target.value}))} />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
+                    {editingId === f.id && (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          borderTop: "1px dashed #e6edf3",
+                          paddingTop: 12,
+                        }}
+                      >
+                        <div className="grid md:grid-cols-5 gap-3">
                           <div>
-                            <div className="text-sm mb-1">Date</div>
-                            <input type="date" className="w-full rounded-xl border px-3 py-2" value={editState.date} onChange={e => setEditState(s=>({...s, date: e.target.value}))} />
+                            <div className="text-sm mb-1">Category</div>
+                            <select
+                              className="w-full rounded-xl border px-3 py-2"
+                              value={editState.category}
+                              onChange={(e) =>
+                                setEditState((s) => ({
+                                  ...s,
+                                  category: e.target.value,
+                                }))
+                              }
+                            >
+                              {(f.mode === "singles"
+                                ? SINGLES_CATEGORIES_ORDER
+                                : DOUBLES_CATEGORIES_ORDER
+                              ).map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
                           </div>
+
                           <div>
-                            <div className="text-sm mb-1">Time</div>
-                            <input type="time" className="w-full rounded-xl border px-3 py-2" value={editState.time} onChange={e => setEditState(s=>({...s, time: e.target.value}))} />
+                            <div className="text-sm mb-1">Side A</div>
+                            <input
+                              className="w-full rounded-xl border px-3 py-2"
+                              value={editState.a}
+                              onChange={(e) =>
+                                setEditState((s) => ({
+                                  ...s,
+                                  a: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <div className="text-sm mb-1">Side B</div>
+                            <input
+                              className="w-full rounded-xl border px-3 py-2"
+                              value={editState.b}
+                              onChange={(e) =>
+                                setEditState((s) => ({
+                                  ...s,
+                                  b: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <div className="text-sm mb-1">Date</div>
+                              <input
+                                type="date"
+                                className="w-full rounded-xl border px-3 py-2"
+                                value={editState.date}
+                                onChange={(e) =>
+                                  setEditState((s) => ({
+                                    ...s,
+                                    date: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div>
+                              <div className="text-sm mb-1">Time</div>
+                              <input
+                                type="time"
+                                className="w-full rounded-xl border px-3 py-2"
+                                value={editState.time}
+                                onChange={(e) =>
+                                  setEditState((s) => ({
+                                    ...s,
+                                    time: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                          </div>
+
+                          {/* NEW: Match Type in edit */}
+                          <div>
+                            <div className="text-sm mb-1">Match Type</div>
+                            <select
+                              className="w-full rounded-xl border px-3 py-2"
+                              value={editState.matchType}
+                              onChange={(e) =>
+                                setEditState((s) => ({
+                                  ...s,
+                                  matchType: e.target.value,
+                                }))
+                              }
+                            >
+                              {MATCH_TYPES.map((t) => (
+                                <option key={t} value={t}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         </div>
-                      </div>
 
-                      <div style={{marginTop:8, display:'flex', gap:8}}>
-                        <Button onClick={() => saveEdit(f.id)}>Save</Button>
-                        <Button variant="secondary" onClick={cancelEdit}>Cancel</Button>
+                        <div
+                          style={{
+                            marginTop: 8,
+                            display: "flex",
+                            gap: 8,
+                          }}
+                        >
+                          <Button onClick={() => saveEdit(f.id)}>Save</Button>
+                          <Button
+                            variant="secondary"
+                            onClick={cancelEdit}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </Card>
-              ))}
+                    )}
+                  </Card>
+                ))}
             </div>
           )}
         </>
@@ -665,7 +960,7 @@ const FixturesAdmin = ({ onBack }) => {
     </div>
   );
 };
-/* ---------------------- StartFromFixtures (admin start) ---------------------- */
+
 function StartFromFixtures({ onBack, onStartScoring }) {
   const [mode, setMode] = useState("singles");
   const [fixtures, setFixtures] = useState([]);
@@ -674,14 +969,23 @@ function StartFromFixtures({ onBack, onStartScoring }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      try { const fx = await apiFixturesList(); if (alive) setFixtures(fx || []); }
-      catch (e) { console.error(e); }
-      finally { if (alive) setLoading(false); }
+      try {
+        const fx = await apiFixturesList();
+        if (alive) setFixtures(fx || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const list = fixtures.filter(f => (f.mode || "singles") === mode && f.status !== "completed");
+  const list = fixtures.filter(
+    (f) => (f.mode || "singles") === mode && f.status !== "completed"
+  );
 
   const startFixture = async (fx) => {
     // mark active (serverside)
@@ -697,7 +1001,12 @@ function StartFromFixtures({ onBack, onStartScoring }) {
       }
       await apiFixturesUpdate(fx.id, patch);
       if (typeof onStartScoring === "function") {
-        onStartScoring({ mode: fx.mode, sides: fx.sides, startingServer: 0, fixtureId: fx.id });
+        onStartScoring({
+          mode: fx.mode,
+          sides: fx.sides,
+          startingServer: 0,
+          fixtureId: fx.id,
+        });
       } else {
         alert("Started: " + (fx.sides?.join(" vs ") || ""));
       }
@@ -709,18 +1018,63 @@ function StartFromFixtures({ onBack, onStartScoring }) {
 
   return (
     <div className="max-w-3xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button><h2 className="text-xl font-bold">Start Match</h2></div>
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}>
+          <ChevronLeft className="w-5 h-5" /> Back
+        </Button>
+        <h2 className="text-xl font-bold">Start Match</h2>
+      </div>
       <Card className="p-5">
         <div className="flex gap-6 mb-4">
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode==="singles"} onChange={()=>setMode("singles")} /> Singles</label>
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode==="doubles"} onChange={()=>setMode("doubles")} /> Doubles</label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="m"
+              checked={mode === "singles"}
+              onChange={() => setMode("singles")}
+            />{" "}
+            Singles
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="m"
+              checked={mode === "doubles"}
+              onChange={() => setMode("doubles")}
+            />{" "}
+            Doubles
+          </label>
         </div>
-        {loading ? <div className="text-zinc-500">Loading fixtures…</div> : list.length === 0 ? <div className="text-zinc-500">No fixtures for {mode}.</div> : (
+        {loading ? (
+          <div className="text-zinc-500">Loading fixtures…</div>
+        ) : list.length === 0 ? (
+          <div className="text-zinc-500">No fixtures for {mode}.</div>
+        ) : (
           <div className="space-y-3">
-            {list.map(f => (
+            {list.map((f) => (
               <Card key={f.id} className="p-4 flex items-center gap-4">
-                <div className="flex-1"><div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>
-                <Button onClick={()=>startFixture(f)}><Play className="w-4 h-4" /> Start Now</Button>
+                <div className="flex-1">
+                  <div className="font-semibold">
+                    {f.sides?.[0]} vs {f.sides?.[1]}
+                  </div>
+                  <div className="text-sm text-zinc-500">
+                    {new Date(f.start).toLocaleString()}
+                  </div>
+                  {/* NEW: show match type + mode */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-semibold uppercase tracking-wide">
+                      {f.matchType || "Qualifier"}
+                    </span>
+                    {f.category && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
+                        {f.category}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Button onClick={() => startFixture(f)}>
+                  <Play className="w-4 h-4" /> Start Now
+                </Button>
               </Card>
             ))}
           </div>
@@ -734,7 +1088,7 @@ function StartFromFixtures({ onBack, onStartScoring }) {
 /* Implementation purposely compact — same behavior as earlier Fast4 rules provided */
 const nextPointNoAd = (p) => ({ 0: 15, 15: 30, 30: 40, 40: "Game" }[p] ?? p);
 function advancePointNoAd(a, b, who) { let pA = a, pB = b; if (who === 0) pA = nextPointNoAd(pA); else pB = nextPointNoAd(pB); return [pA, pB]; }
-function makeEmptySet() { return { gamesA: 0, gamesB: 0, tie: false, tieA: 0, tieB: 0, finished: false }; }
+//function makeEmptySet() { return { gamesA: 0, gamesB: 0, tie: false, tieA: 0, tieB: 0, finished: false }; }
 function setOverFast4(s) {
   if (s.tie) {
     if ((s.tieA >= 5 || s.tieB >= 5) && Math.abs(s.tieA - s.tieB) >= 1) return true;
@@ -746,60 +1100,336 @@ function setOverFast4(s) {
     return false;
   }
 }
+
+/* ---------------------- Scoring Logic (Qualifiers/Semis vs Final) ---------------------- */
+
+/**
+ * We support two match types inside the same Scoring component:
+ *
+ *  - Qualifiers / Semifinals (default if config.matchType is not "final")
+ *      • Set: Fast4 (first to 4 games)
+ *      • Tie-break at 3–3:
+ *          - To 5 points, win by 2
+ *          - If it reaches 5–5, next point wins (max 6–5)
+ *      • Limited deuce:
+ *          - Max 1 deuce (1st time at 40–40)
+ *          - From 2nd deuce onward, next point wins (golden point)
+ *
+ *  - Final (if config.matchType === "final")
+ *      • Set: first to 6 games, win by 2
+ *      • Tie-break at 6–6:
+ *          - To 7 points, win by 2
+ *          - If it reaches 10–10, next point wins (max 11–10)
+ *      • Limited deuce:
+ *          - Max 3 deuces (up to 3 times at 40–40)
+ *          - From 4th deuce onward, next point wins (golden point)
+ */
+
+/** Convert internal integer points to tennis style 0/15/30/40 for display */
+const mapPointToTennis = (p) => {
+  if (p <= 0) return 0;
+  if (p === 1) return 15;
+  if (p === 2) return 30;
+  return 40;
+};
+
+function makeEmptySet(matchType) {
+  return {
+    matchType,       // "regular" | "final"
+    gamesA: 0,
+    gamesB: 0,
+    tie: false,
+    tieA: 0,
+    tieB: 0,
+    finished: false,
+  };
+}
+
 function Scoring({ config, onAbort, onComplete }) {
-  const { sides = ["A","B"], fixtureId } = config;
-  const [points, setPoints] = useState([0,0]);
-  const [sets, setSets] = useState([makeEmptySet()]);
+  const { sides = ["A", "B"], fixtureId, matchType: cfgMatchType } = config || {};
+  const matchType = cfgMatchType === "final" ? "final" : "regular"; // default: qualifiers/semis
+
+  const [points, setPoints] = useState([0, 0]);   // raw integer points in the current game
+  const [deuceCount, setDeuceCount] = useState(0); // how many times we've reached deuce (>=3-3)
+  const [sets, setSets] = useState(() => [makeEmptySet(matchType)]);
+  const [history, setHistory] = useState([]); // stack of previous scoring states for undo
+
   const current = sets[sets.length - 1];
 
-  const gameWin = (a,b) => (a === "Game" ? "A" : b === "Game" ? "B" : null);
-
-  const pointTo = (who) => {
-    if (current.finished) return;
-    if (current.tie) {
-      const ns = [...sets]; const s = {...current};
-      if (who === 0) s.tieA++; else s.tieB++;
-      // tiebreak: first to 5 (no win-by-2) but if 4-4 then next point wins (we enforce by checking >=5 or 4-4 next)
-      if ( (s.tieA >= 5 || s.tieB >=5) || (Math.max(s.tieA,s.tieB) >=4 && Math.abs(s.tieA - s.tieB) >=1) ) {
-        s.finished = true;
-        if (s.tieA > s.tieB) s.gamesA = 4; else s.gamesB = 4;
-      }
-      ns[ns.length - 1] = s; setSets(ns);
-      if (s.finished) recordResult(s);
-      return;
-    }
-    let [a,b] = advancePointNoAd(points[0], points[1], who);
-    setPoints([a,b]);
-    const gw = gameWin(a,b);
-    if (!gw) return;
-    const ns = [...sets]; const s = {...current};
-    if (gw === "A") s.gamesA++; else s.gamesB++;
-    setPoints([0,0]);
-    if (s.gamesA === 3 && s.gamesB === 3 && !s.tie && !s.finished) {
-      s.tie = true; s.tieA = 0; s.tieB = 0;
-    } else if (setOverFast4(s)) {
-      s.finished = true;
-    }
-    ns[ns.length - 1] = s; setSets(ns);
-    if (s.finished) recordResult(s);
+  const pushHistory = () => {
+    setHistory((prev) => [
+      ...prev,
+      {
+        points: [...points],
+        deuceCount,
+        sets: sets.map((s) => ({ ...s })),
+      },
+    ]);
   };
 
+
+  /** Async result recorder – called when the single set finishes */
   const recordResult = async (setObj) => {
-    const scoreline = setObj.tie ? `4-3(${Math.max(setObj.tieA,setObj.tieB)}-${Math.min(setObj.tieA,setObj.tieB)})` : `${setObj.gamesA}-${setObj.gamesB}`;
+    // Build scoreline: e.g. "4-3(6-5)" or "7-6(7-5)" or "6-4"
+    let scoreline;
+    if (setObj.tie) {
+      const main = `${setObj.gamesA}-${setObj.gamesB}`;
+      const hi = Math.max(setObj.tieA, setObj.tieB);
+      const lo = Math.min(setObj.tieA, setObj.tieB);
+      scoreline = `${main}(${hi}-${lo})`;
+    } else {
+      scoreline = `${setObj.gamesA}-${setObj.gamesB}`;
+    }
+
     const winnerName = setObj.gamesA > setObj.gamesB ? sides[0] : sides[1];
-    const payload = { id: crypto.randomUUID(), sides, finishedAt: Date.now(), scoreline, winner: winnerName, mode: config.mode || "singles" };
-    try { await apiMatchesAdd(payload); if (fixtureId) await apiFixturesUpdate(fixtureId, { status: "completed", finishedAt: payload.finishedAt, winner: payload.winner, scoreline: payload.scoreline }); }
-    catch (e) { console.error(e); }
+    const payload = {
+      id: crypto.randomUUID(),
+      sides,
+      finishedAt: Date.now(),
+      scoreline,
+      winner: winnerName,
+      mode: config.mode || "singles",
+      matchType, // optional: persisted for reference
+    };
+
+    try {
+      await apiMatchesAdd(payload);
+      if (fixtureId) {
+        await apiFixturesUpdate(fixtureId, {
+          status: "completed",
+          finishedAt: payload.finishedAt,
+          winner: payload.winner,
+          scoreline: payload.scoreline,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
     onComplete();
   };
 
+  const pointTo = (who) => {
+    if (!current || current.finished) return;
+
+    // Save snapshot for undo
+    pushHistory();
+
+    const isFinal = matchType === "final";
+
+    // ----- Tie-break mode -----
+    if (current.tie) {
+      const ns = [...sets];
+      const s = { ...current };
+
+      if (who === 0) s.tieA += 1;
+      else s.tieB += 1;
+
+      const a = s.tieA;
+      const b = s.tieB;
+      let finished = false;
+
+      if (!isFinal) {
+        // QUALIFIER/SEMI TIE-BREAK:
+        // To 5 points, win by 2; if 5–5, next point wins (max 6–5).
+        if ((a >= 5 || b >= 5) && Math.abs(a - b) >= 2) {
+          finished = true;
+        } else if ((a >= 6 || b >= 6) && Math.abs(a - b) >= 1) {
+          // 6–5 or 5–6 after 5–5 ⇒ winner
+          finished = true;
+        }
+
+        if (finished) {
+          s.finished = true;
+          if (a > b) {
+            s.gamesA = 4;
+            s.gamesB = 3;
+          } else {
+            s.gamesA = 3;
+            s.gamesB = 4;
+          }
+        }
+      } else {
+        // FINAL TIE-BREAK:
+        // To 7 points, win by 2; if 10–10, next point wins (max 11–10).
+        if ((a >= 7 || b >= 7) && Math.abs(a - b) >= 2) {
+          finished = true;
+        } else if ((a >= 11 || b >= 11) && Math.abs(a - b) >= 1) {
+          // After 10–10, 11–10 or 10–11 wins
+          finished = true;
+        }
+
+        if (finished) {
+          s.finished = true;
+          if (a > b) {
+            s.gamesA = 7;
+            s.gamesB = 6;
+          } else {
+            s.gamesA = 6;
+            s.gamesB = 7;
+          }
+        }
+      }
+
+      ns[ns.length - 1] = s;
+      setSets(ns);
+      if (s.finished) recordResult(s);
+      return;
+    }
+
+    // ----- Normal game mode -----
+    const limitDeuces = isFinal ? 3 : 1; // # of deuces allowed before golden point
+
+    let [pA, pB] = points;
+    if (who === 0) pA += 1;
+    else pB += 1;
+
+    let newDeuceCount = deuceCount;
+    if (pA >= 3 && pB >= 3 && pA === pB) {
+      // reached a deuce (>= 40-40)
+      newDeuceCount += 1;
+    }
+
+    let winnerGame = null;
+    if (pA >= 4 || pB >= 4) {
+      const diff = Math.abs(pA - pB);
+      // Before (limitDeuces + 1)th deuce → need 2-point margin
+      // From (limitDeuces + 1)th deuce onward → golden point (1-point margin)
+      const threshold = newDeuceCount >= (limitDeuces + 1) ? 1 : 2;
+      if (diff >= threshold) {
+        winnerGame = pA > pB ? "A" : "B";
+      }
+    }
+
+    if (!winnerGame) {
+      // Game continues
+      setPoints([pA, pB]);
+      setDeuceCount(newDeuceCount);
+      return;
+    }
+
+    // Someone won the game -> reset points & deuce counter
+    setPoints([0, 0]);
+    setDeuceCount(0);
+
+    // Update set score
+    const ns = [...sets];
+    const s = { ...current };
+
+    if (winnerGame === "A") s.gamesA += 1;
+    else s.gamesB += 1;
+
+    // Decide if we enter tie-break or finish the set
+    if (!s.tie) {
+      if (!isFinal) {
+        // QUALIFIERS / SEMIS (Fast4)
+        if (s.gamesA === 3 && s.gamesB === 3) {
+          // Tie-break at 3–3
+          s.tie = true;
+          s.tieA = 0;
+          s.tieB = 0;
+        } else if (s.gamesA >= 4 || s.gamesB >= 4) {
+          // First to 4 games wins (no win-by-2 once not at 3–3)
+          s.finished = true;
+        }
+      } else {
+        // FINAL (full set)
+        if ((s.gamesA >= 6 || s.gamesB >= 6) && Math.abs(s.gamesA - s.gamesB) >= 2) {
+          // Normal 6+ games, win by 2 (e.g. 6–4, 7–5, 8–6)
+          s.finished = true;
+        } else if (s.gamesA === 6 && s.gamesB === 6) {
+          // Tie-break at 6–6
+          s.tie = true;
+          s.tieA = 0;
+          s.tieB = 0;
+        }
+      }
+    }
+
+    ns[ns.length - 1] = s;
+    setSets(ns);
+    if (s.finished) recordResult(s);
+  };
+
+
+  const undoLast = () => {
+    setHistory((prev) => {
+      if (!prev.length) return prev;
+      const last = prev[prev.length - 1];
+      setPoints(last.points);
+      setDeuceCount(last.deuceCount);
+      setSets(last.sets);
+      return prev.slice(0, -1);
+    });
+  };
+
+  const displayPointsA = mapPointToTennis(points[0]);
+  const displayPointsB = mapPointToTennis(points[1]);
+
+  const description =
+    matchType === "final"
+      ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Limited deuces: max 3; from 4th deuce onward, golden point."
+      : "Qualifiers / Semis: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Limited deuces: max 1; from 2nd deuce onward, golden point.";
+
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onAbort}><ChevronLeft className="w-5 h-5" /> Quit</Button><h2 className="text-xl font-bold">Scoring • {sides[0]} vs {sides[1]}</h2></div>
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onAbort}>
+          <ChevronLeft className="w-5 h-5" /> Quit
+        </Button>
+        <h2 className="text-xl font-bold">
+          Scoring • {sides[0]} vs {sides[1]}
+          {matchType === "final" && <span className="ml-3 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">Final</span>}
+        </h2>
+      </div>
       <Card className="p-6">
-        <div className="grid grid-cols-3 gap-4 items-center"><div className="text-right text-3xl font-bold">{String(points[0])}</div><div className="text-center">—</div><div className="text-3xl font-bold">{String(points[1])}</div></div>
-        <div className="mt-6 grid grid-cols-2 gap-4"><Button onClick={()=>pointTo(0)} className="w-full">Point {sides[0]}</Button><Button onClick={()=>pointTo(1)} className="w-full">Point {sides[1]}</Button></div>
-        <div className="mt-6"><div className="font-semibold mb-2">Set</div>{!current.tie ? <div className="text-sm font-mono">{current.gamesA}-{current.gamesB}</div> : <div className="text-sm font-mono">3-3 • TB {current.tieA}-{current.tieB}</div>}<div className="text-xs text-zinc-500 mt-2">Fast4: first to 4 games; no-ad at deuce; tiebreak to 5 at 3–3 (4–4 next point wins).</div></div>
+        {/* Points */}
+        <div className="grid grid-cols-3 gap-4 items-center">
+          <div className="text-right text-3xl font-bold">{String(displayPointsA)}</div>
+          <div className="text-center">—</div>
+          <div className="text-3xl font-bold">{String(displayPointsB)}</div>
+        </div>
+
+        {/* Buttons */}
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <Button onClick={() => pointTo(0)} className="w-full">
+            Point {sides[0]}
+          </Button>
+          <Button onClick={() => pointTo(1)} className="w-full">
+            Point {sides[1]}
+          </Button>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={undoLast}
+            disabled={!history.length || (current && current.finished)}
+          >
+            Undo last point
+          </Button>
+          {history.length > 0 && (
+            <span>
+              {history.length} undo step{history.length > 1 ? "s" : ""} available
+            </span>
+          )}
+        </div>
+
+        {/* Set & tie-break info */}
+        <div className="mt-6">
+          <div className="font-semibold mb-2">Set</div>
+          {!current.tie ? (
+            <div className="text-sm font-mono">
+              {current.gamesA}-{current.gamesB}
+            </div>
+          ) : (
+            <div className="text-sm font-mono">
+              {matchType === "final" ? "6-6" : "3-3"} • TB {current.tieA}-{current.tieB}
+            </div>
+          )}
+          <div className="text-xs text-zinc-500 mt-2">{description}</div>
+        </div>
       </Card>
     </div>
   );
@@ -814,44 +1444,185 @@ function ResultsAdmin({ onBack }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      try { const fx = await apiFixturesList(); const ms = await apiMatchesList(); if (!alive) return; setFixtures(fx || []); setMatches(ms || []); }
-      catch (e) { console.error(e); }
-      finally { if (alive) setLoading(false); }
+      try {
+        const fx = await apiFixturesList();
+        const ms = await apiMatchesList();
+        if (!alive) return;
+        setFixtures(Array.isArray(fx) ? fx : []);
+        setMatches(Array.isArray(ms) ? ms : []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
     const iv = setInterval(async () => {
-      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch {}
+      try {
+        const fx = await apiFixturesList();
+        const ms = await apiMatchesList();
+        if (!alive) return;
+        setFixtures(Array.isArray(fx) ? fx : []);
+        setMatches(Array.isArray(ms) ? ms : []);
+      } catch (e) {
+        console.error(e);
+      }
     }, 8000);
     return () => { alive = false; clearInterval(iv); };
   }, []);
 
-  const active = fixtures.filter(f => f.status === "active");
-  const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
-  const completedFixtures = fixtures.filter(f => f.status === "completed");
-  const completed = [...completedFixtures, ...matches.map(m => ({ id: m.id, sides: m.sides, finishedAt: m.finishedAt, scoreline: m.scoreline, winner: m.winner, mode: m.mode || "singles" }))].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
+  const active = fixtures.filter((f) => f.status === "active");
+  const upcoming = fixtures.filter((f) => !f.status || f.status === "upcoming");
+  const completedFixtures = fixtures.filter((f) => f.status === "completed");
+  const completed = [
+    // Prefer dedicated match records, but keep unique completed fixtures too
+    ...matches.map((m) => ({
+      id: m.id,
+      sides: m.sides,
+      finishedAt: m.finishedAt,
+      scoreline: m.scoreline,
+      winner: m.winner,
+      mode: m.mode || "singles",
+      matchType: m.matchType,
+      category: m.category,
+    })),
+    ...completedFixtures.filter(
+      (f) =>
+        !matches.some(
+          (m) =>
+            Array.isArray(m.sides) &&
+            Array.isArray(f.sides) &&
+            m.sides.join(" vs ") === f.sides.join(" vs ") &&
+            (m.finishedAt || 0) === (f.finishedAt || 0)
+        )
+    ),
+  ].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button><h2 className="text-xl font-bold">Results</h2></div>
-      {loading ? <Card className="p-6 text-center text-zinc-500">Loading…</Card> : (
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}>
+          <ChevronLeft className="w-5 h-5" /> Back
+        </Button>
+        <h2 className="text-xl font-bold">Results</h2>
+      </div>
+      {loading ? (
+        <Card className="p-6 text-center text-zinc-500">Loading…</Card>
+      ) : (
         <div className="grid md:grid-cols-2 gap-6">
           <Card className="p-5">
             <div className="text-lg font-semibold mb-3">Active</div>
-            {active.length ? active.map(f => (<div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No active match.</div>}
+            {active.length ? (
+              active.map((f) => (
+                <div key={f.id} className="border rounded-xl p-3 mb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">
+                      {(f.sides || []).join(" vs ")}
+                    </div>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                      LIVE
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {f.start ? new Date(f.start).toLocaleString() : ""}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-zinc-600">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold uppercase">
+                      {f.matchType || "Qualifier"}
+                    </span>
+                    {f.category && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
+                        {f.category}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-zinc-500">No active match.</div>
+            )}
 
             <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
-            {upcoming.length ? upcoming.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+            {upcoming.length ? (
+              upcoming.map((f) => (
+                <div key={f.id} className="border rounded-xl p-3 mb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">
+                      {(f.sides || []).join(" vs ")}
+                    </div>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">
+                      UPCOMING
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {f.start ? new Date(f.start).toLocaleString() : ""}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-zinc-600">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold uppercase">
+                      {f.matchType || "Qualifier"}
+                    </span>
+                    {f.category && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
+                        {f.category}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-zinc-500">No upcoming fixtures.</div>
+            )}
           </Card>
 
           <Card className="p-5">
             <div className="text-lg font-semibold mb-3">Completed</div>
-            {completed.length ? completed.map(m => (<div key={(m.id||'')+String(m.finishedAt||'')} className="py-2 border-b last:border-0"><div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div><div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div><div className="mt-1 text-sm"><span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner||''}</span> <span className="ml-3 font-mono">{m.scoreline||''}</span></div></div>)) : <div className="text-zinc-500">No results yet.</div>}
+            {completed.length ? (
+              completed.map((m) => (
+                <div
+                  key={(m.id || "") + String(m.finishedAt || "")}
+                  className="border rounded-xl p-3 mb-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">
+                      {(m.sides || []).join(" vs ")}
+                    </div>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700">
+                      Completed
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {m.finishedAt
+                      ? new Date(m.finishedAt).toLocaleString()
+                      : ""}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-zinc-600">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold uppercase">
+                      {m.matchType || "Qualifier"}
+                    </span>
+                    {m.category && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
+                        {m.category}
+                      </span>
+                    )}
+                  </div>
+                  {(m.winner || m.scoreline) && (
+                    <div className="mt-1 text-xs font-mono text-emerald-700">
+                      {m.winner && <span>Winner: {m.winner}</span>}
+                      {m.scoreline && (
+                        <span>{m.winner ? " • " : ""}{m.scoreline}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-zinc-500">No results yet.</div>
+            )}
           </Card>
         </div>
       )}
     </div>
   );
 }
-
 /* ---------------------- App shell ---------------------- */
 export default function App() {
   const path = typeof window !== "undefined" ? window.location.pathname : "/";
@@ -988,7 +1759,7 @@ function Viewer() {
   const upcoming = fixtures.filter((f) => !f.status || f.status === "upcoming");
   const completedFixtures = fixtures.filter((f) => f.status === "completed");
   const completed = [
-    ...completedFixtures,
+    // Prefer match records, but keep unique completed fixtures too
     ...matches.map((m) => ({
       id: m.id,
       sides: m.sides,
@@ -996,7 +1767,19 @@ function Viewer() {
       scoreline: m.scoreline,
       winner: m.winner,
       mode: m.mode || "singles",
+      matchType: m.matchType,
+      category: m.category,
     })),
+    ...completedFixtures.filter(
+      (f) =>
+        !matches.some(
+          (m) =>
+            Array.isArray(m.sides) &&
+            Array.isArray(f.sides) &&
+            m.sides.join(" vs ") === f.sides.join(" vs ") &&
+            (m.finishedAt || 0) === (f.finishedAt || 0)
+        )
+    ),
   ].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
 
   // Simple card tile used in landing
@@ -1185,16 +1968,35 @@ function Viewer() {
               <Card className="p-5">
                 <div className="text-lg font-semibold mb-3">Completed</div>
                 {completed.length ? completed.map((m) => (
-                  <div key={(m.id||"") + String(m.finishedAt||"")} className="py-2 border-b last:border-0">
-                    <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
-                    <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
+                  <div
+                    key={(m.id || "") + String(m.finishedAt || "")}
+                    className="py-2 border-b last:border-0"
+                  >
+                    <div className="font-medium">
+                      {m.sides?.[0]} vs {m.sides?.[1]}
+                    </div>
+                    <div className="text-sm text-zinc-500">
+                      {m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-zinc-600">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-semibold uppercase tracking-wide">
+                        {m.matchType || "Qualifier"}
+                      </span>
+                      {m.category && (
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
+                          {m.category}
+                        </span>
+                      )}
+                    </div>
                     <div className="mt-1 text-sm">
                       <span className="uppercase text-zinc-400 text-xs">Winner</span>{" "}
-                      <span className="font-semibold">{m.winner||''}</span>{" "}
-                      <span className="ml-3 font-mono">{m.scoreline||''}</span>
+                      <span className="font-semibold">{m.winner || ""}</span>{" "}
+                      <span className="ml-3 font-mono">{m.scoreline || ""}</span>
                     </div>
                   </div>
-                )) : <div className="text-zinc-500">No completed matches yet.</div>}
+                )) : (
+                  <div className="text-zinc-500">No completed matches yet.</div>
+                )}
               </Card>
             </div>
           )}
@@ -1220,4 +2022,3 @@ function Viewer() {
     </div>
   );
 }
-
