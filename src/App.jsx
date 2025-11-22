@@ -1152,8 +1152,21 @@ function Scoring({ config, onAbort, onComplete }) {
   const [points, setPoints] = useState([0, 0]);   // raw integer points in the current game
   const [deuceCount, setDeuceCount] = useState(0); // how many times we've reached deuce (>=3-3)
   const [sets, setSets] = useState(() => [makeEmptySet(matchType)]);
+  const [history, setHistory] = useState([]); // stack of previous scoring states for undo
 
   const current = sets[sets.length - 1];
+
+  const pushHistory = () => {
+    setHistory((prev) => [
+      ...prev,
+      {
+        points: [...points],
+        deuceCount,
+        sets: sets.map((s) => ({ ...s })),
+      },
+    ]);
+  };
+
 
   /** Async result recorder – called when the single set finishes */
   const recordResult = async (setObj) => {
@@ -1198,6 +1211,9 @@ function Scoring({ config, onAbort, onComplete }) {
 
   const pointTo = (who) => {
     if (!current || current.finished) return;
+
+    // Save snapshot for undo
+    pushHistory();
 
     const isFinal = matchType === "final";
 
@@ -1335,6 +1351,18 @@ function Scoring({ config, onAbort, onComplete }) {
     if (s.finished) recordResult(s);
   };
 
+
+  const undoLast = () => {
+    setHistory((prev) => {
+      if (!prev.length) return prev;
+      const last = prev[prev.length - 1];
+      setPoints(last.points);
+      setDeuceCount(last.deuceCount);
+      setSets(last.sets);
+      return prev.slice(0, -1);
+    });
+  };
+
   const displayPointsA = mapPointToTennis(points[0]);
   const displayPointsB = mapPointToTennis(points[1]);
 
@@ -1370,6 +1398,22 @@ function Scoring({ config, onAbort, onComplete }) {
           <Button onClick={() => pointTo(1)} className="w-full">
             Point {sides[1]}
           </Button>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={undoLast}
+            disabled={!history.length || (current && current.finished)}
+          >
+            Undo last point
+          </Button>
+          {history.length > 0 && (
+            <span>
+              {history.length} undo step{history.length > 1 ? "s" : ""} available
+            </span>
+          )}
         </div>
 
         {/* Set & tie-break info */}
@@ -1413,7 +1457,29 @@ function ResultsAdmin({ onBack }) {
   const active = fixtures.filter(f => f.status === "active");
   const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
   const completedFixtures = fixtures.filter(f => f.status === "completed");
-  const completed = [...completedFixtures, ...matches.map(m => ({ id: m.id, sides: m.sides, finishedAt: m.finishedAt, scoreline: m.scoreline, winner: m.winner, mode: m.mode || "singles" }))].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
+  const completed = [
+    // Prefer dedicated match records, but keep unique completed fixtures too
+    ...matches.map((m) => ({
+      id: m.id,
+      sides: m.sides,
+      finishedAt: m.finishedAt,
+      scoreline: m.scoreline,
+      winner: m.winner,
+      mode: m.mode || "singles",
+      matchType: m.matchType,
+      category: m.category,
+    })),
+    ...completedFixtures.filter(
+      (f) =>
+        !matches.some(
+          (m) =>
+            Array.isArray(m.sides) &&
+            Array.isArray(f.sides) &&
+            m.sides.join(" vs ") === f.sides.join(" vs ") &&
+            (m.finishedAt || 0) === (f.finishedAt || 0)
+        )
+    ),
+  ].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -1806,4 +1872,3 @@ function Viewer() {
     </div>
   );
 }
-
