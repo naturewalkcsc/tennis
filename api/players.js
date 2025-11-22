@@ -39,7 +39,7 @@ const DEFAULT_PLAYERS = {
     "Kid's Doubles": [],
     "Men's (A) Doubles": [],
     "Men's (B) Doubles": [],
-    "Mixed Doubles": []
+    "Combination Doubles": []
   }
 };
 

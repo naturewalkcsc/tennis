@@ -4,8 +4,6 @@ import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
 
-import imgLive from "./LiveStreaming.png";
-import AttivoLogo from "./attivo_logo.png";
 /*
  Viewer.jsx
  - Menu with 3 image tiles (Rules, Teams, Fixture/Scores)
@@ -251,35 +249,99 @@ export default function Viewer() {
     const db = new Date(b).getTime();
     return db - da;
   });
+
+  
+  // Standings: category-wise & pool-wise from completed fixtures
+  const standingsByCategory = (() => {
+    const table = {};
+
+    // Helper to ensure player record exists
+    const ensureEntry = (category, pool, name) => {
+      if (!table[category]) table[category] = {};
+      if (!table[category][pool]) table[category][pool] = {};
+      if (!table[category][pool][name]) {
+        table[category][pool][name] = { name, played: 0, wins: 0, points: 0 };
+      }
+      return table[category][pool][name];
+    };
+
+    // Build quick lookup from players map to know pools
+    const playerPools = { singles: {}, doubles: {} };
+    ["singles", "doubles"].forEach((mode) => {
+      const byCat = players[mode] || {};
+      Object.keys(byCat).forEach((cat) => {
+        const arr = byCat[cat] || [];
+        if (!playerPools[mode][cat]) playerPools[mode][cat] = {};
+        arr.forEach((p) => {
+          if (!p || !p.name) return;
+          playerPools[mode][cat][p.name] = (p.pool || "No Pool");
+        });
+      });
+    });
+
+    // Walk through completed fixtures
+    (fixtures || []).forEach((f) => {
+      if (f.status !== "completed") return;
+      const category = f.category || "Uncategorized";
+      const mode = f.mode || "singles";
+      const sides = Array.isArray(f.sides) ? f.sides : [];
+      const poolsByName = (playerPools[mode] && playerPools[mode][category]) || {};
+
+      if (sides.length < 2) return;
+
+      // Ensure entries for both sides
+      sides.forEach((name) => {
+        if (!name) return;
+        const pool = poolsByName[name] || "No Pool";
+        const rec = ensureEntry(category, pool, name);
+        rec.played += 1;
+      });
+
+      // Apply win
+      if (f.winner) {
+        const pool = poolsByName[f.winner] || "No Pool";
+        const rec = ensureEntry(category, pool, f.winner);
+        rec.wins += 1;
+        rec.points += 2; // 2 points per win
+      }
+    });
+
+    // Convert inner maps to sorted arrays
+    const result = {};
+    Object.keys(table).forEach((cat) => {
+      result[cat] = {};
+      Object.keys(table[cat]).forEach((pool) => {
+        const arr = Object.values(table[cat][pool]);
+        arr.sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          if (b.wins !== a.wins) return b.wins - a.wins;
+          return a.name.localeCompare(b.name);
+        });
+        result[cat][pool] = arr;
+      });
+    });
+
+    return result;
+  })();
+// MENU
   if (page === "menu") {
     return (
-      <div
-        style={{
-          padding: 28,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-        }}
-      >
-        <h1 style={{ margin: 0, textAlign: "center" }}>RNW Tennis Tournament 2025</h1>
-        <div style={{ textAlign: "center", marginTop: 8 }}>
-          <div style={{ fontSize: 14, color: "#7D1E7E", fontWeight: 600 }}>Sponsored by</div>
-          <img src={AttivoLogo} style={{ width: 260, marginTop: 6, display: "block" }} alt="Attivo Logo" />
-        </div>
+      <div style={{ padding: 28 }}>
+        <h1 style={{ margin: 0 }}>RNW Tennis Tournament 2025</h1>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
-        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
-          <Tile img={imgLive} title="Live Stream" subtitle="YouTube live + live score" onClick={() => setPage("live")} />
+        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap" }}>
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
           <Tile img={imgScore} title="Teams" subtitle="View players by category" onClick={() => setPage("teams")} />
-          <Tile img={imgSettings} title="Fixture/Scores" subtitle="All fixtures, upcoming & recent results" onClick={() => setPage("fixtures")} />
+          <Tile img={imgSettings} title="Fixture/Scores" subtitle="Live, upcoming & recent results" onClick={() => setPage("fixtures")} />
         </div>
       </div>
     );
   }
 
   // RULES PAGE
-  if (page === "rules") {
-    return (
+// RULES PAGE
+if (page === "rules") {
+  return (
     <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 12 }}>
         <button
@@ -406,111 +468,6 @@ export default function Viewer() {
     );
   }
 
-  // LIVE STREAM PAGE (theatre mode)
-  if (page === "live") {
-    const activeMatches = fixtures.filter((f) => f.status === "active");
-    const active = activeMatches[0];
-
-    const YOUTUBE_LIVE_EMBED_URL =
-      "https://www.youtube.com/embed/REPLACE_WITH_VIDEO_ID?autoplay=1&mute=1";
-
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#020617",
-          color: "#e5e7eb",
-          padding: 16,
-        }}
-      >
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <button
-              onClick={() => setPage("menu")}
-              style={{
-                padding: "6px 10px",
-                borderRadius: 999,
-                border: "1px solid #1f2937",
-                background: "#020617",
-                color: "#e5e7eb",
-                cursor: "pointer",
-              }}
-            >
-              ← Back
-            </button>
-            {active && (
-              <div style={{ fontSize: 13, color: "#9ca3af" }}>
-                Showing live score for{" "}
-                <strong>{(active.sides || []).join(" vs ")}</strong>
-              </div>
-            )}
-          </div>
-
-          <h2 style={{ marginTop: 0, marginBottom: 12 }}>Live Stream &amp; Score</h2>
-
-          <div
-            style={{
-              borderRadius: 16,
-              overflow: "hidden",
-              boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
-              background: "#000",
-            }}
-          >
-            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
-              <iframe
-                title="YouTube Live"
-                src={YOUTUBE_LIVE_EMBED_URL}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  border: "none",
-                }}
-              />
-              {active && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 12,
-                    right: 12,
-                    padding: "6px 10px",
-                    borderRadius: 999,
-                    background: "rgba(15,23,42,0.9)",
-                    color: "#bbf7d0",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "999px",
-                      background: "#22c55e",
-                    }}
-                  />
-                  <span>{(active.sides || []).join(" vs ")}</span>
-                  <span>•</span>
-                  <span>{active.scoreline || "Scoring…"}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {!active && (
-            <div style={{ marginTop: 16, fontSize: 13, color: "#9ca3af" }}>
-              No live match is currently active. When a match is started from the scorer, it will appear here with the latest score.
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
   // FIXTURES PAGE
   if (page === "fixtures") {
     return (
@@ -521,6 +478,48 @@ export default function Viewer() {
         <h2 style={{ marginTop: 0 }}>Fixtures & Scores</h2>
 
         <div style={{ marginTop: 12 }}>
+          {/* Standings table */}
+          {Object.keys(standingsByCategory).length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ margin: 0, marginBottom: 8, fontSize: 16 }}>Standings (2 points per win)</h3>
+              {Object.keys(standingsByCategory).sort().map((cat) => (
+                <div key={cat} style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{cat}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                    {Object.keys(standingsByCategory[cat]).sort().map((pool) => (
+                      <div key={pool} style={{ minWidth: 220, background: "#f9fafb", borderRadius: 8, padding: 8, border: "1px solid #e5e7eb" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                          {pool === "No Pool" ? "Overall" : `Pool ${pool}`}
+                        </div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign: "left", padding: "2px 4px" }}>Player / Team</th>
+                              <th style={{ textAlign: "right", padding: "2px 4px" }}>P</th>
+                              <th style={{ textAlign: "right", padding: "2px 4px" }}>W</th>
+                              <th style={{ textAlign: "right", padding: "2px 4px" }}>Pts</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {standingsByCategory[cat][pool].map((row) => (
+                              <tr key={row.name}>
+                                <td style={{ padding: "2px 4px" }}>{row.name}</td>
+                                <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.played}</td>
+                                <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.wins}</td>
+                                <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.points}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Fixtures by day */}
           {loadingFixtures ? (
             <div className="card" style={{ padding: 12 }}>Loading fixtures…</div>
           ) : dayKeys.length === 0 ? (
