@@ -1272,6 +1272,7 @@ function Scoring({ config, onAbort, onComplete }) {
 
       if (isQualifier) {
         // Qualifiers: first deuce uses advantage; from second deuce onward, golden point
+       alert(newDeuceCount);
         if (newDeuceCount >= 2) {
           // Golden point: any 1-point lead at/after second deuce wins
           if (diff >= 1) {
