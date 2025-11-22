@@ -446,6 +446,11 @@ if (page === "rules") {
                           <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 12 }}>
                             <div style={{ color: "#6b7280", fontSize: 13 }}>{f.start ? new Date(f.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}</div>
                             <div style={{ color: "#475569", fontSize: 13 }}>{f.mode ? f.mode.toUpperCase() : ""}</div>
+                            {f.matchType && (
+                              <div style={{ padding: "2px 8px", borderRadius: 999, background: "#fef3c7", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+                                {f.matchType}
+                              </div>
+                            )}
                             {f.status === "completed" && <div style={{ marginLeft: "auto", color: "#065f46", fontWeight: 700 }}>{f.winner ? `Winner: ${f.winner}` : ""} {f.scoreline ? ` • ${f.scoreline}` : ""}</div>}
                           </div>
                         </div>
