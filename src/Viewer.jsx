@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
+import imgLive from "./LiveStreaming.png";
 
 /*
  Viewer.jsx
@@ -257,7 +258,7 @@ export default function Viewer() {
         <h1 style={{ margin: 0, textAlign: "center" }}>RNW Tennis Tournament 2025</h1>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
         <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap" }}>
-          <Tile img={imgScore} title="Live Stream" subtitle="YouTube live + live score" onClick={() => setPage("live")} />
+          <Tile img={imgLive} title="Live Stream" subtitle="YouTube live + live score" onClick={() => setPage("live")} />
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
           <Tile img={imgScore} title="Teams" subtitle="View players by category" onClick={() => setPage("teams")} />
           <Tile img={imgSettings} title="Fixture/Scores" subtitle="All fixtures, upcoming & recent results" onClick={() => setPage("fixtures")} />
