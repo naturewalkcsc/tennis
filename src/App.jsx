@@ -13,6 +13,9 @@ const safeJson = async (res) => {
   try { return await res.json(); } catch { return null; }
 };
 
+const MATCH_TYPES = ["Qualifier", "Semifinal", "Final"];
+// ➜ ADD THIS:
+
 /* ---------------------- API wrappers (admin) ---------------------- */
 /* These call your existing endpoints. They throw on non-OK. */
 const apiPlayersGet = async () => {
@@ -421,126 +424,545 @@ function ManagePlayers({ onBack }) {
   );
 }
 
-/* ---------------------- Fixtures admin (simplified) ---------------------- */
-function FixturesAdmin({ onBack }) {
-  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
-  const [mode, setMode] = useState("singles");
-  const [category, setCategory] = useState("");
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const SINGLES_ORDER = ["Women's Singles","Kid's Singles","NW Team (A) Singles","NW Team (B) Singles"];
-  const DOUBLES_ORDER = ["Women's Doubles","Kid's Doubles","NW Team (A) Doubles","NW Team (B) Doubles","Mixed Doubles"];
+const MATCH_TYPES = ["Qualifier", "Semifinal", "Final"];
 
-  useEffect(() => {
+const FixturesAdmin = ({ onBack }) => {
+  const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
+  const [mode, setMode] = React.useState("singles");
+  const [category, setCategory] = React.useState(SINGLES_CATEGORIES_ORDER[0]);
+  const [a, setA] = React.useState("");
+  const [b, setB] = React.useState("");
+  const [date, setDate] = React.useState("");
+  const [time, setTime] = React.useState("");
+  const [matchType, setMatchType] = React.useState("Qualifier");  // NEW
+  const [list, setList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [editingId, setEditingId] = React.useState(null);
+  const [editState, setEditState] = React.useState({
+    category: "",
+    a: "",
+    b: "",
+    date: "",
+    time: "",
+    matchType: "Qualifier", // NEW
+  });
+
+  // load players + fixtures on mount
+  React.useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const rawPlayers = await apiPlayersGet();
-        const norm = normalizePlayers(rawPlayers);
-        if (!alive) return;
-        setPlayers(norm);
-        // pick first category by default if available
-        const defaults = mode === "singles" ? (SINGLES_ORDER.find(k => (norm.singles[k]||[]).length>0) || Object.keys(norm.singles)[0]) : (DOUBLES_ORDER.find(k => (norm.doubles[k]||[]).length>0) || Object.keys(norm.doubles)[0]);
-        setCategory(defaults || "");
+        const p = await apiPlayersGet();
+        if (alive) {
+          // if players saved as arrays (legacy), normalize to categories if needed
+          const normalized = { singles: {}, doubles: {} };
+          // if p.singles is object-like with categories, use as is; else fallback
+          if (p && p.singles && typeof p.singles === "object" && !Array.isArray(p.singles)) {
+            normalized.singles = p.singles;
+          } else if (Array.isArray(p.singles)) {
+            normalized.singles = {
+              [SINGLES_CATEGORIES_ORDER[0]]: p.singles.map((n) =>
+                typeof n === "string" ? { name: n } : n
+              ),
+            };
+          }
+          if (p && p.doubles && typeof p.doubles === "object" && !Array.isArray(p.doubles)) {
+            normalized.doubles = p.doubles;
+          } else if (Array.isArray(p.doubles)) {
+            normalized.doubles = {
+              [DOUBLES_CATEGORIES_ORDER[0]]: p.doubles.map((n) =>
+                typeof n === "string" ? { name: n } : n
+              ),
+            };
+          }
+
+          // ensure all categories exist so selects show empty lists rather than undefined
+          SINGLES_CATEGORIES_ORDER.forEach((c) => {
+            if (!normalized.singles[c]) normalized.singles[c] = [];
+          });
+          DOUBLES_CATEGORIES_ORDER.forEach((c) => {
+            if (!normalized.doubles[c]) normalized.doubles[c] = [];
+          });
+
+          setPlayers(normalized);
+          // default category set based on mode
+          setCategory(mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]);
+        }
       } catch (e) {
-        console.error(e);
+        // ignore — admin can add players manually
+        console.warn("Could not load players", e);
       }
-      try { const fx = await apiFixturesList(); if (alive) setList(fx || []); } catch { }
-      finally { if (alive) setLoading(false); }
+
+      try {
+        const fx = await apiFixturesList();
+        if (alive) setList(Array.isArray(fx) ? fx : []);
+      } catch (e) {
+        console.warn("Could not load fixtures", e);
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // recompute options for sides when category or mode changes
+  const categories = mode === "singles" ? SINGLES_CATEGORIES_ORDER : DOUBLES_CATEGORIES_ORDER;
+  React.useEffect(() => {
+    // set default category when mode changes
+    setCategory(mode === "singles" ? SINGLES_CATEGORIES_ORDER[0] : DOUBLES_CATEGORIES_ORDER[0]);
+    // reset a/b
+    setA("");
+    setB("");
   }, [mode]);
 
-  const optionsForCategory = (mode === "singles") ? (players.singles[category] || []) : (players.doubles[category] || []);
-  const canAdd = category && a && b && a !== b && date && time;
-
-  const add = async (e) => {
-    e.preventDefault();
-    const payload = { id: crypto.randomUUID(), mode, category, sides: [a, b], start: new Date(`${date}T${time}:00`).getTime(), status: "upcoming" };
-    await apiFixturesAdd(payload);
-    setList(prev => [...prev, payload].sort((x,y) => x.start - y.start));
-    setA(""); setB(""); setDate(""); setTime("");
+  // flatten player list for chosen category (each player may be object {name,...} or string)
+  const optionsForCategory = (mode, category) => {
+    const map = mode === "singles" ? players.singles : players.doubles;
+    const arr = (map && map[category]) || [];
+    return arr
+      .map((el) =>
+        typeof el === "string" ? el : el && el.name ? el.name : ""
+      )
+      .filter(Boolean);
   };
 
-  const remove = async (id) => { await apiFixturesRemove(id); setList(prev => prev.filter(f => f.id !== id)); };
+  const canAdd = a && b && a !== b && date && time && matchType;
+
+  const add = async (e) => {
+    e && e.preventDefault();
+    const start = new Date(`${date}T${time}:00`).getTime();
+    const payload = {
+      id: crypto.randomUUID(),
+      mode,
+      category,
+      sides: [a, b],
+      start,
+      status: "upcoming",
+      matchType, // NEW
+    };
+    await apiFixturesAdd(payload);
+    setList((prev) =>
+      [...prev, payload].sort((x, y) => (x.start || 0) - (y.start || 0))
+    );
+    setA("");
+    setB("");
+    setDate("");
+    setTime("");
+    setMatchType("Qualifier"); // reset
+  };
+
+  const remove = async (id) => {
+    if (!confirm("Remove this fixture?")) return;
+    await apiFixturesRemove(id);
+    setList((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const clearAll = async () => {
+    if (!confirm("Clear ALL fixtures?")) return;
+    await apiFixturesClear();
+    setList([]);
+  };
+
+  const refresh = async () => {
+    const fx = await apiFixturesList();
+    setList(Array.isArray(fx) ? fx : []);
+  };
+
+  // start editing a fixture inline
+  const beginEdit = (fx) => {
+    setEditingId(fx.id);
+    const dt = fx.start ? new Date(fx.start) : new Date();
+    const yyyy = dt.toISOString().slice(0, 10);
+    const hhmm = dt.toTimeString().slice(0, 5);
+    setEditState({
+      category:
+        fx.category ||
+        (fx.mode === "singles"
+          ? SINGLES_CATEGORIES_ORDER[0]
+          : DOUBLES_CATEGORIES_ORDER[0]),
+      a: (fx.sides && fx.sides[0]) || "",
+      b: (fx.sides && fx.sides[1]) || "",
+      date: yyyy,
+      time: hhmm,
+      matchType: fx.matchType || "Qualifier", // NEW: default if missing
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditState({
+      category: "",
+      a: "",
+      b: "",
+      date: "",
+      time: "",
+      matchType: "Qualifier",
+    });
+  };
+
+  const saveEdit = async (id) => {
+    const { category: cat, a: A, b: B, date: D, time: T, matchType: MT } =
+      editState;
+    if (!cat || !A || !B || A === B || !D || !T || !MT) {
+      alert(
+        "Please provide valid category, distinct sides, date/time and match type."
+      );
+      return;
+    }
+    const start = new Date(`${D}T${T}:00`).getTime();
+    const patch = { category: cat, sides: [A, B], start, matchType: MT }; // NEW
+    await apiFixturesUpdate(id, patch);
+    // update locally
+    setList((prev) =>
+      prev
+        .map((f) => (f.id === id ? { ...f, ...patch } : f))
+        .sort((x, y) => (x.start || 0) - (y.start || 0))
+    );
+    cancelEdit();
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button>
+        <Button variant="ghost" onClick={onBack}>
+          <ChevronLeft className="w-5 h-5" /> Back
+        </Button>
         <h2 className="text-xl font-bold">Fixtures</h2>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" onClick={refresh}>
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </Button>
+          <Button variant="secondary" onClick={clearAll}>
+            Clear All
+          </Button>
+        </div>
       </div>
 
-      {loading ? <Card className="p-5 text-center text-zinc-500">Loading…</Card> : (
+      {loading ? (
+        <Card className="p-5 text-center text-zinc-500">Loading…</Card>
+      ) : (
         <>
+          {/* Create fixture */}
           <Card className="p-5 mb-6">
             <div className="font-semibold mb-3">Schedule a Match</div>
             <form onSubmit={add} className="grid md:grid-cols-4 gap-4">
               <div className="md:col-span-1">
                 <div className="text-sm mb-1">Type</div>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode==="singles"} onChange={() => { setMode("singles"); setCategory(""); }} /> Singles</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="mode" checked={mode==="doubles"} onChange={() => { setMode("doubles"); setCategory(""); }} /> Doubles</label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mode"
+                      checked={mode === "singles"}
+                      onChange={() => setMode("singles")}
+                    />{" "}
+                    Singles
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mode"
+                      checked={mode === "doubles"}
+                      onChange={() => setMode("doubles")}
+                    />{" "}
+                    Doubles
+                  </label>
                 </div>
               </div>
 
               <div>
                 <div className="text-sm mb-1">Category</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={category} onChange={e => setCategory(e.target.value)}>
-                  <option value="">Choose…</option>
-                  { (mode === "singles" ? SINGLES_ORDER : DOUBLES_ORDER).map(k => <option key={k} value={k}>{k}</option>) }
+                <select
+                  className="w-full rounded-xl border px-3 py-2"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  {(mode === "singles"
+                    ? SINGLES_CATEGORIES_ORDER
+                    : DOUBLES_CATEGORIES_ORDER
+                  ).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <div className="text-sm mb-1">{mode === "singles" ? "Player 2" : "Team 2"}</div>
-                <select className="w-full rounded-xl border px-3 py-2" value={b} onChange={e => setB(e.target.value)}>
+                <div className="text-sm mb-1">
+                  {mode === "singles" ? "Player 1" : "Team 1"}
+                </div>
+                <select
+                  className="w-full rounded-xl border px-3 py-2"
+                  value={a}
+                  onChange={(e) => setA(e.target.value)}
+                >
                   <option value="">Choose…</option>
-                  {optionsForCategory.map(o => <option key={o} value={o}>{o}</option>)}
+                  {optionsForCategory(mode, category).map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-sm mb-1">
+                  {mode === "singles" ? "Player 2" : "Team 2"}
+                </div>
+                <select
+                  className="w-full rounded-xl border px-3 py-2"
+                  value={b}
+                  onChange={(e) => setB(e.target.value)}
+                >
+                  <option value="">Choose…</option>
+                  {optionsForCategory(mode, category).map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2 grid grid-cols-2 gap-2">
                 <div>
                   <div className="text-sm mb-1">Date</div>
-                  <input type="date" className="w-full rounded-xl border px-3 py-2" value={date} onChange={e=>setDate(e.target.value)} />
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border px-3 py-2"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
                 </div>
                 <div>
                   <div className="text-sm mb-1">Time</div>
-                  <input type="time" className="w-full rounded-xl border px-3 py-2" value={time} onChange={e=>setTime(e.target.value)} />
+                  <input
+                    type="time"
+                    className="w-full rounded-xl border px-3 py-2"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                  />
                 </div>
               </div>
 
+              {/* NEW: Match Type select */}
+              <div>
+                <div className="text-sm mb-1">Match Type</div>
+                <select
+                  className="w-full rounded-xl border px-3 py-2"
+                  value={matchType}
+                  onChange={(e) => setMatchType(e.target.value)}
+                >
+                  {MATCH_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="md:col-span-4">
-                <Button type="submit" disabled={!canAdd}><CalendarPlus className="w-4 h-4" /> Add Fixture</Button>
+                <Button type="submit" disabled={!canAdd}>
+                  <CalendarPlus className="w-4 h-4" /> Add Fixture
+                </Button>
               </div>
             </form>
           </Card>
 
-          {list.length === 0 ? <Card className="p-5 text-center text-zinc-500">No fixtures yet.</Card> : (
+          {/* Fixtures list */}
+          {list.length === 0 ? (
+            <Card className="p-5 text-center text-zinc-500">
+              No fixtures yet.
+            </Card>
+          ) : (
             <div className="space-y-3">
-              {list.map(f => (
-                <Card key={f.id} className="p-4 flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode || f.category || "—"}</span></div>
-                    <div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()} {f.status === "active" && (<span className="ml-2 text-emerald-600">Live</span>)}</div>
-                  </div>
-                  <Button variant="ghost" onClick={() => remove(f.id)} title="Remove"><X className="w-4 h-4" /></Button>
-                </Card>
-              ))}
+              {list
+                .sort((x, y) => (x.start || 0) - (y.start || 0))
+                .map((f) => (
+                  <Card key={f.id} className="p-4">
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600 }}>
+                          {(f.sides || []).join(" vs ")}{" "}
+                          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">
+                            {f.matchType || "Qualifier"} {/* NEW badge */}
+                          </span>
+                          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">
+                            {f.mode}
+                            {f.category ? ` • ${f.category}` : ""}
+                          </span>
+                        </div>
+                        <div
+                          style={{ color: "#6b7280", fontSize: 13 }}
+                        >
+                          {f.winner ? `Winner: ${f.winner}` : ""}
+                          {f.scoreline ? ` • ${f.scoreline}` : ""}
+                        </div>
+                        <div
+                          style={{ marginTop: 6, color: "#6b7280" }}
+                        >
+                          {f.start
+                            ? new Date(f.start).toLocaleString()
+                            : ""}
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Button variant="ghost" onClick={() => beginEdit(f)}>
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => remove(f.id)}
+                          title="Remove"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {editingId === f.id && (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          borderTop: "1px dashed #e6edf3",
+                          paddingTop: 12,
+                        }}
+                      >
+                        <div className="grid md:grid-cols-5 gap-3">
+                          <div>
+                            <div className="text-sm mb-1">Category</div>
+                            <select
+                              className="w-full rounded-xl border px-3 py-2"
+                              value={editState.category}
+                              onChange={(e) =>
+                                setEditState((s) => ({
+                                  ...s,
+                                  category: e.target.value,
+                                }))
+                              }
+                            >
+                              {(f.mode === "singles"
+                                ? SINGLES_CATEGORIES_ORDER
+                                : DOUBLES_CATEGORIES_ORDER
+                              ).map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <div className="text-sm mb-1">Side A</div>
+                            <input
+                              className="w-full rounded-xl border px-3 py-2"
+                              value={editState.a}
+                              onChange={(e) =>
+                                setEditState((s) => ({
+                                  ...s,
+                                  a: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <div className="text-sm mb-1">Side B</div>
+                            <input
+                              className="w-full rounded-xl border px-3 py-2"
+                              value={editState.b}
+                              onChange={(e) =>
+                                setEditState((s) => ({
+                                  ...s,
+                                  b: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <div className="text-sm mb-1">Date</div>
+                              <input
+                                type="date"
+                                className="w-full rounded-xl border px-3 py-2"
+                                value={editState.date}
+                                onChange={(e) =>
+                                  setEditState((s) => ({
+                                    ...s,
+                                    date: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div>
+                              <div className="text-sm mb-1">Time</div>
+                              <input
+                                type="time"
+                                className="w-full rounded-xl border px-3 py-2"
+                                value={editState.time}
+                                onChange={(e) =>
+                                  setEditState((s) => ({
+                                    ...s,
+                                    time: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                          </div>
+
+                          {/* NEW: Match Type in edit */}
+                          <div>
+                            <div className="text-sm mb-1">Match Type</div>
+                            <select
+                              className="w-full rounded-xl border px-3 py-2"
+                              value={editState.matchType}
+                              onChange={(e) =>
+                                setEditState((s) => ({
+                                  ...s,
+                                  matchType: e.target.value,
+                                }))
+                              }
+                            >
+                              {MATCH_TYPES.map((t) => (
+                                <option key={t} value={t}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 8,
+                            display: "flex",
+                            gap: 8,
+                          }}
+                        >
+                          <Button onClick={() => saveEdit(f.id)}>Save</Button>
+                          <Button
+                            variant="secondary"
+                            onClick={cancelEdit}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                ))}
             </div>
           )}
         </>
       )}
     </div>
   );
-}
+};
 
-/* ---------------------- StartFromFixtures (admin start) ---------------------- */
 function StartFromFixtures({ onBack, onStartScoring }) {
   const [mode, setMode] = useState("singles");
   const [fixtures, setFixtures] = useState([]);
@@ -549,14 +971,23 @@ function StartFromFixtures({ onBack, onStartScoring }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      try { const fx = await apiFixturesList(); if (alive) setFixtures(fx || []); }
-      catch (e) { console.error(e); }
-      finally { if (alive) setLoading(false); }
+      try {
+        const fx = await apiFixturesList();
+        if (alive) setFixtures(fx || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const list = fixtures.filter(f => (f.mode || "singles") === mode && f.status !== "completed");
+  const list = fixtures.filter(
+    (f) => (f.mode || "singles") === mode && f.status !== "completed"
+  );
 
   const startFixture = async (fx) => {
     // mark active (serverside)
@@ -572,7 +1003,12 @@ function StartFromFixtures({ onBack, onStartScoring }) {
       }
       await apiFixturesUpdate(fx.id, patch);
       if (typeof onStartScoring === "function") {
-        onStartScoring({ mode: fx.mode, sides: fx.sides, startingServer: 0, fixtureId: fx.id });
+        onStartScoring({
+          mode: fx.mode,
+          sides: fx.sides,
+          startingServer: 0,
+          fixtureId: fx.id,
+        });
       } else {
         alert("Started: " + (fx.sides?.join(" vs ") || ""));
       }
@@ -584,18 +1020,56 @@ function StartFromFixtures({ onBack, onStartScoring }) {
 
   return (
     <div className="max-w-3xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button><h2 className="text-xl font-bold">Start Match</h2></div>
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}>
+          <ChevronLeft className="w-5 h-5" /> Back
+        </Button>
+        <h2 className="text-xl font-bold">Start Match</h2>
+      </div>
       <Card className="p-5">
         <div className="flex gap-6 mb-4">
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode==="singles"} onChange={()=>setMode("singles")} /> Singles</label>
-          <label className="flex items-center gap-2"><input type="radio" name="m" checked={mode==="doubles"} onChange={()=>setMode("doubles")} /> Doubles</label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="m"
+              checked={mode === "singles"}
+              onChange={() => setMode("singles")}
+            />{" "}
+            Singles
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="m"
+              checked={mode === "doubles"}
+              onChange={() => setMode("doubles")}
+            />{" "}
+            Doubles
+          </label>
         </div>
-        {loading ? <div className="text-zinc-500">Loading fixtures…</div> : list.length === 0 ? <div className="text-zinc-500">No fixtures for {mode}.</div> : (
+        {loading ? (
+          <div className="text-zinc-500">Loading fixtures…</div>
+        ) : list.length === 0 ? (
+          <div className="text-zinc-500">No fixtures for {mode}.</div>
+        ) : (
           <div className="space-y-3">
-            {list.map(f => (
+            {list.map((f) => (
               <Card key={f.id} className="p-4 flex items-center gap-4">
-                <div className="flex-1"><div className="font-semibold">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>
-                <Button onClick={()=>startFixture(f)}><Play className="w-4 h-4" /> Start Now</Button>
+                <div className="flex-1">
+                  <div className="font-semibold">
+                    {f.sides?.[0]} vs {f.sides?.[1]}
+                  </div>
+                  <div className="text-sm text-zinc-500">
+                    {new Date(f.start).toLocaleString()}
+                  </div>
+                  {/* NEW: show match type + mode */}
+                  <div className="mt-1 text-xs text-zinc-600">
+                    {(f.matchType || "Qualifier") + " • " + (f.category || "")}
+                  </div>
+                </div>
+                <Button onClick={() => startFixture(f)}>
+                  <Play className="w-4 h-4" /> Start Now
+                </Button>
               </Card>
             ))}
           </div>
