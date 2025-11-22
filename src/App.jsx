@@ -1261,9 +1261,11 @@ function Scoring({ config, onAbort, onComplete }) {
     else pB += 1;
 
     let newDeuceCount = deuceCount;
+    console.log(newDeuceCount);
     if (pA >= 3 && pB >= 3 && pA === pB) {
       // reached a deuce (>= 40-40)
       newDeuceCount += 1;
+      console.log("Increment newDeuceCount");
     }
 
     let winnerGame = null;
