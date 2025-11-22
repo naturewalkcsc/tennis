@@ -12,6 +12,19 @@ const buster = () => `?t=${Date.now()}`;
 const safeJson = async (res) => {
   try { return await res.json(); } catch { return null; }
 };
+  const SINGLES_CATEGORIES_ORDER = [
+    "Women's Singles",
+    "Kid's Singles",
+    "NW Team (A) Singles",
+    "NW Team (B) Singles"
+  ];
+  const DOUBLES_CATEGORIES_ORDER = [
+    "Women's Doubles",
+    "Kid's Doubles",
+    "NW Team (A) Doubles",
+    "NW Team (B) Doubles",
+    "Mixed Doubles"
+  ];
 
 const MATCH_TYPES = ["Qualifier", "Semifinal", "Final"];
 // ➜ ADD THIS:
@@ -142,19 +155,6 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
 
 /* ---------------------- Manage Players (admin) ---------------------- */
 function ManagePlayers({ onBack }) {
-  const SINGLES_CATEGORIES_ORDER = [
-    "Women's Singles",
-    "Kid's Singles",
-    "NW Team (A) Singles",
-    "NW Team (B) Singles"
-  ];
-  const DOUBLES_CATEGORIES_ORDER = [
-    "Women's Doubles",
-    "Kid's Doubles",
-    "NW Team (A) Doubles",
-    "NW Team (B) Doubles",
-    "Mixed Doubles"
-  ];
 
   const POOLS = ["No Pool", "Pool A", "Pool B"];
 
