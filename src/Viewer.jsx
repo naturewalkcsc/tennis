@@ -3,6 +3,8 @@ import React, { useEffect, useState } from "react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
+import imgLive from "./LiveStreaming.png";
+import AttivoLogo from "./attivo_logo.png";
 
 /*
  Viewer.jsx
@@ -326,19 +328,29 @@ export default function Viewer() {
 // MENU
   if (page === "menu") {
     return (
-      <div style={{ padding: 28 }}>
-        <h1 style={{ margin: 0 }}>RNW Tennis Tournament 2025</h1>
+      <div
+        style={{
+          padding: 28,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+        <h1 style={{ margin: 0, textAlign: "center" }}>RNW Tennis Tournament 2025</h1>
+        <div style={{ textAlign: "center", marginTop: 8 }}>
+          <div style={{ fontSize: 14, color: "#7D1E7E", fontWeight: 600 }}>Sponsored by</div>
+          <img src={AttivoLogo} style={{ width: 260, marginTop: 6, display: "block" }} alt="Attivo Logo" />
+        </div>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
-        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap" }}>
+        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
+          <Tile img={imgLive} title="Live Stream" subtitle="YouTube live + live score" onClick={() => setPage("live")} />
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
           <Tile img={imgScore} title="Teams" subtitle="View players by category" onClick={() => setPage("teams")} />
-          <Tile img={imgSettings} title="Fixture/Scores" subtitle="Live, upcoming & recent results" onClick={() => setPage("fixtures")} />
+          <Tile img={imgSettings} title="Fixture/Scores" subtitle="All fixtures, upcoming & recent results" onClick={() => setPage("fixtures")} />
         </div>
       </div>
     );
   }
-
-  // RULES PAGE
 // RULES PAGE
 if (page === "rules") {
   return (
