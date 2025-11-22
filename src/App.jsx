@@ -1256,7 +1256,7 @@ function Scoring({ config, onAbort, onComplete }) {
     }
 
     // ----- Normal game mode -----
-    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use hybrid (golden point)
+    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use golden point from 2nd deuce
 
     let [pA, pB] = points;
     if (who === 0) pA += 1;
@@ -1335,25 +1335,25 @@ function Scoring({ config, onAbort, onComplete }) {
   const isQualifierView = (cfgMatchType || "").toLowerCase() === "qualifier";
 
   const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
-  const limitDeucesView = isQualifierView ? 1 : 9999;
-  const isGoldenDeuce = isQualifierView && atDeuce && deuceCount >= (limitDeucesView + 1);
+  // deuceCount is incremented every time we return to deuce (3–3, 4–4, 5–5, ...)
+  // For qualifiers: 1st deuce = normal advantage, 2nd deuce onwards = golden point
+  const isGoldenDeuce = isQualifierView && atDeuce && deuceCount >= 2;
 
   let displayPointsA = mapPointToTennis(pA);
   let displayPointsB = mapPointToTennis(pB);
 
   if (!current.tie) {
     if (atDeuce) {
-      // Always show 40-40 at deuce
+      // Always show 40–40 at deuce (even during golden point)
       displayPointsA = 40;
       displayPointsB = 40;
     } else if (
-      isQualifierView &&
       pA >= 3 &&
       pB >= 3 &&
       Math.abs(pA - pB) === 1 &&
       !isGoldenDeuce
     ) {
-      // First deuce uses traditional advantage for qualifiers
+      // First deuce uses traditional advantage when applicable
       if (pA > pB) {
         displayPointsA = "Ad";
         displayPointsB = 40;
@@ -1364,7 +1364,7 @@ function Scoring({ config, onAbort, onComplete }) {
     }
   }
 
-  const showGoldenBadge = isQualifierView && isGoldenDeuce && !current.tie;
+  const showGoldenBadge = isGoldenDeuce && !current.tie;
 
   const description = isQualifierView
     ? "Qualifier: Fast4 to 4 games. Tie-break to 5. First deuce uses advantage; from second deuce onward, golden point."
