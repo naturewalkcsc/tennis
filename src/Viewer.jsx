@@ -1,10 +1,11 @@
 // src/Viewer.jsx
 import React, { useEffect, useState } from "react";
-import AttivoLogo from "./attivo_logo.png";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
 
+import imgLive from "./LiveStreaming.png";
+import AttivoLogo from "./attivo_logo.png";
 /*
  Viewer.jsx
  - Menu with 3 image tiles (Rules, Teams, Fixture/Scores)
@@ -250,30 +251,35 @@ export default function Viewer() {
     const db = new Date(b).getTime();
     return db - da;
   });
-
-  // MENU
   if (page === "menu") {
     return (
-      <div style={{ padding: 28, textAlign: "center" }}>
+      <div
+        style={{
+          padding: 28,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
         <h1 style={{ margin: 0, textAlign: "center" }}>RNW Tennis Tournament 2025</h1>
         <div style={{ textAlign: "center", marginTop: 8 }}>
           <div style={{ fontSize: 14, color: "#7D1E7E", fontWeight: 600 }}>Sponsored by</div>
-          <img src={AttivoLogo} style={{ width: 140, marginTop: 6 }} alt="Attivo Logo" />
+          <img src={AttivoLogo} style={{ width: 260, marginTop: 6, display: "block" }} alt="Attivo Logo" />
         </div>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
         <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
+          <Tile img={imgLive} title="Live Stream" subtitle="YouTube live + live score" onClick={() => setPage("live")} />
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
           <Tile img={imgScore} title="Teams" subtitle="View players by category" onClick={() => setPage("teams")} />
-          <Tile img={imgSettings} title="Fixture/Scores" subtitle="Live, upcoming & recent results" onClick={() => setPage("fixtures")} />
+          <Tile img={imgSettings} title="Fixture/Scores" subtitle="All fixtures, upcoming & recent results" onClick={() => setPage("fixtures")} />
         </div>
       </div>
     );
   }
 
   // RULES PAGE
-// RULES PAGE
-if (page === "rules") {
-  return (
+  if (page === "rules") {
+    return (
     <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 12 }}>
         <button
@@ -400,6 +406,111 @@ if (page === "rules") {
     );
   }
 
+  // LIVE STREAM PAGE (theatre mode)
+  if (page === "live") {
+    const activeMatches = fixtures.filter((f) => f.status === "active");
+    const active = activeMatches[0];
+
+    const YOUTUBE_LIVE_EMBED_URL =
+      "https://www.youtube.com/embed/REPLACE_WITH_VIDEO_ID?autoplay=1&mute=1";
+
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#020617",
+          color: "#e5e7eb",
+          padding: 16,
+        }}
+      >
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <button
+              onClick={() => setPage("menu")}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 999,
+                border: "1px solid #1f2937",
+                background: "#020617",
+                color: "#e5e7eb",
+                cursor: "pointer",
+              }}
+            >
+              ← Back
+            </button>
+            {active && (
+              <div style={{ fontSize: 13, color: "#9ca3af" }}>
+                Showing live score for{" "}
+                <strong>{(active.sides || []).join(" vs ")}</strong>
+              </div>
+            )}
+          </div>
+
+          <h2 style={{ marginTop: 0, marginBottom: 12 }}>Live Stream &amp; Score</h2>
+
+          <div
+            style={{
+              borderRadius: 16,
+              overflow: "hidden",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
+              background: "#000",
+            }}
+          >
+            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+              <iframe
+                title="YouTube Live"
+                src={YOUTUBE_LIVE_EMBED_URL}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  border: "none",
+                }}
+              />
+              {active && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    right: 12,
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: "rgba(15,23,42,0.9)",
+                    color: "#bbf7d0",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "999px",
+                      background: "#22c55e",
+                    }}
+                  />
+                  <span>{(active.sides || []).join(" vs ")}</span>
+                  <span>•</span>
+                  <span>{active.scoreline || "Scoring…"}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {!active && (
+            <div style={{ marginTop: 16, fontSize: 13, color: "#9ca3af" }}>
+              No live match is currently active. When a match is started from the scorer, it will appear here with the latest score.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   // FIXTURES PAGE
   if (page === "fixtures") {
     return (
