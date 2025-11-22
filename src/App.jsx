@@ -1061,8 +1061,15 @@ function StartFromFixtures({ onBack, onStartScoring }) {
                     {new Date(f.start).toLocaleString()}
                   </div>
                   {/* NEW: show match type + mode */}
-                  <div className="mt-1 text-xs text-zinc-600">
-                    {(f.matchType || "Qualifier") + " • " + (f.category || "")}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-semibold uppercase tracking-wide">
+                      {f.matchType || "Qualifier"}
+                    </span>
+                    {f.category && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
+                        {f.category}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <Button onClick={() => startFixture(f)}>
@@ -1415,102 +1422,15 @@ function ResultsAdmin({ onBack }) {
         <div className="grid md:grid-cols-2 gap-6">
           <Card className="p-5">
             <div className="text-lg font-semibold mb-3">Active</div>
-            {active.length ? (
-              active.map((f) => (
-                <div key={f.id} className="border rounded-xl p-3 mb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold">
-                      {(f.sides || []).join(" vs ")}
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-                      LIVE
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {f.start ? new Date(f.start).toLocaleString() : ""}
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-zinc-600">
-                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold uppercase">
-                      {f.matchType || "Qualifier"}
-                    </span>
-                    {f.category && <span>{f.category}</span>}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-zinc-500">No active match.</div>
-            )}
+            {active.length ? active.map(f => (<div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No active match.</div>}
 
             <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
-            {upcoming.length ? (
-              upcoming.map((f) => (
-                <div key={f.id} className="border rounded-xl p-3 mb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold">
-                      {(f.sides || []).join(" vs ")}
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">
-                      UPCOMING
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {f.start ? new Date(f.start).toLocaleString() : ""}
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-zinc-600">
-                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold uppercase">
-                      {f.matchType || "Qualifier"}
-                    </span>
-                    {f.category && <span>{f.category}</span>}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-zinc-500">No upcoming fixtures.</div>
-            )}
+            {upcoming.length ? upcoming.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
           </Card>
 
           <Card className="p-5">
             <div className="text-lg font-semibold mb-3">Completed</div>
-            {completed.length ? (
-              completed.map((m) => (
-                <div
-                  key={(m.id || "") + String(m.finishedAt || m.start || "")}
-                  className="border rounded-xl p-3 mb-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold">
-                      {(m.sides || []).join(" vs ")}
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700">
-                      Completed
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {m.finishedAt
-                      ? new Date(m.finishedAt).toLocaleString()
-                      : m.start
-                      ? new Date(m.start).toLocaleString()
-                      : ""}
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-zinc-600">
-                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold uppercase">
-                      {m.matchType || "Qualifier"}
-                    </span>
-                    {m.category && <span>{m.category}</span>}
-                  </div>
-                  {(m.winner || m.scoreline) && (
-                    <div className="mt-1 text-xs font-mono text-emerald-700">
-                      {m.winner && <span>Winner: {m.winner}</span>}
-                      {m.scoreline && (
-                        <span>{m.winner ? " • " : ""}{m.scoreline}</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))
-            ) : (
-              <div className="text-zinc-500">No results yet.</div>
-            )}
+            {completed.length ? completed.map(m => (<div key={(m.id||'')+String(m.finishedAt||'')} className="py-2 border-b last:border-0"><div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div><div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div><div className="mt-1 text-sm"><span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner||''}</span> <span className="ml-3 font-mono">{m.scoreline||''}</span></div></div>)) : <div className="text-zinc-500">No results yet.</div>}
           </Card>
         </div>
       )}
