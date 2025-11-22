@@ -153,7 +153,7 @@ function ManagePlayers({ onBack }) {
     "Kid's Doubles",
     "NW Team (A) Doubles",
     "NW Team (B) Doubles",
-    "Mixed Doubles"
+    "Combination Doubles"
   ];
 
   const POOLS = ["No Pool", "Pool A", "Pool B"];
@@ -1663,7 +1663,7 @@ function Viewer() {
       "Kid's Doubles",
       "NW Team (A) Doubles",
       "NW Team (B) Doubles",
-      "Mixed Doubles",
+      "Combination Doubles",
     ];
 
     const singlesByCategory = playersObj.singles && !Array.isArray(playersObj.singles)
