@@ -267,7 +267,6 @@ export default function Viewer() {
     );
   }
 
-
   // RULES PAGE
 if (page === "rules") {
   return (
@@ -398,74 +397,105 @@ if (page === "rules") {
   }
 
 
-  // LIVE STREAM PAGE
+  // LIVE STREAM PAGE (theatre mode)
   if (page === "live") {
     const activeMatches = fixtures.filter((f) => f.status === "active");
     const active = activeMatches[0];
 
-    const YOUTUBE_LIVE_EMBED_URL = "https://www.youtube.com/embed/qiQ4cfJugVI?autoplay=1";
+    const YOUTUBE_LIVE_EMBED_URL =
+      "https://www.youtube.com/embed/REPLACE_WITH_VIDEO_ID?autoplay=1&mute=1";
 
     return (
-      <div style={{ padding: 24 }}>
-        <div style={{ marginBottom: 12 }}>
-          <button
-            onClick={() => setPage("menu")}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 999,
-              border: "1px solid #e6edf8",
-              background: "white",
-            }}
-          >
-            ← Back
-          </button>
-        </div>
-
-        <h2 style={{ marginTop: 0 }}>Live Stream &amp; Score</h2>
-
-        <div style={{ marginTop: 12, maxWidth: 960 }}>
-          <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, borderRadius: 12, overflow: "hidden", boxShadow: "0 10px 30px rgba(15,23,42,0.35)" }}>
-            <iframe
-              title="YouTube Live"
-              src={YOUTUBE_LIVE_EMBED_URL}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-            />
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#020617",
+          color: "#e5e7eb",
+          padding: 16,
+        }}
+      >
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <button
+              onClick={() => setPage("menu")}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 999,
+                border: "1px solid #1f2937",
+                background: "#020617",
+                color: "#e5e7eb",
+                cursor: "pointer",
+              }}
+            >
+              ← Back
+            </button>
             {active && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 12,
-                  right: 12,
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  background: "rgba(15,23,42,0.85)",
-                  color: "#bbf7d0",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <span style={{ width: 8, height: 8, borderRadius: "999px", background: "#22c55e" }} />
-                <span>{(active.sides || []).join(" vs ")}</span>
-                <span>•</span>
-                <span>{active.scoreline || "Scoring…"}</span>
+              <div style={{ fontSize: 13, color: "#9ca3af" }}>
+                Showing live score for{" "}
+                <strong>{(active.sides || []).join(" vs ")}</strong>
               </div>
             )}
           </div>
-        </div>
 
-        <div style={{ marginTop: 16, fontSize: 13, color: "#64748b" }}>
+          <h2 style={{ marginTop: 0, marginBottom: 12 }}>Live Stream &amp; Score</h2>
+
+          <div
+            style={{
+              borderRadius: 16,
+              overflow: "hidden",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
+              background: "#000",
+            }}
+          >
+            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+              <iframe
+                title="YouTube Live"
+                src={YOUTUBE_LIVE_EMBED_URL}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  border: "none",
+                }}
+              />
+              {active && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    right: 12,
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: "rgba(15,23,42,0.9)",
+                    color: "#bbf7d0",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "999px",
+                      background: "#22c55e",
+                    }}
+                  />
+                  <span>{(active.sides || []).join(" vs ")}</span>
+                  <span>•</span>
+                  <span>{active.scoreline || "Scoring…"}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           {!active && (
-            <div>No live match is currently active. When a match is started from the scorer, it will appear here with the latest score.</div>
-          )}
-          {active && (
-            <div>
-              Showing live score for{" "}
-              <strong>{(active.sides || []).join(" vs ")}</strong>. This updates automatically as points are scored.
+            <div style={{ marginTop: 16, fontSize: 13, color: "#9ca3af" }}>
+              No live match is currently active. When a match is started from the scorer, it will appear here with the latest score.
             </div>
           )}
         </div>
@@ -524,16 +554,7 @@ if (page === "rules") {
                           <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 12 }}>
                             <div style={{ color: "#6b7280", fontSize: 13 }}>{f.start ? new Date(f.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}</div>
                             <div style={{ color: "#475569", fontSize: 13 }}>{f.mode ? f.mode.toUpperCase() : ""}</div>
-                            {f.status === "completed" && (
-                              <div style={{ marginLeft: "auto", color: "#065f46", fontWeight: 700 }}>
-                                {f.winner ? `Winner: ${f.winner}` : ""} {f.scoreline ? ` • ${f.scoreline}` : ""}
-                              </div>
-                            )}
-                            {f.status === "active" && f.scoreline && (
-                              <div style={{ marginLeft: "auto", color: "#047857", fontWeight: 600 }}>
-                                Score: {f.scoreline}
-                              </div>
-                            )}
+                            {f.status === "completed" && <div style={{ marginLeft: "auto", color: "#065f46", fontWeight: 700 }}>{f.winner ? `Winner: ${f.winner}` : ""} {f.scoreline ? ` • ${f.scoreline}` : ""}</div>}
                           </div>
                         </div>
                         <div style={{ minWidth: 110, textAlign: "right", color: "#475569", fontSize: 13 }}>
