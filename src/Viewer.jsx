@@ -97,6 +97,7 @@ export default function Viewer() {
   const [page, setPage] = useState("menu"); // menu | rules | teams | fixtures
   const [players, setPlayers] = useState({ singles: {}, doubles: {} });
   const [fixtures, setFixtures] = useState([]);
+  const [fixtureFilter, setFixtureFilter] = useState("all");
   const [loadingPlayers, setLoadingPlayers] = useState(true);
   const [loadingFixtures, setLoadingFixtures] = useState(true);
   const [error, setError] = useState("");
@@ -237,8 +238,14 @@ export default function Viewer() {
     );
   }
 
-  // Fixtures grouped by date
-  const groupedByDay = fixtures.reduce((acc, f) => {
+  // Fixtures grouped by date with status filter
+  const filteredFixtures = fixtures.filter((f) => {
+    if (fixtureFilter === "completed") return f.status === "completed";
+    if (fixtureFilter === "upcoming") return f.status !== "completed";
+    return true;
+  });
+
+  const groupedByDay = filteredFixtures.reduce((acc, f) => {
     const key = f.start ? dateKey(f.start) : "Unknown";
     if (!acc[key]) acc[key] = [];
     acc[key].push(f);
@@ -488,6 +495,28 @@ if (page === "rules") {
           <button onClick={() => setPage("menu")} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e6edf8", background: "white" }}>← Back</button>
         </div>
         <h2 style={{ marginTop: 0 }}>Fixtures & Scores</h2>
+        <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
+          {["all", "upcoming", "completed"].map((key) => {
+            const label = key === "all" ? "All" : key === "upcoming" ? "Upcoming" : "Completed";
+            return (
+              <button
+                key={key}
+                onClick={() => setFixtureFilter(key)}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  border: "1px solid " + (fixtureFilter === key ? "#0f172a" : "#e5e7eb"),
+                  background: fixtureFilter === key ? "#0f172a" : "#ffffff",
+                  color: fixtureFilter === key ? "#f9fafb" : "#4b5563",
+                  cursor: "pointer",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
 
         <div style={{ marginTop: 12 }}>
           {/* Standings table */}
