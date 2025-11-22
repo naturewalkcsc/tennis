@@ -3,8 +3,6 @@ import React, { useEffect, useState } from "react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
-import imgLive from "./LiveStreaming.png";
-import AttivoLogo from "./attivo_logo.png";
 
 /*
  Viewer.jsx
@@ -97,6 +95,7 @@ export default function Viewer() {
   const [page, setPage] = useState("menu"); // menu | rules | teams | fixtures
   const [players, setPlayers] = useState({ singles: {}, doubles: {} });
   const [fixtures, setFixtures] = useState([]);
+  const [fixtureFilter, setFixtureFilter] = useState("all");
   const [loadingPlayers, setLoadingPlayers] = useState(true);
   const [loadingFixtures, setLoadingFixtures] = useState(true);
   const [error, setError] = useState("");
@@ -237,12 +236,20 @@ export default function Viewer() {
     );
   }
 
-  // Fixtures grouped by date
-  const groupedByDay = fixtures.reduce((acc, f) => {
+  // Fixtures grouped by date with status filter
+  const filteredFixtures = fixtures.filter((f) => {
+    if (fixtureFilter === "completed") return f.status === "completed";
+    if (fixtureFilter === "upcoming") return f.status !== "completed";
+    return true;
+  });
+
+  const groupedByDay = filteredFixtures.reduce((acc, f) => {
     const key = f.start ? dateKey(f.start) : "Unknown";
     if (!acc[key]) acc[key] = [];
     acc[key].push(f);
     return acc;
+  }, {});
+
   }, {});
 
   // Sort day keys (most recent day first)
@@ -252,105 +259,22 @@ export default function Viewer() {
     return db - da;
   });
 
-  
-  // Standings: category-wise & pool-wise from completed fixtures
-  const standingsByCategory = (() => {
-    const table = {};
-
-    // Helper to ensure player record exists
-    const ensureEntry = (category, pool, name) => {
-      if (!table[category]) table[category] = {};
-      if (!table[category][pool]) table[category][pool] = {};
-      if (!table[category][pool][name]) {
-        table[category][pool][name] = { name, played: 0, wins: 0, points: 0 };
-      }
-      return table[category][pool][name];
-    };
-
-    // Build quick lookup from players map to know pools
-    const playerPools = { singles: {}, doubles: {} };
-    ["singles", "doubles"].forEach((mode) => {
-      const byCat = players[mode] || {};
-      Object.keys(byCat).forEach((cat) => {
-        const arr = byCat[cat] || [];
-        if (!playerPools[mode][cat]) playerPools[mode][cat] = {};
-        arr.forEach((p) => {
-          if (!p || !p.name) return;
-          playerPools[mode][cat][p.name] = (p.pool || "No Pool");
-        });
-      });
-    });
-
-    // Walk through completed fixtures
-    (fixtures || []).forEach((f) => {
-      if (f.status !== "completed") return;
-      const category = f.category || "Uncategorized";
-      const mode = f.mode || "singles";
-      const sides = Array.isArray(f.sides) ? f.sides : [];
-      const poolsByName = (playerPools[mode] && playerPools[mode][category]) || {};
-
-      if (sides.length < 2) return;
-
-      // Ensure entries for both sides
-      sides.forEach((name) => {
-        if (!name) return;
-        const pool = poolsByName[name] || "No Pool";
-        const rec = ensureEntry(category, pool, name);
-        rec.played += 1;
-      });
-
-      // Apply win
-      if (f.winner) {
-        const pool = poolsByName[f.winner] || "No Pool";
-        const rec = ensureEntry(category, pool, f.winner);
-        rec.wins += 1;
-        rec.points += 2; // 2 points per win
-      }
-    });
-
-    // Convert inner maps to sorted arrays
-    const result = {};
-    Object.keys(table).forEach((cat) => {
-      result[cat] = {};
-      Object.keys(table[cat]).forEach((pool) => {
-        const arr = Object.values(table[cat][pool]);
-        arr.sort((a, b) => {
-          if (b.points !== a.points) return b.points - a.points;
-          if (b.wins !== a.wins) return b.wins - a.wins;
-          return a.name.localeCompare(b.name);
-        });
-        result[cat][pool] = arr;
-      });
-    });
-
-    return result;
-  })();
-// MENU
+  // MENU
   if (page === "menu") {
     return (
-      <div
-        style={{
-          padding: 28,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-        }}
-      >
-        <h1 style={{ margin: 0, textAlign: "center" }}>RNW Tennis Tournament 2025</h1>
-        <div style={{ textAlign: "center", marginTop: 8 }}>
-          <div style={{ fontSize: 14, color: "#7D1E7E", fontWeight: 600 }}>Sponsored by</div>
-          <img src={AttivoLogo} style={{ width: 260, marginTop: 6, display: "block" }} alt="Attivo Logo" />
-        </div>
+      <div style={{ padding: 28 }}>
+        <h1 style={{ margin: 0 }}>RNW Tennis Tournament 2025</h1>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
-        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
-          <Tile img={imgLive} title="Live Stream" subtitle="YouTube live + live score" onClick={() => setPage("live")} />
+        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap" }}>
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
           <Tile img={imgScore} title="Teams" subtitle="View players by category" onClick={() => setPage("teams")} />
-          <Tile img={imgSettings} title="Fixture/Scores" subtitle="All fixtures, upcoming & recent results" onClick={() => setPage("fixtures")} />
+          <Tile img={imgSettings} title="Fixture/Scores" subtitle="Live, upcoming & recent results" onClick={() => setPage("fixtures")} />
         </div>
       </div>
     );
   }
+
+  // RULES PAGE
 // RULES PAGE
 if (page === "rules") {
   return (
@@ -488,50 +412,29 @@ if (page === "rules") {
           <button onClick={() => setPage("menu")} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e6edf8", background: "white" }}>← Back</button>
         </div>
         <h2 style={{ marginTop: 0 }}>Fixtures & Scores</h2>
+        <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
+          {["all", "upcoming", "completed"].map((key) => {
+            const label = key === "all" ? "All" : key === "upcoming" ? "Upcoming" : "Completed";
+            return (
+              <button
+                key={key}
+                onClick={() => setFixtureFilter(key)}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  border: "1px solid " + (fixtureFilter === key ? "#0f172a" : "#e5e7eb"),
+                  background: fixtureFilter === key ? "#0f172a" : "#ffffff",
+                  color: fixtureFilter === key ? "#f9fafb" : "#4b5563",
+                  cursor: "pointer",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
 
         <div style={{ marginTop: 12 }}>
-          {/* Standings table */}
-          {Object.keys(standingsByCategory).length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <h3 style={{ margin: 0, marginBottom: 8, fontSize: 16 }}>Standings (2 points per win)</h3>
-              {Object.keys(standingsByCategory).sort().map((cat) => (
-                <div key={cat} style={{ marginBottom: 12 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{cat}</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-                    {Object.keys(standingsByCategory[cat]).sort().map((pool) => (
-                      <div key={pool} style={{ minWidth: 220, background: "#f9fafb", borderRadius: 8, padding: 8, border: "1px solid #e5e7eb" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                          {pool === "No Pool" ? "Overall" : `Pool ${pool}`}
-                        </div>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                          <thead>
-                            <tr>
-                              <th style={{ textAlign: "left", padding: "2px 4px" }}>Player / Team</th>
-                              <th style={{ textAlign: "right", padding: "2px 4px" }}>P</th>
-                              <th style={{ textAlign: "right", padding: "2px 4px" }}>W</th>
-                              <th style={{ textAlign: "right", padding: "2px 4px" }}>Pts</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {standingsByCategory[cat][pool].map((row) => (
-                              <tr key={row.name}>
-                                <td style={{ padding: "2px 4px" }}>{row.name}</td>
-                                <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.played}</td>
-                                <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.wins}</td>
-                                <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.points}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Fixtures by day */}
           {loadingFixtures ? (
             <div className="card" style={{ padding: 12 }}>Loading fixtures…</div>
           ) : dayKeys.length === 0 ? (
