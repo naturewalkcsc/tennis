@@ -1640,7 +1640,7 @@ function Viewer() {
   const upcoming = fixtures.filter((f) => !f.status || f.status === "upcoming");
   const completedFixtures = fixtures.filter((f) => f.status === "completed");
   const completed = [
-    ...completedFixtures,
+    // Prefer match records, but keep unique completed fixtures too
     ...matches.map((m) => ({
       id: m.id,
       sides: m.sides,
@@ -1648,7 +1648,19 @@ function Viewer() {
       scoreline: m.scoreline,
       winner: m.winner,
       mode: m.mode || "singles",
+      matchType: m.matchType,
+      category: m.category,
     })),
+    ...completedFixtures.filter(
+      (f) =>
+        !matches.some(
+          (m) =>
+            Array.isArray(m.sides) &&
+            Array.isArray(f.sides) &&
+            m.sides.join(" vs ") === f.sides.join(" vs ") &&
+            (m.finishedAt || 0) === (f.finishedAt || 0)
+        )
+    ),
   ].sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
 
   // Simple card tile used in landing
@@ -1837,16 +1849,35 @@ function Viewer() {
               <Card className="p-5">
                 <div className="text-lg font-semibold mb-3">Completed</div>
                 {completed.length ? completed.map((m) => (
-                  <div key={(m.id||"") + String(m.finishedAt||"")} className="py-2 border-b last:border-0">
-                    <div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div>
-                    <div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div>
+                  <div
+                    key={(m.id || "") + String(m.finishedAt || "")}
+                    className="py-2 border-b last:border-0"
+                  >
+                    <div className="font-medium">
+                      {m.sides?.[0]} vs {m.sides?.[1]}
+                    </div>
+                    <div className="text-sm text-zinc-500">
+                      {m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-zinc-600">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-semibold uppercase tracking-wide">
+                        {m.matchType || "Qualifier"}
+                      </span>
+                      {m.category && (
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
+                          {m.category}
+                        </span>
+                      )}
+                    </div>
                     <div className="mt-1 text-sm">
                       <span className="uppercase text-zinc-400 text-xs">Winner</span>{" "}
-                      <span className="font-semibold">{m.winner||''}</span>{" "}
-                      <span className="ml-3 font-mono">{m.scoreline||''}</span>
+                      <span className="font-semibold">{m.winner || ""}</span>{" "}
+                      <span className="ml-3 font-mono">{m.scoreline || ""}</span>
                     </div>
                   </div>
-                )) : <div className="text-zinc-500">No completed matches yet.</div>}
+                )) : (
+                  <div className="text-zinc-500">No completed matches yet.</div>
+                )}
               </Card>
             </div>
           )}
