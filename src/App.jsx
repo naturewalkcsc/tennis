@@ -1189,6 +1189,18 @@ function Scoring({ config, onAbort, onComplete }) {
     onComplete();
   };
 
+
+  const pushLiveScore = async (setObj) => {
+    if (!fixtureId || !setObj) return;
+    try {
+      const main = `${setObj.gamesA}-${setObj.gamesB}`;
+      const live = setObj.tie ? `${main} (TB ${setObj.tieA}-${setObj.tieB})` : main;
+      await apiFixturesUpdate(fixtureId, { scoreline: live });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const pointTo = (who) => {
     if (!current || current.finished) return;
 
@@ -1250,7 +1262,11 @@ function Scoring({ config, onAbort, onComplete }) {
 
       ns[ns.length - 1] = s;
       setSets(ns);
-      if (s.finished) recordResult(s);
+      if (s.finished) {
+        recordResult(s);
+      } else {
+        pushLiveScore(s);
+      }
       return;
     }
 
@@ -1325,7 +1341,11 @@ function Scoring({ config, onAbort, onComplete }) {
 
     ns[ns.length - 1] = s;
     setSets(ns);
-    if (s.finished) recordResult(s);
+    if (s.finished) {
+      recordResult(s);
+    } else {
+      pushLiveScore(s);
+    }
   };
 
   const displayPointsA = mapPointToTennis(points[0]);
