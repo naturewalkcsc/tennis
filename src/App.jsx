@@ -1194,7 +1194,6 @@ function Scoring({ config, onAbort, onComplete }) {
 
     const isFinal = matchType === "final";
     const isQualifier = (cfgMatchType || "").toLowerCase() === "qualifier";
-    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use hybrid (golden point)
 
     // ----- Tie-break mode -----
     if (current.tie) {
@@ -1257,6 +1256,7 @@ function Scoring({ config, onAbort, onComplete }) {
     }
 
     // ----- Normal game mode -----
+    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use hybrid (golden point)
 
     let [pA, pB] = points;
     if (who === 0) pA += 1;
@@ -1333,16 +1333,17 @@ function Scoring({ config, onAbort, onComplete }) {
   const pB = points[1];
   const isFinalView = matchType === "final";
   const isQualifierView = (cfgMatchType || "").toLowerCase() === "qualifier";
-  const limitDeucesView = isQualifierView ? 1 : 9999;
 
   const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
-  const isGoldenDeuce = atDeuce && deuceCount >= limitDeucesView;
+  const limitDeucesView = isQualifierView ? 1 : 9999;
+  const isGoldenDeuce = isQualifierView && atDeuce && deuceCount >= (limitDeucesView + 1);
 
   let displayPointsA = mapPointToTennis(pA);
   let displayPointsB = mapPointToTennis(pB);
 
   if (!current.tie) {
     if (atDeuce) {
+      // Always show 40-40 at deuce
       displayPointsA = 40;
       displayPointsB = 40;
     } else if (
@@ -1370,7 +1371,6 @@ function Scoring({ config, onAbort, onComplete }) {
     : isFinalView
     ? "Final: one full set to 6 (win by 2). Tie-break to 7. Traditional advantage, no golden point."
     : "Semifinal/Other: Fast4 to 4 games. Tie-break to 5. Traditional advantage, no golden point.";
-
 
   return (
     <div className="max-w-4xl mx-auto p-6">
