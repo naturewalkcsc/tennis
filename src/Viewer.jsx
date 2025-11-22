@@ -2,9 +2,10 @@
 import React, { useEffect, useState } from "react";
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
-import imgLive from "./LiveStreaming.png";
 import imgSettings from "./Settings.jpg";
 
+import imgLive from "./LiveStreaming.png";
+import AttivoLogo from "./attivo_logo.png";
 /*
  Viewer.jsx
  - Menu with 3 image tiles (Rules, Teams, Fixture/Scores)
@@ -250,14 +251,23 @@ export default function Viewer() {
     const db = new Date(b).getTime();
     return db - da;
   });
-
-  // MENU
   if (page === "menu") {
     return (
-      <div style={{ padding: 28 }}>
+      <div
+        style={{
+          padding: 28,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
         <h1 style={{ margin: 0, textAlign: "center" }}>RNW Tennis Tournament 2025</h1>
+        <div style={{ textAlign: "center", marginTop: 8 }}>
+          <div style={{ fontSize: 14, color: "#7D1E7E", fontWeight: 600 }}>Sponsored by</div>
+          <img src={AttivoLogo} style={{ width: 260, marginTop: 6, display: "block" }} alt="Attivo Logo" />
+        </div>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
-        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap" }}>
+        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
           <Tile img={imgLive} title="Live Stream" subtitle="YouTube live + live score" onClick={() => setPage("live")} />
           <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
           <Tile img={imgScore} title="Teams" subtitle="View players by category" onClick={() => setPage("teams")} />
@@ -268,8 +278,8 @@ export default function Viewer() {
   }
 
   // RULES PAGE
-if (page === "rules") {
-  return (
+  if (page === "rules") {
+    return (
     <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 12 }}>
         <button
@@ -396,14 +406,13 @@ if (page === "rules") {
     );
   }
 
-
   // LIVE STREAM PAGE (theatre mode)
   if (page === "live") {
     const activeMatches = fixtures.filter((f) => f.status === "active");
     const active = activeMatches[0];
 
     const YOUTUBE_LIVE_EMBED_URL =
-      "https://www.youtube.com/embed/qiQ4cfJugVI?autoplay=1";
+      "https://www.youtube.com/embed/REPLACE_WITH_VIDEO_ID?autoplay=1&mute=1";
 
     return (
       <div
@@ -502,7 +511,6 @@ if (page === "rules") {
       </div>
     );
   }
-
   // FIXTURES PAGE
   if (page === "fixtures") {
     return (
