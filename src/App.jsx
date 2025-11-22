@@ -424,8 +424,6 @@ function ManagePlayers({ onBack }) {
   );
 }
 
-const MATCH_TYPES = ["Qualifier", "Semifinal", "Final"];
-
 const FixturesAdmin = ({ onBack }) => {
   const [players, setPlayers] = React.useState({ singles: {}, doubles: {} });
   const [mode, setMode] = React.useState("singles");
