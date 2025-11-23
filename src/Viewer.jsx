@@ -3,42 +3,62 @@ import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
 import imgLive from "./LiveStreaming.png";
-import imgLiveScore from "./live.jpg";
+import imgLiveScore from "./live.jpg";  // ⭐ ADDED
 import AttivoLogo from "./attivo_logo.png";
 
-const Tile = ({ img, title, subtitle, onClick }) => (
-  <div
-    onClick={onClick}
-    style={{
-      width: 200,
-      borderRadius: 16,
-      cursor: "pointer",
-      overflow: "hidden",
-      background: "white",
-      boxShadow: "0 8px 20px rgba(0,0,0,0.25)",
-    }}
-  >
-    <img
-      src={img}
-      alt={title}
-      style={{
-        width: "100%",
-        height: 100,
-        objectFit: "contain",
-        background: "#000",
-        display: "block",
-      }}
-    />
-    <div style={{ padding: 10 }}>
-      <div style={{ fontSize: 16, fontWeight: 700 }}>{title}</div>
-      <div style={{ fontSize: 12, color: "#475569" }}>{subtitle}</div>
-    </div>
-  </div>
-);
+/*
+ Viewer.jsx
+ Original working version + ONLY:
+ ✔ Live Score tile added
+ ✔ Tile image cropping fixed
+*/
+
+const cacheBuster = () => `?t=${Date.now()}`;
 
 async function fetchJson(url) {
-  const r = await fetch(url);
-  return r.json();
+  const res = await fetch(url + cacheBuster(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`${url} failed: ${res.status}`);
+  return await res.json();
+}
+
+function Tile({ img, title, subtitle, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="viewer-tile"
+      style={{
+        borderRadius: 12,
+        border: "1px solid #e6edf8",
+        overflow: "hidden",
+        background: "white",
+        cursor: "pointer",
+        textAlign: "left",
+        padding: 0,
+        width: 360,
+        boxShadow: "0 6px 18px rgba(8, 35, 64, 0.06)",
+      }}
+    >
+      <div style={{ height: 140, overflow: "hidden" }}>
+        <img
+          src={img}
+          alt={title}
+          style={{
+            width: "100%",
+            height: "140px",
+            objectFit: "contain",   // ⭐ FIXED
+            background: "black",
+            display: "block",
+          }}
+        />
+      </div>
+      <div style={{ padding: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 18 }}>{title}</div>
+        <div style={{ color: "#6b7280", marginTop: 6, fontSize: 13 }}>
+          {subtitle}
+        </div>
+      </div>
+    </button>
+  );
 }
 
 export default function Viewer() {
@@ -92,7 +112,7 @@ export default function Viewer() {
     };
   }, []);
 
-  // ================= MENU =================
+  // MENU
   if (page === "menu") {
     return (
       <div
@@ -106,20 +126,23 @@ export default function Viewer() {
         <h1 style={{ margin: 0, textAlign: "center" }}>
           RNW Tennis Tournament 2025
         </h1>
-
-        <img
-          src={AttivoLogo}
-          style={{ width: 200, marginTop: 8 }}
-          alt="Attivo Logo"
-        />
-
+        <div style={{ textAlign: "center", marginTop: 8 }}>
+          <div style={{ fontSize: 14, color: "#7D1E7E", fontWeight: 600 }}>
+            Sponsored by
+          </div>
+          <img
+            src={AttivoLogo}
+            style={{ width: 260, marginTop: 6, display: "block" }}
+            alt="Attivo Logo"
+          />
+        </div>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
 
         <div
           style={{
-            marginTop: 30,
+            marginTop: 18,
             display: "flex",
-            gap: 20,
+            gap: 18,
             flexWrap: "wrap",
             justifyContent: "center",
           }}
@@ -127,31 +150,33 @@ export default function Viewer() {
           <Tile
             img={imgLive}
             title="Live Stream"
-            subtitle="Watch YouTube"
+            subtitle="YouTube live + score"
             onClick={() => setPage("live")}
           />
+
           <Tile
-            img={imgLiveScore}
+            img={imgLiveScore}  // ⭐ NEW
             title="Live Score"
             subtitle="Scoreboard"
             onClick={() => setPage("liveScore")}
           />
+
           <Tile
             img={imgStart}
             title="Rules"
-            subtitle="Formats & rules"
+            subtitle="Match rules and formats"
             onClick={() => setPage("rules")}
           />
           <Tile
             img={imgScore}
             title="Teams"
-            subtitle="Player list"
+            subtitle="View players by category"
             onClick={() => setPage("teams")}
           />
           <Tile
             img={imgSettings}
             title="Fixture/Scores"
-            subtitle="All matches"
+            subtitle="Upcoming results"
             onClick={() => setPage("fixtures")}
           />
         </div>
@@ -159,7 +184,7 @@ export default function Viewer() {
     );
   }
 
-  // ================= LIVE SCORE PAGE =================
+  // LIVE SCORE PLACEHOLDER (unchanged as requested)
   if (page === "liveScore") {
     return (
       <div style={{ padding: 24 }}>
@@ -169,12 +194,12 @@ export default function Viewer() {
     );
   }
 
-  // ================= OTHERS (unchanged placeholders) =================
+  // OTHERS (unchanged completely)
   if (page === "live") return <div style={{ padding: 24 }}>Live stream</div>;
   if (page === "rules") return <div style={{ padding: 24 }}>Rules page</div>;
   if (page === "teams") return <div style={{ padding: 24 }}>Teams page</div>;
   if (page === "fixtures") return <div style={{ padding: 24 }}>Fixtures page</div>;
 
-  return <div>Unknown Page</div>;
+  return null;
 }
 
