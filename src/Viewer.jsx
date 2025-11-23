@@ -158,29 +158,6 @@ export default function Viewer() {
       clearInterval(iv);
     };
   }, []);
-  // Extra-fast refresh when on Live Stream page – poll fixtures more frequently
-  useEffect(() => {
-    if (page !== "live") return;
-    let alive = true;
-
-    const ivLive = setInterval(async () => {
-      try {
-        const fx = await fetchJson("/api/fixtures");
-        if (!alive) return;
-        const arr = Array.isArray(fx) ? fx : [];
-        arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
-        setFixtures(arr);
-      } catch {
-        // ignore errors for live polling
-      }
-    }, 1000);
-
-    return () => {
-      alive = false;
-      clearInterval(ivLive);
-    };
-  }, [page]);
-
 
   // Helpers: render category card with colors
   const categoryColors = [
@@ -480,17 +457,6 @@ if (page === "rules") {
 
   // LIVE STREAM PAGE
   if (page === "live") {
-    // Decide which fixture to treat as the live match:
-    // 1) First with status === "active"
-    // 2) Else first non-completed
-    // 3) Else just the first fixture (if any)
-    const liveFixtures = fixtures.filter((f) => f.status === "active");
-    const live =
-      liveFixtures[0] ||
-      fixtures.find((f) => f.status !== "completed") ||
-      fixtures[0] ||
-      null;
-
     return (
       <div style={{ padding: 24 }}>
         <div style={{ marginBottom: 12 }}>
@@ -508,100 +474,9 @@ if (page === "rules") {
         </div>
 
         <h2 style={{ marginTop: 0, marginBottom: 8 }}>Live Stream</h2>
-
-        {/* Live scoreboard strip above the video */}
-        {live ? (
-          <div
-            style={{
-              maxWidth: 960,
-              margin: "0 auto 12px",
-              padding: "10px 14px",
-              borderRadius: 999,
-              background: "#0f172a",
-              color: "#e5e7eb",
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                padding: "3px 9px",
-                borderRadius: 999,
-                background: "#dcfce7",
-                color: "#166534",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 8,
-                  height: 8,
-                  borderRadius: 999,
-                  background: "#22c55e",
-                  boxShadow: "0 0 10px #22c55e",
-                }}
-              />
-              LIVE SCORE
-            </div>
-
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontWeight: 700,
-                  fontSize: 16,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {(live.sides || []).join(" vs ")}
-              </div>
-              <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
-                {live.category || ""}{" "}
-                {live.mode ? `• ${live.mode.toUpperCase()}` : ""}{" "}
-                {live.venue ? `• ${live.venue}` : ""}
-              </div>
-            </div>
-
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontWeight: 800, fontSize: 18 }}>
-                {live.scoreline || live.liveScore || "Live"}
-              </div>
-              <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>
-                {JSON.stringify({ id: live.id, scoreline: live.scoreline, liveScore: live.liveScore })}
-              </div>
-              {live.start && (
-                <div style={{ fontSize: 11, color: "#9ca3af" }}>
-                  {new Date(live.start).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div
-            style={{
-              maxWidth: 960,
-              margin: "0 auto 12px",
-              padding: "8px 12px",
-              borderRadius: 10,
-              background: "#f9fafb",
-              color: "#6b7280",
-              fontSize: 13,
-            }}
-          >
-            No fixtures found. Once a match is created and marked as{" "}
-            <b>active</b>, its live score will appear here.
-          </div>
-        )}
+        <p style={{ marginTop: 0, marginBottom: 16, color: "#6b7280", fontSize: 14 }}>
+          YouTube live streaming of the current court. Replace the video ID in Viewer.jsx with your actual stream link.
+        </p>
 
         <div
           style={{
@@ -629,6 +504,10 @@ if (page === "rules") {
               border: 0,
             }}
           />
+        </div>
+
+        <div style={{ marginTop: 16, textAlign: "center", fontSize: 12, color: "#9ca3af" }}>
+          Tip: replace <code>VIDEO_ID</code> in Viewer.jsx with the ID of your tournament&apos;s YouTube live stream.
         </div>
       </div>
     );
