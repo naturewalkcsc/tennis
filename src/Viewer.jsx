@@ -454,6 +454,65 @@ if (page === "rules") {
     </div>
   );
 }
+
+  // LIVE STREAM PAGE
+  if (page === "live") {
+    return (
+      <div style={{ padding: 24 }}>
+        <div style={{ marginBottom: 12 }}>
+          <button
+            onClick={() => setPage("menu")}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid #e6edf8",
+              background: "white",
+            }}
+          >
+            ← Back
+          </button>
+        </div>
+
+        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Live Stream</h2>
+        <p style={{ marginTop: 0, marginBottom: 16, color: "#6b7280", fontSize: 14 }}>
+          YouTube live streaming of the current court. Replace the video ID in Viewer.jsx with your actual stream link.
+        </p>
+
+        <div
+          style={{
+            position: "relative",
+            paddingBottom: "56.25%",
+            height: 0,
+            overflow: "hidden",
+            borderRadius: 12,
+            boxShadow: "0 12px 30px rgba(15,23,42,0.35)",
+            maxWidth: 960,
+            margin: "0 auto",
+          }}
+        >
+          <iframe
+            title="YouTube live stream"
+            src="https://www.youtube.com/embed/VIDEO_ID?autoplay=1&rel=0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              border: 0,
+            }}
+          />
+        </div>
+
+        <div style={{ marginTop: 16, textAlign: "center", fontSize: 12, color: "#9ca3af" }}>
+          Tip: replace <code>VIDEO_ID</code> in Viewer.jsx with the ID of your tournament&apos;s YouTube live stream.
+        </div>
+      </div>
+    );
+  }
+
   // TEAMS PAGE
   if (page === "teams") {
     return (
