@@ -1213,7 +1213,7 @@ function Scoring({ config, onAbort, onComplete }) {
 
       const live = detail ? `${gamesPart} • ${detail}` : gamesPart;
 
-      await apiFixturesUpdate(fixtureId, { scoreline: live });
+      await apiFixturesUpdate(fixtureId, { scoreline: live, liveScore: live });
     } catch (e) {
       console.error(e);
     }
