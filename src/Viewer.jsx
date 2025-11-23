@@ -159,6 +159,29 @@ export default function Viewer() {
     };
   }, []);
 
+  // Extra-fast refresh when on Live Stream page – poll fixtures more frequently
+  useEffect(() => {
+    if (page !== "live") return;
+    let alive = true;
+
+    const ivLive = setInterval(async () => {
+      try {
+        const fx = await fetchJson("/api/fixtures");
+        if (!alive) return;
+        const arr = Array.isArray(fx) ? fx : [];
+        arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
+        setFixtures(arr);
+      } catch {
+        // ignore errors for live polling
+      }
+    }, 4000); // ~4s for near-point updates
+
+    return () => {
+      alive = false;
+      clearInterval(ivLive);
+    };
+  }, [page]);
+
   // Helpers: render category card with colors
   const categoryColors = [
     "#FDE68A", // yellow
@@ -457,6 +480,10 @@ if (page === "rules") {
 
   // LIVE STREAM PAGE
   if (page === "live") {
+    // Pick the first active fixture as the primary live match
+    const liveFixtures = fixtures.filter((f) => f.status === "active");
+    const live = liveFixtures.length > 0 ? liveFixtures[0] : null;
+
     return (
       <div style={{ padding: 24 }}>
         <div style={{ marginBottom: 12 }}>
@@ -474,6 +501,87 @@ if (page === "rules") {
         </div>
 
         <h2 style={{ marginTop: 0, marginBottom: 8 }}>Live Stream</h2>
+
+        {/* Live scoreboard strip above the video */}
+        {live ? (
+          <div
+            style={{
+              maxWidth: 960,
+              margin: "0 auto 12px",
+              padding: "10px 14px",
+              borderRadius: 999,
+              background: "#0f172a",
+              color: "#e5e7eb",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                padding: "3px 9px",
+                borderRadius: 999,
+                background: "#dcfce7",
+                color: "#166534",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 8,
+                  height: 8,
+                  borderRadius: 999,
+                  background: "#22c55e",
+                  boxShadow: "0 0 10px #22c55e",
+                }}
+              />
+              LIVE SCORE
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {(live.sides || []).join(" vs ")}
+              </div>
+              <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
+                {live.category || ""} {live.mode ? `• ${live.mode.toUpperCase()}` : ""}{" "}
+                {live.venue ? `• ${live.venue}` : ""}
+              </div>
+            </div>
+
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontWeight: 800, fontSize: 18 }}>
+                {live.scoreline || live.liveScore || "Score updating…"}
+              </div>
+              {live.start && (
+                <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                  {new Date(live.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              maxWidth: 960,
+              margin: "0 auto 12px",
+              padding: "8px 12px",
+              borderRadius: 10,
+              background: "#f9fafb",
+              color: "#6b7280",
+              fontSize: 13,
+            }}
+          >
+            No live match is currently marked as <b>active</b>. Once a fixture is set to{" "}
+            <code style={{ background: "#e5e7eb", padding: "1px 4px", borderRadius: 4 }}>status: "active"</code>, its
+            scoreline will appear here automatically.
+          </div>
+        )}
+
         <div
           style={{
             position: "relative",
@@ -501,7 +609,6 @@ if (page === "rules") {
             }}
           />
         </div>
-
       </div>
     );
   }
