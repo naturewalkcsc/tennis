@@ -152,7 +152,7 @@ export default function Viewer() {
       } catch {
         // ignore periodic refresh errors
       }
-    }, 12000);
+    }, 2000);
 
     return () => {
       alive = false;
@@ -350,7 +350,6 @@ export default function Viewer() {
           <img src={AttivoLogo} style={{ width: 260, marginTop: 6, display: "block" }} alt="Attivo Logo" />
         </div>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
-                {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
         <div
           style={{
             marginTop: 18,
@@ -391,6 +390,7 @@ export default function Viewer() {
             onClick={() => setPage("fixtures")}
           />
         </div>
+      </div>
     );
   }
 // RULES PAGE
@@ -548,7 +548,150 @@ if (page === "rules") {
     );
   }
 
-  // TEAMS PAGE
+  
+  // LIVE SCORE (big scoreboard) PAGE
+  if (page === "liveScore") {
+    const liveFixture = fixtures.find((f) => f.status === "active");
+
+    const rawScore =
+      (liveFixture && (liveFixture.scoreline || liveFixture.liveScore)) || "0-0";
+    const parts = rawScore.split("•");
+    const setScore = parts[0].trim();
+    const gameScore = (parts[1] || "").trim();
+
+    return (
+      <div style={{ padding: 24 }}>
+        <div style={{ marginBottom: 12 }}>
+          <button
+            onClick={() => setPage("menu")}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid #e6edf8",
+              background: "white",
+            }}
+          >
+            ← Back
+          </button>
+        </div>
+
+        <h2 style={{ marginTop: 0, marginBottom: 16 }}>Live Score</h2>
+
+        {loadingFixtures ? (
+          <div>Loading live score…</div>
+        ) : !liveFixture ? (
+          <div style={{ fontSize: 18, color: "#6b7280" }}>
+            No live match is currently active.
+          </div>
+        ) : (
+          <div
+            style={{
+              marginTop: 8,
+              borderRadius: 16,
+              border: "2px solid #0f172a",
+              padding: 24,
+              maxWidth: 900,
+              marginInline: "auto",
+              background: "linear-gradient(135deg,#020617,#0f172a)",
+              color: "white",
+              boxShadow: "0 18px 40px rgba(15,23,42,0.6)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ fontSize: 18, fontWeight: 600 }}>Court Live</div>
+              <div
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 999,
+                  background: "#dc2626",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
+                }}
+              >
+                ● Live
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto 1fr",
+                alignItems: "center",
+                columnGap: 24,
+              }}
+            >
+              <div
+                style={{
+                  textAlign: "right",
+                  fontSize: 32,
+                  fontWeight: 600,
+                  wordBreak: "break-word",
+                }}
+              >
+                {liveFixture.sides?.[0] || "Player A"}
+              </div>
+
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    fontSize: 72,
+                    lineHeight: 1,
+                    fontWeight: 800,
+                    fontFamily:
+                      "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+                  }}
+                >
+                  {setScore}
+                </div>
+                {gameScore && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 32,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {gameScore}
+                  </div>
+                )}
+                <div
+                  style={{
+                    marginTop: 12,
+                    fontSize: 14,
+                    color: "#e5e7eb",
+                  }}
+                >
+                  {liveFixture.mode || "singles"}
+                  {liveFixture.court ? ` • Court ${liveFixture.court}` : ""}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  textAlign: "left",
+                  fontSize: 32,
+                  fontWeight: 600,
+                  wordBreak: "break-word",
+                }}
+              >
+                {liveFixture.sides?.[1] || "Player B"}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+// TEAMS PAGE
   if (page === "teams") {
     return (
       <div style={{ padding: 24 }}>
