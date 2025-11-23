@@ -173,7 +173,7 @@ export default function Viewer() {
       } catch {
         // ignore errors for live polling
       }
-    }, 4000);
+    }, 1000);
 
     return () => {
       alive = false;
@@ -572,6 +572,9 @@ if (page === "rules") {
             <div style={{ textAlign: "right" }}>
               <div style={{ fontWeight: 800, fontSize: 18 }}>
                 {live.scoreline || live.liveScore || "Live"}
+              </div>
+              <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>
+                {JSON.stringify({ id: live.id, scoreline: live.scoreline, liveScore: live.liveScore })}
               </div>
               {live.start && (
                 <div style={{ fontSize: 11, color: "#9ca3af" }}>
