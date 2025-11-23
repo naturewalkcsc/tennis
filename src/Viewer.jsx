@@ -555,7 +555,7 @@ if (page === "rules") {
 
             <div style={{ textAlign: "right" }}>
               <div style={{ fontWeight: 800, fontSize: 18 }}>
-                {live.scoreline || live.liveScore || "Score updating…"}
+                {live.scoreline || live.liveScore || "Live"}
               </div>
               {live.start && (
                 <div style={{ fontSize: 11, color: "#9ca3af" }}>
