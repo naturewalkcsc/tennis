@@ -492,7 +492,7 @@ if (page === "rules") {
         >
           <iframe
             title="YouTube live stream"
-            src="https://www.youtube.com/embed/VIDEO_ID?autoplay=1&rel=0"
+            src="https://www.youtube.com/embed/QNPpdtUsC60?autoplay=1&rel=0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
             style={{
