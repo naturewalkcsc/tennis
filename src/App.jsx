@@ -1202,6 +1202,16 @@ function Scoring({ config, onAbort, onComplete }) {
     }
   };
 
+  // Keep fixture's live score in sync for the public viewer (games / tie-break)
+  useEffect(() => {
+    if (!fixtureId || !current || current.finished) return;
+    // This ensures the viewer never stays on plain "Live" once a set has a valid score,
+    // and also pushes an initial 0-0 when scoring just started.
+    pushLiveScore(current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixtureId, current.gamesA, current.gamesB, current.tie, current.tieA, current.tieB]);
+
+
   const pointTo = (who) => {
     if (!current || current.finished) return;
 
