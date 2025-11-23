@@ -158,7 +158,6 @@ export default function Viewer() {
       clearInterval(iv);
     };
   }, []);
-
   // Extra-fast refresh when on Live Stream page – poll fixtures more frequently
   useEffect(() => {
     if (page !== "live") return;
@@ -174,13 +173,14 @@ export default function Viewer() {
       } catch {
         // ignore errors for live polling
       }
-    }, 4000); // ~4s for near-point updates
+    }, 4000);
 
     return () => {
       alive = false;
       clearInterval(ivLive);
     };
   }, [page]);
+
 
   // Helpers: render category card with colors
   const categoryColors = [
@@ -480,9 +480,16 @@ if (page === "rules") {
 
   // LIVE STREAM PAGE
   if (page === "live") {
-    // Pick the first active fixture as the primary live match
+    // Decide which fixture to treat as the live match:
+    // 1) First with status === "active"
+    // 2) Else first non-completed
+    // 3) Else just the first fixture (if any)
     const liveFixtures = fixtures.filter((f) => f.status === "active");
-    const live = liveFixtures.length > 0 ? liveFixtures[0] : null;
+    const live =
+      liveFixtures[0] ||
+      fixtures.find((f) => f.status !== "completed") ||
+      fixtures[0] ||
+      null;
 
     return (
       <div style={{ padding: 24 }}>
@@ -544,11 +551,20 @@ if (page === "rules") {
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: 16,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {(live.sides || []).join(" vs ")}
               </div>
               <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
-                {live.category || ""} {live.mode ? `• ${live.mode.toUpperCase()}` : ""}{" "}
+                {live.category || ""}{" "}
+                {live.mode ? `• ${live.mode.toUpperCase()}` : ""}{" "}
                 {live.venue ? `• ${live.venue}` : ""}
               </div>
             </div>
@@ -559,7 +575,10 @@ if (page === "rules") {
               </div>
               {live.start && (
                 <div style={{ fontSize: 11, color: "#9ca3af" }}>
-                  {new Date(live.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(live.start).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </div>
               )}
             </div>
@@ -576,9 +595,8 @@ if (page === "rules") {
               fontSize: 13,
             }}
           >
-            No live match is currently marked as <b>active</b>. Once a fixture is set to{" "}
-            <code style={{ background: "#e5e7eb", padding: "1px 4px", borderRadius: 4 }}>status: "active"</code>, its
-            scoreline will appear here automatically.
+            No fixtures found. Once a match is created and marked as{" "}
+            <b>active</b>, its live score will appear here.
           </div>
         )}
 
