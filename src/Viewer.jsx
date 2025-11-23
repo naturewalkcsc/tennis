@@ -4,6 +4,7 @@ import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
 import imgSettings from "./Settings.jpg";
 import imgLive from "./LiveStreaming.png";
+import imgLiveScore from "./live.jpg";
 import AttivoLogo from "./attivo_logo.png";
 
 /*
@@ -349,13 +350,47 @@ export default function Viewer() {
           <img src={AttivoLogo} style={{ width: 260, marginTop: 6, display: "block" }} alt="Attivo Logo" />
         </div>
         {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
-        <div style={{ marginTop: 18, display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
-          <Tile img={imgLive} title="Live Stream" subtitle="YouTube live + live score" onClick={() => setPage("live")} />
-          <Tile img={imgStart} title="Rules" subtitle="Match rules and formats" onClick={() => setPage("rules")} />
-          <Tile img={imgScore} title="Teams" subtitle="View players by category" onClick={() => setPage("teams")} />
-          <Tile img={imgSettings} title="Fixture/Scores" subtitle="All fixtures, upcoming & recent results" onClick={() => setPage("fixtures")} />
+                {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
+        <div
+          style={{
+            marginTop: 18,
+            display: "flex",
+            gap: 18,
+            flexWrap: "wrap",
+            justifyContent: "center",
+          }}
+        >
+          <Tile
+            img={imgLive}
+            title="Live Stream"
+            subtitle="YouTube live stream"
+            onClick={() => setPage("live")}
+          />
+          <Tile
+            img={imgLiveScore}
+            title="Live Score"
+            subtitle="Big board for current match"
+            onClick={() => setPage("liveScore")}
+          />
+          <Tile
+            img={imgStart}
+            title="Rules"
+            subtitle="Match rules and formats"
+            onClick={() => setPage("rules")}
+          />
+          <Tile
+            img={imgScore}
+            title="Teams"
+            subtitle="View players by category"
+            onClick={() => setPage("teams")}
+          />
+          <Tile
+            img={imgSettings}
+            title="Fixture/Scores"
+            subtitle="All fixtures, upcoming & recent results"
+            onClick={() => setPage("fixtures")}
+          />
         </div>
-      </div>
     );
   }
 // RULES PAGE
