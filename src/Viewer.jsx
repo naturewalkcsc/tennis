@@ -474,10 +474,6 @@ if (page === "rules") {
         </div>
 
         <h2 style={{ marginTop: 0, marginBottom: 8 }}>Live Stream</h2>
-        <p style={{ marginTop: 0, marginBottom: 16, color: "#6b7280", fontSize: 14 }}>
-          YouTube live streaming of the current court. Replace the video ID in Viewer.jsx with your actual stream link.
-        </p>
-
         <div
           style={{
             position: "relative",
@@ -506,9 +502,6 @@ if (page === "rules") {
           />
         </div>
 
-        <div style={{ marginTop: 16, textAlign: "center", fontSize: 12, color: "#9ca3af" }}>
-          Tip: replace <code>VIDEO_ID</code> in Viewer.jsx with the ID of your tournament&apos;s YouTube live stream.
-        </div>
       </div>
     );
   }
