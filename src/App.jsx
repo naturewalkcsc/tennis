@@ -1006,7 +1006,6 @@ function StartFromFixtures({ onBack, onStartScoring }) {
           sides: fx.sides,
           startingServer: 0,
           fixtureId: fx.id,
-          matchType: fx.matchType,
         });
       } else {
         alert("Started: " + (fx.sides?.join(" vs ") || ""));
@@ -1149,6 +1148,28 @@ function Scoring({ config, onAbort, onComplete }) {
 
   const current = sets[sets.length - 1];
 
+  // 0 = first side, 1 = second side
+  const [serverIndex, setServerIndex] = useState(
+    typeof config.startingServer === "number" ? config.startingServer : 0
+  );
+
+  // Simple text-to-speech helper for point announcements
+  const speak = (text) => {
+    if (typeof window === "undefined") return;
+    if (!("speechSynthesis" in window)) return;
+    if (!text) return;
+    try {
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.rate = 1;
+      utt.pitch = 1;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utt);
+    } catch (e) {
+      // ignore TTS errors
+    }
+  };
+
+
   /** Async result recorder – called when the single set finishes */
   const recordResult = async (setObj) => {
     // Build scoreline: e.g. "4-3(6-5)" or "7-6(7-5)" or "6-4"
@@ -1202,11 +1223,86 @@ function Scoring({ config, onAbort, onComplete }) {
     }
   };
 
+  // Announce points after each change (server score called first)
+  useEffect(() => {
+    if (!current || current.finished) return;
+    if (current.tie) return; // skip tie-break for now
+
+    const isQualifier = (cfgMatchType || "").toLowerCase() === "qualifier";
+
+    const server = serverIndex; // 0 or 1
+    const receiver = server === 0 ? 1 : 0;
+
+    const pS = points[server];   // server points
+    const pR = points[receiver]; // receiver points
+
+    const toWord = (p) => {
+      if (p <= 0) return "Love";
+      if (p === 1) return "15";
+      if (p === 2) return "30";
+      if (p === 3) return "40";
+      return "";
+    };
+
+    const serverName = sides[server] || "Server";
+    const receiverName = sides[receiver] || "Receiver";
+
+    const atDeuce = pS >= 3 && pR >= 3 && pS === pR;
+    const isAdv =
+      pS >= 3 && pR >= 3 && Math.abs(pS - pR) === 1 && !atDeuce;
+
+    // GOLDEN POINT for qualifiers from 2nd deuce onward
+    const isGolden =
+      isQualifier && atDeuce && deuceCount >= 2;
+
+    let phrase = "";
+
+    if (isGolden) {
+      // Golden point announcement
+      phrase = "Golden point";
+    } else if (atDeuce) {
+      if (deuceCount === 1) {
+        phrase = "First deuce";
+      } else {
+        phrase = "Deuce";
+      }
+    } else if (isAdv) {
+      const advForServer = pS > pR;
+      const name = advForServer ? serverName : receiverName;
+      phrase = `Advantage ${name}`;
+    } else {
+      // Normal score cases
+      if (pS === pR) {
+        const w = toWord(pS);
+        phrase = `${w} all`;
+      } else {
+        const wS = toWord(pS);
+        const wR = toWord(pR);
+        phrase = `${wS} ${wR}`;
+      }
+    }
+
+    if (phrase) speak(phrase);
+  }, [points, deuceCount, serverIndex, current, cfgMatchType, sides]);
+
+  // Announce match winner once the set is finished
+  useEffect(() => {
+    if (!current || !current.finished) return;
+    const last = sets[sets.length - 1];
+    if (!last) return;
+    let winner = null;
+    if (last.gamesA > last.gamesB) winner = sides[0];
+    else if (last.gamesB > last.gamesA) winner = sides[1];
+    if (winner) {
+      speak(`${winner} wins the match`);
+    }
+  }, [current, sets, sides]);
+
+
   const pointTo = (who) => {
     if (!current || current.finished) return;
 
     const isFinal = matchType === "final";
-    const isQualifier = (cfgMatchType || "").toLowerCase() === "qualifier";
 
     // ----- Tie-break mode -----
     if (current.tie) {
@@ -1273,7 +1369,7 @@ function Scoring({ config, onAbort, onComplete }) {
     }
 
     // ----- Normal game mode -----
-    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use golden point from 2nd deuce
+    const limitDeuces = isFinal ? 3 : 1; // # of deuces allowed before golden point
 
     let [pA, pB] = points;
     if (who === 0) pA += 1;
@@ -1341,6 +1437,12 @@ function Scoring({ config, onAbort, onComplete }) {
       }
     }
 
+
+    // Rotate server after each completed game
+    if (!current.tie) {
+      setServerIndex((prev) => (prev === 0 ? 1 : 0));
+    }
+
     ns[ns.length - 1] = s;
     setSets(ns);
     if (s.finished) {
@@ -1350,47 +1452,13 @@ function Scoring({ config, onAbort, onComplete }) {
     }
   };
 
-  const pA = points[0];
-  const pB = points[1];
-  const isFinalView = matchType === "final";
-  const isQualifierView = (cfgMatchType || "").toLowerCase() === "qualifier";
+  const displayPointsA = mapPointToTennis(points[0]);
+  const displayPointsB = mapPointToTennis(points[1]);
 
-  const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
-  // For qualifiers: 1st deuce = normal advantage, 2nd deuce onward = golden point
-  const isGoldenDeuce = isQualifierView && atDeuce && deuceCount >= 2;
-
-  let displayPointsA = mapPointToTennis(pA);
-  let displayPointsB = mapPointToTennis(pB);
-
-  if (!current.tie) {
-    if (atDeuce) {
-      // Always show 40–40 at deuce (even during golden point)
-      displayPointsA = 40;
-      displayPointsB = 40;
-    } else if (
-      pA >= 3 &&
-      pB >= 3 &&
-      Math.abs(pA - pB) === 1 &&
-      !isGoldenDeuce
-    ) {
-      // First deuce / traditional advantage view
-      if (pA > pB) {
-        displayPointsA = "Ad";
-        displayPointsB = 40;
-      } else {
-        displayPointsB = "Ad";
-        displayPointsA = 40;
-      }
-    }
-  }
-
-  const showGoldenBadge = isGoldenDeuce && !current.tie;
-
-  const description = isQualifierView
-    ? "Qualifier: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
-    : isFinalView
-    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Traditional advantage, no golden point."
-    : "Semifinal/Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
+  const description =
+    matchType === "final"
+      ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Limited deuces: max 3; from 4th deuce onward, golden point."
+      : "Qualifiers / Semis: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Limited deuces: max 1; from 2nd deuce onward, golden point.";
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -1404,13 +1472,6 @@ function Scoring({ config, onAbort, onComplete }) {
         </h2>
       </div>
       <Card className="p-6">
-        {showGoldenBadge && (
-          <div className="mb-3 text-center">
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-semibold tracking-wide">
-              GOLDEN POINT
-            </span>
-          </div>
-        )}
         {/* Points */}
         <div className="grid grid-cols-3 gap-4 items-center">
           <div className="text-right text-3xl font-bold">{String(displayPointsA)}</div>
