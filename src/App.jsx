@@ -13,6 +13,19 @@ const safeJson = async (res) => {
   try { return await res.json(); } catch { return null; }
 };
 
+  const SINGLES_CATEGORIES_ORDER = [
+    "Women's Singles",
+    "Kid's Singles",
+    "NW Team (A) Singles",
+    "NW Team (B) Singles"
+  ];
+  const DOUBLES_CATEGORIES_ORDER = [
+    "Women's Doubles",
+    "Kid's Doubles",
+    "NW Team (A) Doubles",
+    "NW Team (B) Doubles",
+    "Combination Doubles"
+  ];
 const MATCH_TYPES = ["Qualifier", "Semifinal", "Final"];
 // ➜ ADD THIS:
 
@@ -142,19 +155,6 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
 
 /* ---------------------- Manage Players (admin) ---------------------- */
 function ManagePlayers({ onBack }) {
-  const SINGLES_CATEGORIES_ORDER = [
-    "Women's Singles",
-    "Kid's Singles",
-    "NW Team (A) Singles",
-    "NW Team (B) Singles"
-  ];
-  const DOUBLES_CATEGORIES_ORDER = [
-    "Women's Doubles",
-    "Kid's Doubles",
-    "NW Team (A) Doubles",
-    "NW Team (B) Doubles",
-    "Mixed Doubles"
-  ];
 
   const POOLS = ["No Pool", "Pool A", "Pool B"];
 
@@ -1190,6 +1190,18 @@ function Scoring({ config, onAbort, onComplete }) {
     onComplete();
   };
 
+
+  const pushLiveScore = async (setObj) => {
+    if (!fixtureId || !setObj) return;
+    try {
+      const main = `${setObj.gamesA}-${setObj.gamesB}`;
+      const live = setObj.tie ? `${main} (TB ${setObj.tieA}-${setObj.tieB})` : main;
+      await apiFixturesUpdate(fixtureId, { scoreline: live });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const pointTo = (who) => {
     if (!current || current.finished) return;
 
@@ -1252,10 +1264,17 @@ function Scoring({ config, onAbort, onComplete }) {
 
       ns[ns.length - 1] = s;
       setSets(ns);
-      if (s.finished) recordResult(s);
+      if (s.finished) {
+        recordResult(s);
+      } else {
+        pushLiveScore(s);
+      }
       return;
     }
+
     // ----- Normal game mode -----
+    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use golden point from 2nd deuce
+
     let [pA, pB] = points;
     if (who === 0) pA += 1;
     else pB += 1;
@@ -1269,42 +1288,10 @@ function Scoring({ config, onAbort, onComplete }) {
     let winnerGame = null;
     if (pA >= 4 || pB >= 4) {
       const diff = Math.abs(pA - pB);
-
-      if (isQualifier) {
-        // Qualifiers: first deuce uses advantage; from second deuce onward, golden point
-        if (newDeuceCount >= 2) {
-          // Golden point: any 1-point lead at/after second deuce wins
-          if (diff >= 1) {
-            winnerGame = pA > pB ? "A" : "B";
-          }
-        } else {
-          // Before second deuce: need 2-point margin (traditional advantage)
-          if (diff >= 2) {
-            winnerGame = pA > pB ? "A" : "B";
-          }
-        }
-      } else {
-        // Semis / Finals / others: always traditional advantage (win by 2)
-        if (diff >= 2) {
-          winnerGame = pA > pB ? "A" : "B";
-        }
-      }
-    }
-
-    if (!winnerGame) {
-      // Game continues
-      setPoints([pA, pB]);
-      setDeuceCount(newDeuceCount);
-      return;
-    }
-
-    // Someone won the game -> reset points & deuce counter
-    setPoints([0, 0]);
-    setDeuceCount(0);
-
-    // Update set score
-    const ns = [...sets];
-    const s = { ...current };
+      // Before (limitDeuces + 1)th deuce → need 2-point margin
+      // From (limitDeuces + 1)th deuce onward → golden point (1-point margin)
+      const threshold = newDeuceCount >= (limitDeuces + 1) ? 1 : 2;
+      if (diff >= threshold) {
         winnerGame = pA > pB ? "A" : "B";
       }
     }
@@ -1356,7 +1343,11 @@ function Scoring({ config, onAbort, onComplete }) {
 
     ns[ns.length - 1] = s;
     setSets(ns);
-    if (s.finished) recordResult(s);
+    if (s.finished) {
+      recordResult(s);
+    } else {
+      pushLiveScore(s);
+    }
   };
 
   const pA = points[0];
@@ -1396,10 +1387,10 @@ function Scoring({ config, onAbort, onComplete }) {
   const showGoldenBadge = isGoldenDeuce && !current.tie;
 
   const description = isQualifierView
-    ? "Qualifier: Fast4 to 4 games. Tie-break to 5. First deuce uses advantage; from second deuce onward, golden point."
+    ? "Qualifier: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
     : isFinalView
-    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6. Traditional advantage, no golden point."
-    : "Semifinal/Other: Fast4 to 4 games. Tie-break to 5 at 4–4. Traditional advantage, no golden point.";
+    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Traditional advantage, no golden point."
+    : "Semifinal/Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -1715,7 +1706,7 @@ function Viewer() {
       "Kid's Doubles",
       "NW Team (A) Doubles",
       "NW Team (B) Doubles",
-      "Mixed Doubles",
+      "Combination Doubles",
     ];
 
     const singlesByCategory = playersObj.singles && !Array.isArray(playersObj.singles)
