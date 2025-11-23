@@ -1148,28 +1148,6 @@ function Scoring({ config, onAbort, onComplete }) {
 
   const current = sets[sets.length - 1];
 
-  // 0 = first side, 1 = second side
-  const [serverIndex, setServerIndex] = useState(
-    typeof config.startingServer === "number" ? config.startingServer : 0
-  );
-
-  // Simple text-to-speech helper for point announcements
-  const speak = (text) => {
-    if (typeof window === "undefined") return;
-    if (!("speechSynthesis" in window)) return;
-    if (!text) return;
-    try {
-      const utt = new SpeechSynthesisUtterance(text);
-      utt.rate = 1;
-      utt.pitch = 1;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utt);
-    } catch (e) {
-      // ignore TTS errors
-    }
-  };
-
-
   /** Async result recorder – called when the single set finishes */
   const recordResult = async (setObj) => {
     // Build scoreline: e.g. "4-3(6-5)" or "7-6(7-5)" or "6-4"
@@ -1222,82 +1200,6 @@ function Scoring({ config, onAbort, onComplete }) {
       console.error(e);
     }
   };
-
-  // Announce points after each change (server score called first)
-  useEffect(() => {
-    if (!current || current.finished) return;
-    if (current.tie) return; // skip tie-break for now
-
-    const isQualifier = (cfgMatchType || "").toLowerCase() === "qualifier";
-
-    const server = serverIndex; // 0 or 1
-    const receiver = server === 0 ? 1 : 0;
-
-    const pS = points[server];   // server points
-    const pR = points[receiver]; // receiver points
-
-    const toWord = (p) => {
-      if (p <= 0) return "Love";
-      if (p === 1) return "15";
-      if (p === 2) return "30";
-      if (p === 3) return "40";
-      return "";
-    };
-
-    const serverName = sides[server] || "Server";
-    const receiverName = sides[receiver] || "Receiver";
-
-    const atDeuce = pS >= 3 && pR >= 3 && pS === pR;
-    const isAdv =
-      pS >= 3 && pR >= 3 && Math.abs(pS - pR) === 1 && !atDeuce;
-
-    // GOLDEN POINT for qualifiers from 2nd deuce onward
-    const isGolden =
-      isQualifier && atDeuce && deuceCount >= 2;
-
-    let phrase = "";
-
-    if (isGolden) {
-      // Golden point announcement
-      phrase = "Golden point";
-    } else if (atDeuce) {
-      if (deuceCount === 1) {
-        phrase = "First deuce";
-      } else {
-        phrase = "Deuce";
-      }
-    } else if (isAdv) {
-      const advForServer = pS > pR;
-      const name = advForServer ? serverName : receiverName;
-      phrase = `Advantage ${name}`;
-    } else {
-      // Normal score cases
-      if (pS === pR) {
-        const w = toWord(pS);
-        phrase = `${w} all`;
-      } else {
-        const wS = toWord(pS);
-        const wR = toWord(pR);
-        phrase = `${wS} ${wR}`;
-      }
-    }
-
-    if (phrase) speak(phrase);
-  }, [points, deuceCount, serverIndex, current, cfgMatchType, sides]);
-
-  // Announce match winner once the set is finished
-  useEffect(() => {
-    if (!current || !current.finished) return;
-    const last = sets[sets.length - 1];
-    if (!last) return;
-    let winner = null;
-    if (last.gamesA > last.gamesB) winner = sides[0];
-    else if (last.gamesB > last.gamesA) winner = sides[1];
-    if (winner) {
-      speak(`${winner} wins the match`);
-    }
-  }, [current, sets, sides]);
-
 
   const pointTo = (who) => {
     if (!current || current.finished) return;
@@ -1437,12 +1339,6 @@ function Scoring({ config, onAbort, onComplete }) {
       }
     }
 
-
-    // Rotate server after each completed game
-    if (!current.tie) {
-      setServerIndex((prev) => (prev === 0 ? 1 : 0));
-    }
-
     ns[ns.length - 1] = s;
     setSets(ns);
     if (s.finished) {
@@ -1472,7 +1368,25 @@ function Scoring({ config, onAbort, onComplete }) {
         </h2>
       </div>
       <Card className="p-6">
-        {/* Points */}
+        {/* Server selection */
+        <div className="flex justify-center gap-2 mb-4 text-sm items-center">
+          <span className="font-medium">Server:</span>
+          <button
+            type="button"
+            onClick={() => setServerIndex(0)}
+            className={`px-3 py-1 rounded-full border text-xs ${serverIndex === 0 ? "bg-slate-900 text-slate-50" : "bg-white text-slate-700"}`}
+          >
+            {sides[0] || "Side 1"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setServerIndex(1)}
+            className={`px-3 py-1 rounded-full border text-xs ${serverIndex === 1 ? "bg-slate-900 text-slate-50" : "bg-white text-slate-700"}`}
+          >
+            {sides[1] || "Side 2"}
+          </button>
+        </div>
+        {/* Points */
         <div className="grid grid-cols-3 gap-4 items-center">
           <div className="text-right text-3xl font-bold">{String(displayPointsA)}</div>
           <div className="text-center">—</div>
