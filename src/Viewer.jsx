@@ -10,12 +10,12 @@ const Tile = ({ img, title, subtitle, onClick }) => (
   <div
     onClick={onClick}
     style={{
-      width: 220,
+      width: 200,
       borderRadius: 16,
       cursor: "pointer",
       overflow: "hidden",
-      boxShadow: "0 12px 30px rgba(0,0,0,0.25)",
       background: "white",
+      boxShadow: "0 8px 20px rgba(0,0,0,0.25)",
     }}
   >
     <img
@@ -23,16 +23,15 @@ const Tile = ({ img, title, subtitle, onClick }) => (
       alt={title}
       style={{
         width: "100%",
-        height: 140,
-        objectFit: "cover",
+        height: 100,
+        objectFit: "contain",
+        background: "#000",
         display: "block",
       }}
     />
-    <div style={{ padding: 12 }}>
-      <div style={{ fontSize: 17, fontWeight: 700 }}>{title}</div>
-      <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>
-        {subtitle}
-      </div>
+    <div style={{ padding: 10 }}>
+      <div style={{ fontSize: 16, fontWeight: 700 }}>{title}</div>
+      <div style={{ fontSize: 12, color: "#475569" }}>{subtitle}</div>
     </div>
   </div>
 );
@@ -47,7 +46,7 @@ export default function Viewer() {
   const [fixtures, setFixtures] = useState([]);
   const [players, setPlayers] = useState({});
   const [loadingFixtures, setLoadingFixtures] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
 
   const normalizePlayersMap = (m) =>
     Object.fromEntries(
@@ -78,7 +77,7 @@ export default function Viewer() {
         setFixtures(arr);
 
         setLoadingFixtures(false);
-      } catch (e) {
+      } catch {
         if (!alive) return;
         setError("Error loading data");
         setLoadingFixtures(false);
@@ -86,8 +85,7 @@ export default function Viewer() {
     }
 
     load();
-    const iv = setInterval(load, 2000); // FAST REFRESH ⚡
-
+    const iv = setInterval(load, 5000);
     return () => {
       alive = false;
       clearInterval(iv);
@@ -108,22 +106,18 @@ export default function Viewer() {
         <h1 style={{ margin: 0, textAlign: "center" }}>
           RNW Tennis Tournament 2025
         </h1>
-        <div style={{ textAlign: "center", marginTop: 8 }}>
-          <div style={{ fontSize: 14, color: "#7D1E7E", fontWeight: 600 }}>
-            Sponsored by
-          </div>
-          <img
-            src={AttivoLogo}
-            style={{ width: 260, marginTop: 6, display: "block" }}
-            alt="Attivo Logo"
-          />
-        </div>
-        {error && (
-          <div style={{ color: "red", marginTop: 8 }}>{error}</div>
-        )}
+
+        <img
+          src={AttivoLogo}
+          style={{ width: 200, marginTop: 8 }}
+          alt="Attivo Logo"
+        />
+
+        {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
+
         <div
           style={{
-            marginTop: 28,
+            marginTop: 30,
             display: "flex",
             gap: 20,
             flexWrap: "wrap",
@@ -133,31 +127,31 @@ export default function Viewer() {
           <Tile
             img={imgLive}
             title="Live Stream"
-            subtitle="Watch YouTube Stream"
+            subtitle="Watch YouTube"
             onClick={() => setPage("live")}
           />
           <Tile
             img={imgLiveScore}
             title="Live Score"
-            subtitle="Big scoreboard display"
+            subtitle="Scoreboard"
             onClick={() => setPage("liveScore")}
           />
           <Tile
             img={imgStart}
             title="Rules"
-            subtitle="Match rules"
+            subtitle="Formats & rules"
             onClick={() => setPage("rules")}
           />
           <Tile
             img={imgScore}
             title="Teams"
-            subtitle="Players by category"
+            subtitle="Player list"
             onClick={() => setPage("teams")}
           />
           <Tile
             img={imgSettings}
             title="Fixture/Scores"
-            subtitle="Upcoming & results"
+            subtitle="All matches"
             onClick={() => setPage("fixtures")}
           />
         </div>
@@ -167,128 +161,20 @@ export default function Viewer() {
 
   // ================= LIVE SCORE PAGE =================
   if (page === "liveScore") {
-    const liveFixture =
-      fixtures.find((f) => f.status === "active") ||
-      fixtures[0] ||
-      null;
-
-    if (!liveFixture) {
-      return (
-        <div style={{ padding: 24 }}>
-          <button onClick={() => setPage("menu")}>← Back</button>
-          <h2 style={{ marginTop: 24 }}>Live Score</h2>
-          <div>No live match.</div>
-        </div>
-      );
-    }
-
-    const rawScore =
-      (liveFixture.scoreline || liveFixture.liveScore || "0-0").toString();
-    const parts = rawScore.split("•");
-    const setScore = parts[0].trim();
-    const gameScore = (parts[1] || "").trim();
-    const isTB = gameScore.toLowerCase().includes("tb");
-
     return (
-      <div
-        style={{
-          padding: 0,
-          minHeight: "100vh",
-          background: "#020617",
-          color: "white",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            textAlign: "center",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 64,
-                fontWeight: 900,
-                marginBottom: 20,
-              }}
-            >
-              {liveFixture.sides?.[0] || "Player A"}
-            </div>
-
-            <div
-              style={{
-                fontSize: 180,
-                fontWeight: 900,
-                lineHeight: 1,
-              }}
-            >
-              {setScore}
-            </div>
-
-            {gameScore && (
-              <div
-                style={{
-                  marginTop: 16,
-                  fontSize: 100,
-                  fontWeight: 800,
-                }}
-              >
-                {isTB ? "Tie-break" : gameScore}
-              </div>
-            )}
-
-            {isTB && (
-              <div
-                style={{
-                  fontSize: 100,
-                  fontWeight: 900,
-                  marginTop: 12,
-                }}
-              >
-                {gameScore.replace(/TB/i, "").trim()}
-              </div>
-            )}
-
-            <div
-              style={{
-                fontSize: 64,
-                fontWeight: 900,
-                marginTop: 26,
-              }}
-            >
-              {liveFixture.sides?.[1] || "Player B"}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ padding: 16, textAlign: "center" }}>
-          <button
-            onClick={() => setPage("menu")}
-            style={{
-              padding: "12px 18px",
-              borderRadius: 999,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            ← Back to Menu
-          </button>
-        </div>
+      <div style={{ padding: 24 }}>
+        <button onClick={() => setPage("menu")}>← Back</button>
+        <h2>Live Score (coming next)</h2>
       </div>
     );
   }
 
-  // ================= OTHER PAGES =================
-  if (page === "rules") return <div>Rules page coming…</div>;
-  if (page === "teams") return <div>Teams page coming…</div>;
-  if (page === "fixtures") return <div>Fixtures page coming…</div>;
-  if (page === "live") return <div>Live streaming screen…</div>;
+  // ================= OTHERS (unchanged placeholders) =================
+  if (page === "live") return <div style={{ padding: 24 }}>Live stream</div>;
+  if (page === "rules") return <div style={{ padding: 24 }}>Rules page</div>;
+  if (page === "teams") return <div style={{ padding: 24 }}>Teams page</div>;
+  if (page === "fixtures") return <div style={{ padding: 24 }}>Fixtures page</div>;
 
-  return <div>Unknown</div>;
+  return <div>Unknown Page</div>;
 }
 
