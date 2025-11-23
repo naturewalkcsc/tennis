@@ -1006,6 +1006,7 @@ function StartFromFixtures({ onBack, onStartScoring }) {
           sides: fx.sides,
           startingServer: 0,
           fixtureId: fx.id,
+          matchType: fx.matchType,
         });
       } else {
         alert("Started: " + (fx.sides?.join(" vs ") || ""));
@@ -1205,6 +1206,7 @@ function Scoring({ config, onAbort, onComplete }) {
     if (!current || current.finished) return;
 
     const isFinal = matchType === "final";
+    const isQualifier = (cfgMatchType || "").toLowerCase() === "qualifier";
 
     // ----- Tie-break mode -----
     if (current.tie) {
@@ -1271,7 +1273,7 @@ function Scoring({ config, onAbort, onComplete }) {
     }
 
     // ----- Normal game mode -----
-    const limitDeuces = isFinal ? 3 : 1; // # of deuces allowed before golden point
+    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use golden point from 2nd deuce
 
     let [pA, pB] = points;
     if (who === 0) pA += 1;
@@ -1348,13 +1350,47 @@ function Scoring({ config, onAbort, onComplete }) {
     }
   };
 
-  const displayPointsA = mapPointToTennis(points[0]);
-  const displayPointsB = mapPointToTennis(points[1]);
+  const pA = points[0];
+  const pB = points[1];
+  const isFinalView = matchType === "final";
+  const isQualifierView = (cfgMatchType || "").toLowerCase() === "qualifier";
 
-  const description =
-    matchType === "final"
-      ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Limited deuces: max 3; from 4th deuce onward, golden point."
-      : "Qualifiers / Semis: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Limited deuces: max 1; from 2nd deuce onward, golden point.";
+  const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
+  // For qualifiers: 1st deuce = normal advantage, 2nd deuce onward = golden point
+  const isGoldenDeuce = isQualifierView && atDeuce && deuceCount >= 2;
+
+  let displayPointsA = mapPointToTennis(pA);
+  let displayPointsB = mapPointToTennis(pB);
+
+  if (!current.tie) {
+    if (atDeuce) {
+      // Always show 40–40 at deuce (even during golden point)
+      displayPointsA = 40;
+      displayPointsB = 40;
+    } else if (
+      pA >= 3 &&
+      pB >= 3 &&
+      Math.abs(pA - pB) === 1 &&
+      !isGoldenDeuce
+    ) {
+      // First deuce / traditional advantage view
+      if (pA > pB) {
+        displayPointsA = "Ad";
+        displayPointsB = 40;
+      } else {
+        displayPointsB = "Ad";
+        displayPointsA = 40;
+      }
+    }
+  }
+
+  const showGoldenBadge = isGoldenDeuce && !current.tie;
+
+  const description = isQualifierView
+    ? "Qualifier: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
+    : isFinalView
+    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Traditional advantage, no golden point."
+    : "Semifinal/Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -1368,31 +1404,43 @@ function Scoring({ config, onAbort, onComplete }) {
         </h2>
       </div>
       <Card className="p-6">
-        {/* Server selection */
-        <div className="flex justify-center gap-2 mb-4 text-sm items-center">
-          <span className="font-medium">Server:</span>
-          <button
-            type="button"
-            onClick={() => setServerIndex(0)}
-            className={`px-3 py-1 rounded-full border text-xs ${serverIndex === 0 ? "bg-slate-900 text-slate-50" : "bg-white text-slate-700"}`}
-          >
-            {sides[0] || "Side 1"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setServerIndex(1)}
-            className={`px-3 py-1 rounded-full border text-xs ${serverIndex === 1 ? "bg-slate-900 text-slate-50" : "bg-white text-slate-700"}`}
-          >
-            {sides[1] || "Side 2"}
-          </button>
-        </div>
-        {/* Points */
-        <div className="grid grid-cols-3 gap-4 items-center">
-          <div className="text-right text-3xl font-bold">{String(displayPointsA)}</div>
-          <div className="text-center">—</div>
-          <div className="text-3xl font-bold">{String(displayPointsB)}</div>
-        </div>
+        {showGoldenBadge && (
+          <div className="mb-3 text-center">
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-semibold tracking-wide">
+              GOLDEN POINT
+            </span>
+          </div>
+        )}
+{/* Player names */}
+<div className="grid grid-cols-3 gap-4 items-center mb-1">
+  <div className="text-right text-sm font-semibold truncate">
+    {sides[0]}
+  </div>
+  <div />
+  <div className="text-sm font-semibold truncate">
+    {sides[1]}
+  </div>
+</div>
 
+{/* Tie-break scores near player names when in TB */}
+{current.tie && (
+  <div className="grid grid-cols-3 gap-4 items-center mb-2 text-xs text-zinc-600">
+    <div className="text-right">TB {current.tieA}</div>
+    <div className="text-center">•</div>
+    <div>TB {current.tieB}</div>
+  </div>
+)}
+
+{/* Points */}
+<div className="grid grid-cols-3 gap-4 items-center">
+  <div className="text-right text-3xl font-bold">
+    {String(displayPointsA)}
+  </div>
+  <div className="text-center">—</div>
+  <div className="text-3xl font-bold">
+    {String(displayPointsB)}
+  </div>
+</div>
         {/* Buttons */}
         <div className="mt-6 grid grid-cols-2 gap-4">
           <Button onClick={() => pointTo(0)} className="w-full">
