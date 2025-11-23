@@ -1191,26 +1191,33 @@ function Scoring({ config, onAbort, onComplete }) {
   };
 
 
-  const pushLiveScore = async (setObj) => {
+  const pushLiveScore = async (setObj, rawPoints) => {
     if (!fixtureId || !setObj) return;
     try {
-      const main = `${setObj.gamesA}-${setObj.gamesB}`;
-      const live = setObj.tie ? `${main} (TB ${setObj.tieA}-${setObj.tieB})` : main;
+      const gamesPart = `${setObj.gamesA}-${setObj.gamesB}`;
+
+      let detail = "";
+      if (setObj.tie) {
+        // Tie-break: show TB points
+        detail = `TB ${setObj.tieA}-${setObj.tieB}`;
+      } else {
+        // In normal games, try to also show current point score (15/30/40)
+        const [pA, pB] = rawPoints || points;
+        // Only show points if some rally has actually been played
+        if (typeof pA === "number" && typeof pB === "number" && (pA > 0 || pB > 0)) {
+          const tpA = mapPointToTennis(pA);
+          const tpB = mapPointToTennis(pB);
+          detail = `${tpA}-${tpB}`;
+        }
+      }
+
+      const live = detail ? `${gamesPart} • ${detail}` : gamesPart;
+
       await apiFixturesUpdate(fixtureId, { scoreline: live });
     } catch (e) {
       console.error(e);
     }
   };
-
-  // Keep fixture's live score in sync for the public viewer (games / tie-break)
-  useEffect(() => {
-    if (!fixtureId || !current || current.finished) return;
-    // This ensures the viewer never stays on plain "Live" once a set has a valid score,
-    // and also pushes an initial 0-0 when scoring just started.
-    pushLiveScore(current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fixtureId, current.gamesA, current.gamesB, current.tie, current.tieA, current.tieB]);
-
 
   const pointTo = (who) => {
     if (!current || current.finished) return;
@@ -1310,6 +1317,8 @@ function Scoring({ config, onAbort, onComplete }) {
       // Game continues
       setPoints([pA, pB]);
       setDeuceCount(newDeuceCount);
+      // Push live games + *point* score (e.g. 0-0 • 15-30)
+      pushLiveScore(current, [pA, pB]);
       return;
     }
 
@@ -1372,10 +1381,6 @@ function Scoring({ config, onAbort, onComplete }) {
   let displayPointsA = mapPointToTennis(pA);
   let displayPointsB = mapPointToTennis(pB);
 
-  // Tie-break golden point for Fast4 (qualifier/semis): 5–5 ⇒ next point wins
-  const isTieGoldenPoint =
-    current.tie && !isFinalView && current.tieA === 5 && current.tieB === 5;
-
   if (!current.tie) {
     if (atDeuce) {
       // Always show 40–40 at deuce (even during golden point)
@@ -1396,16 +1401,9 @@ function Scoring({ config, onAbort, onComplete }) {
         displayPointsA = 40;
       }
     }
-  } else {
-    // In tie-break, reuse the big 0–0 slots to show TB score
-    displayPointsA = current.tieA;
-    displayPointsB = current.tieB;
   }
 
-  // Show badge either for game golden point (deuce) or TB golden point
-  const showGoldenBadge =
-    (!current.tie && isGoldenDeuce) || isTieGoldenPoint;
-
+  const showGoldenBadge = isGoldenDeuce && !current.tie;
 
   const description = isQualifierView
     ? "Qualifier: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
@@ -1432,44 +1430,11 @@ function Scoring({ config, onAbort, onComplete }) {
             </span>
           </div>
         )}
-{/* Player names */}
-<div className="grid grid-cols-3 gap-4 items-center mb-1">
-  <div className="text-right text-sm font-semibold truncate">
-    {sides[0]}
-  </div>
-  <div />
-  <div className="text-sm font-semibold truncate">
-    {sides[1]}
-  </div>
-</div>
-
-{/* Tie-break scores near player names when in TB */}
-{current.tie && (
-  <div className="grid grid-cols-3 gap-4 items-center mb-2 text-xs text-zinc-600">
-    <div className="text-right">TB {current.tieA}</div>
-    <div className="text-center">•</div>
-    <div>TB {current.tieB}</div>
-  </div>
-)}
-
-{/* Points / Tie-break */}
+        {/* Points */}
         <div className="grid grid-cols-3 gap-4 items-center">
-          <div className="text-right text-3xl font-bold">
-            {String(displayPointsA)}
-          </div>
-
-          <div className="text-center text-xs font-semibold tracking-wide">
-            {current.tie &&
-            !isFinalView &&
-            current.tieA === 5 &&
-            current.tieB === 5
-              ? "GOLDEN POINT"
-              : "—"}
-          </div>
-
-          <div className="text-3xl font-bold">
-            {String(displayPointsB)}
-          </div>
+          <div className="text-right text-3xl font-bold">{String(displayPointsA)}</div>
+          <div className="text-center">—</div>
+          <div className="text-3xl font-bold">{String(displayPointsB)}</div>
         </div>
 
         {/* Buttons */}
