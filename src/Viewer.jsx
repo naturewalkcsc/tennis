@@ -397,7 +397,7 @@ if (page === "rules") {
             <b>Champions B:</b> Single pool, round-robin. Top two qualify for finals.
           </li>
           <li>
-            <b>Women Singles:</b> Two pools. First-place from each pool → finals.
+            <b>Women Singles:</b> Two pools (A & B). Top two from each pool → semifinals → winners enter finals.
           </li>
           <li>
             <b>Kids Singles:</b> Single pool. Round robin → top two play finals.
