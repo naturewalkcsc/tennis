@@ -1492,19 +1492,20 @@ function Scoring({ config, onAbort, onComplete }) {
 }
 
 /* ---------------------- Results admin ---------------------- */
-/* ---------------------- Results admin ---------------------- */
+/* ---------------------- Results admin (cloned from Viewer.jsx fixtures) ---------------------- */
 function ResultsAdmin({ onBack }) {
   const [fixtures, setFixtures] = useState([]);
-  const [matches, setMatches] = useState([]);
-  const [playersMap, setPlayersMap] = useState({ singles: {}, doubles: {} });
   const [fixtureFilter, setFixtureFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
+  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
+  const [loadingFixtures, setLoadingFixtures] = useState(true);
+  const [loadingPlayers, setLoadingPlayers] = useState(true);
+  const [error, setError] = useState("");
 
-  // helpers (mirrors Viewer.jsx behaviour)
-  function normalizePlayersMapLocal(playersMapIn) {
+  // Helpers copied from Viewer.jsx
+  function normalizePlayersMap(playersMap) {
     const out = {};
-    for (const cat of Object.keys(playersMapIn || {})) {
-      const arr = playersMapIn[cat] || [];
+    for (const cat of Object.keys(playersMap || {})) {
+      const arr = playersMap[cat] || [];
       out[cat] = arr.map((it) => {
         if (!it) return { name: "", pool: "none" };
         if (typeof it === "string") return { name: it, pool: "none" };
@@ -1523,6 +1524,7 @@ function ResultsAdmin({ onBack }) {
     const d = new Date(Number(ts));
     return d.toLocaleDateString();
   }
+
   function dayLabel(ts) {
     const d = new Date(Number(ts));
     return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
@@ -1536,48 +1538,94 @@ function ResultsAdmin({ onBack }) {
     return <span style={{ padding: "4px 8px", borderRadius: 999, background: "#eef2ff", color: "#1e3a8a", fontWeight: 600, fontSize: 12 }}>Upcoming</span>;
   }
 
+  // load players + fixtures (same polling cadence as Viewer)
   useEffect(() => {
     let alive = true;
 
     (async () => {
+      setLoadingPlayers(true);
+      setLoadingFixtures(true);
       try {
-        const [fxRes, msRes, plRes] = await Promise.allSettled([ apiFixturesList(), apiMatchesList(), apiPlayersGet() ]);
+        const pData = await fetchJson("/api/players");
         if (!alive) return;
-
-        setFixtures(fxRes.status === "fulfilled" && Array.isArray(fxRes.value) ? fxRes.value : []);
-        setMatches(msRes.status === "fulfilled" && Array.isArray(msRes.value) ? msRes.value : []);
-
-        const pval = plRes.status === "fulfilled" ? plRes.value : {};
-        if (Array.isArray(pval)) {
-          // legacy players array -> put under a default category
-          setPlayersMap({ singles: { Players: pval.map(n => typeof n === "string" ? { name: n } : n) }, doubles: {} });
-        } else if (pval && typeof pval === "object") {
-          const singles = pval.singles && !Array.isArray(pval.singles) ? pval.singles : (Array.isArray(pval.singles) ? { Players: pval.singles } : {});
-          const doubles = pval.doubles && !Array.isArray(pval.doubles) ? pval.doubles : (Array.isArray(pval.doubles) ? { Players: pval.doubles } : {});
-          setPlayersMap({ singles: normalizePlayersMapLocal(singles), doubles: normalizePlayersMapLocal(doubles) });
-        } else {
-          setPlayersMap({ singles: {}, doubles: {} });
-        }
+        const s = normalizePlayersMap((pData && pData.singles) || {});
+        const d = normalizePlayersMap((pData && pData.doubles) || {});
+        setPlayers({ singles: s, doubles: d });
       } catch (e) {
-        console.error("ResultsAdmin load err", e);
+        console.warn("Failed loading players", e);
+        setError((p) => (p ? p + " • players" : "Failed loading players"));
       } finally {
-        if (alive) setLoading(false);
+        if (alive) setLoadingPlayers(false);
+      }
+    })();
+
+    (async () => {
+      try {
+        const fx = await fetchJson("/api/fixtures");
+        if (!alive) return;
+        const arr = Array.isArray(fx) ? fx : [];
+        arr.sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+        setFixtures(arr);
+      } catch (e) {
+        console.warn("Failed loading fixtures", e);
+        setError((p) => (p ? p + " • fixtures" : "Failed loading fixtures"));
+      } finally {
+        if (alive) setLoadingFixtures(false);
       }
     })();
 
     const iv = setInterval(async () => {
       try {
-        const [fx, ms] = await Promise.all([apiFixturesList(), apiMatchesList()]);
+        const [pData, fx] = await Promise.all([fetchJson("/api/players"), fetchJson("/api/fixtures")]);
         if (!alive) return;
-        setFixtures(Array.isArray(fx) ? fx : []);
-        setMatches(Array.isArray(ms) ? ms : []);
-      } catch {}
-    }, 8000);
+        setPlayers({ singles: normalizePlayersMap((pData && pData.singles) || {}), doubles: normalizePlayersMap((pData && pData.doubles) || {}) });
+        const arr = Array.isArray(fx) ? fx : [];
+        arr.sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+        setFixtures(arr);
+      } catch {
+        // ignore periodic refresh errors
+      }
+    }, 12000);
 
     return () => { alive = false; clearInterval(iv); };
   }, []);
 
-  // build simple standings from completed fixtures + matches
+  // Category color helper (from Viewer)
+  const categoryColors = [
+    "#FDE68A", // yellow
+    "#BFDBFE", // blue
+    "#FBCFE8", // pink
+    "#BBF7D0", // green
+    "#E9D5FF", // purple
+    "#FEF3C7", // soft
+  ];
+  function catColorFor(name) {
+    let s = 0;
+    for (let i = 0; i < name.length; i++) s = (s * 31 + name.charCodeAt(i)) >>> 0;
+    return categoryColors[s % categoryColors.length];
+  }
+
+  // Filtered & grouped fixtures
+  const filteredFixtures = fixtures.filter((f) => {
+    if (fixtureFilter === "completed") return f.status === "completed";
+    if (fixtureFilter === "upcoming") return f.status !== "completed";
+    return true;
+  });
+
+  const groupedByDay = filteredFixtures.reduce((acc, f) => {
+    const key = f.start ? dateKey(f.start) : "Unknown";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(f);
+    return acc;
+  }, {});
+
+  const dayKeys = Object.keys(groupedByDay).sort((a, b) => {
+    const da = new Date(a).getTime();
+    const db = new Date(b).getTime();
+    return db - da;
+  });
+
+  // Standings computation (same method as Viewer)
   const standingsByCategory = (() => {
     const table = {};
     const ensureEntry = (category, pool, name) => {
@@ -1588,23 +1636,23 @@ function ResultsAdmin({ onBack }) {
     };
 
     const playerPools = { singles: {}, doubles: {} };
-    ["singles","doubles"].forEach(mode => {
-      const byCat = playersMap[mode] || {};
-      Object.keys(byCat).forEach(cat => {
+    Object.keys(players || {}).forEach((mode) => {
+      const byCat = players[mode] || {};
+      Object.keys(byCat).forEach((cat) => {
         const arr = byCat[cat] || [];
         if (!playerPools[mode][cat]) playerPools[mode][cat] = {};
-        arr.forEach(p => { if (p && p.name) playerPools[mode][cat][p.name] = p.pool || "No Pool"; });
+        arr.forEach((p) => { if (p && p.name) playerPools[mode][cat][p.name] = p.pool || "No Pool"; });
       });
     });
 
-    (fixtures || []).forEach(f => {
+    (fixtures || []).forEach((f) => {
       if (f.status !== "completed") return;
       const category = f.category || "Uncategorized";
       const mode = f.mode || "singles";
       const sides = Array.isArray(f.sides) ? f.sides : [];
       const poolsByName = (playerPools[mode] && playerPools[mode][category]) || {};
       if (sides.length < 2) return;
-      sides.forEach(name => {
+      sides.forEach((name) => {
         if (!name) return;
         const pool = poolsByName[name] || "No Pool";
         const rec = ensureEntry(category, pool, name);
@@ -1619,11 +1667,11 @@ function ResultsAdmin({ onBack }) {
     });
 
     const result = {};
-    Object.keys(table).forEach(cat => {
+    Object.keys(table).forEach((cat) => {
       result[cat] = {};
-      Object.keys(table[cat]).forEach(pool => {
+      Object.keys(table[cat]).forEach((pool) => {
         const arr = Object.values(table[cat][pool]);
-        arr.sort((a,b) => {
+        arr.sort((a, b) => {
           if (b.points !== a.points) return b.points - a.points;
           if (b.wins !== a.wins) return b.wins - a.wins;
           return a.name.localeCompare(b.name);
@@ -1634,26 +1682,7 @@ function ResultsAdmin({ onBack }) {
     return result;
   })();
 
-  // filtering + grouping
-  const filteredFixtures = fixtures.filter((f) => {
-    if (fixtureFilter === "completed") return f.status === "completed";
-    if (fixtureFilter === "upcoming") return f.status !== "completed";
-    return true;
-  });
-
-  const groupedByDay = filteredFixtures.reduce((acc, f) => {
-    const key = f.start ? dateKey(f.start) : "Unknown";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(f);
-    return acc;
-  }, {});
-
-  const dayKeys = Object.keys(groupedByDay).sort((a,b) => {
-    const da = new Date(a).getTime();
-    const db = new Date(b).getTime();
-    return db - da;
-  });
-
+  // Render — this JSX is identical to Viewer.jsx fixtures UI (includes Standings before match results)
   return (
     <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 12 }}>
@@ -1680,6 +1709,7 @@ function ResultsAdmin({ onBack }) {
         })}
       </div>
 
+      {/* Standings (moved above match results as requested) */}
       {Object.keys(standingsByCategory).length > 0 && (
         <div style={{ marginTop: 24 }}>
           <h3 style={{ marginBottom: 8 }}>Standings (2 pts / win)</h3>
@@ -1699,7 +1729,17 @@ function ResultsAdmin({ onBack }) {
                           </div>
                         </li>
                       ))}
-                    <div style={{ marginTop: 16 }}>
+                    </ol>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Match results grouped by day */}
+      <div style={{ marginTop: 16 }}>
         {dayKeys.length === 0 ? (
           <div style={{ color: "#9ca3af" }}>No fixtures found.</div>
         ) : dayKeys.map(day => (
@@ -1724,14 +1764,6 @@ function ResultsAdmin({ onBack }) {
         ))}
       </div>
 
-      </ol>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
