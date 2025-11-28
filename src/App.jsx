@@ -12,50 +12,6 @@ const buster = () => `?t=${Date.now()}`;
 const safeJson = async (res) => {
   try { return await res.json(); } catch { return null; }
 };
-/* ---------------------- Tennis game score helpers ---------------------- */
-function computeGameScore(state) {
-  if (!state) return "0-0";
-  // tie-break (show numeric tie-break score)
-  if (state.tieBreak || state.tie) {
-    const a = typeof state.tieA !== "undefined" ? state.tieA : (state.tbA ?? 0);
-    const b = typeof state.tieB !== "undefined" ? state.tieB : (state.tbB ?? 0);
-    return `${a}-${b}`;
-  }
-  if (state.gameScoreString) return state.gameScoreString;
-  const pA = typeof state.pointsA !== "undefined" ? Number(state.pointsA) : null;
-  const pB = typeof state.pointsB !== "undefined" ? Number(state.pointsB) : null;
-  if (pA === null || pB === null) return state.gameScoreString ? state.gameScoreString : "0-0";
-  const pointName = (p) => {
-    if (p <= 0) return "0";
-    if (p === 1) return "15";
-    if (p === 2) return "30";
-    if (p === 3) return "40";
-    return "40";
-  };
-  if (state.goldenPoint) {
-    if (pA >= 3 && pB >= 3 && pA === pB) return "GOLDEN POINT";
-    if (pA !== pB) {
-      if (pA > pB) return `${pointName(pA)}-${pointName(pB)} (A)`;
-      else return `${pointName(pA)}-${pointName(pB)} (B)`;
-    }
-  }
-  if (pA >= 3 && pB >= 3) {
-    if (pA === pB) return "DEUCE";
-    if (pA === pB + 1) return "ADV A";
-    if (pB === pA + 1) return "ADV B";
-    if (pA > pB) return `${pointName(pA)}-${pointName(pB)}`;
-    return `${pointName(pA)}-${pointName(pB)}`;
-  }
-  return `${pointName(pA)}-${pointName(pB)}`;
-}
-
-function computeScorelineFromState(state) {
-  const setScore = (state && typeof state.gamesA !== "undefined" && typeof state.gamesB !== "undefined")
-    ? `${state.gamesA}-${state.gamesB}`
-    : (state && typeof state.setsA !== "undefined" && typeof state.setsB !== "undefined") ? `${state.setsA}-${state.setsB}` : (state && state.setScoreString) ? state.setScoreString : "0-0";
-  const gameScore = computeGameScore(state);
-  return gameScore ? `${setScore} • ${gameScore}` : setScore;
-}
 
   const SINGLES_CATEGORIES_ORDER = [
     "Women's Singles",
@@ -1235,62 +1191,16 @@ function Scoring({ config, onAbort, onComplete }) {
   };
 
 
-  
-const pushLiveScore = async (state) => {
-  try {
-    // determine fixtureId variable name in this scope; try common ones
-    const fid = (typeof fixtureId !== "undefined") ? fixtureId : (state && state.fixtureId) ? state.fixtureId : (typeof currentFixtureId !== "undefined" ? currentFixtureId : null);
-    if (!fid) {
-      console.warn("pushLiveScore: no fixtureId available");
-      return;
-    }
-
-    // Build scoreline using helpers
-    const scoreline = computeScorelineFromState(state);
-    console.debug("pushLiveScore: computed scoreline ->", scoreline, "fixtureId:", fid);
-
-    // 1) Try existing helper (keeps compatibility)
+  const pushLiveScore = async (setObj) => {
+    if (!fixtureId || !setObj) return;
     try {
-      if (typeof apiFixturesUpdate === "function") {
-        await apiFixturesUpdate(fid, { scoreline, status: "active" });
-        console.debug("pushLiveScore: apiFixturesUpdate OK");
-      }
+      const main = `${setObj.gamesA}-${setObj.gamesB}`;
+      const live = setObj.tie ? `${main} (TB ${setObj.tieA}-${setObj.tieB})` : main;
+      await apiFixturesUpdate(fixtureId, { scoreline: live });
     } catch (e) {
-      console.warn("pushLiveScore: apiFixturesUpdate failed", e);
+      console.error(e);
     }
-
-    // 2) Direct PATCH to fixtures to guarantee update
-    try {
-      const p = await fetch(`/api/fixtures/${fid}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scoreline, status: "active" }),
-        cache: "no-store",
-      });
-      const txtResp = await p.text();
-      if (!p.ok) {
-        console.warn("pushLiveScore: direct PATCH failed", p.status, txtResp);
-      } else {
-        try { const json = JSON.parse(txtResp || "{}"); console.debug("pushLiveScore: direct PATCH OK", json); } catch(_) { console.debug("pushLiveScore: direct PATCH OK (non-json)"); }
-      }
-    } catch (e) {
-      console.warn("pushLiveScore: direct PATCH exception", e);
-    }
-
-    // 3) Broadcast via localStorage so viewers update immediately
-    try {
-      const payload = { id: fid, scoreline, ts: Date.now() };
-      localStorage.setItem("fixture_update", JSON.stringify(payload));
-      localStorage.setItem("fixture_update_ping", String(Date.now()));
-      console.debug("pushLiveScore: broadcasted fixture_update", payload);
-    } catch (e) {
-      console.warn("pushLiveScore: localStorage broadcast failed", e);
-    }
-  } catch (e) {
-    console.error("pushLiveScore: unexpected error", e);
-  }
-};
-;
+  };
 
   const pointTo = (who) => {
     if (!current || current.finished) return;
@@ -1582,250 +1492,51 @@ const pushLiveScore = async (state) => {
 }
 
 /* ---------------------- Results admin ---------------------- */
-/* ---------------------- Results admin ---------------------- */
 function ResultsAdmin({ onBack }) {
   const [fixtures, setFixtures] = useState([]);
   const [matches, setMatches] = useState([]);
-  const [playersMap, setPlayersMap] = useState({ singles: {}, doubles: {} });
-  const [fixtureFilter, setFixtureFilter] = useState("all");
   const [loading, setLoading] = useState(true);
-
-  // helpers (mirrors Viewer.jsx behaviour)
-  function normalizePlayersMapLocal(playersMapIn) {
-    const out = {};
-    for (const cat of Object.keys(playersMapIn || {})) {
-      const arr = playersMapIn[cat] || [];
-      out[cat] = arr.map((it) => {
-        if (!it) return { name: "", pool: "none" };
-        if (typeof it === "string") return { name: it, pool: "none" };
-        if (typeof it === "object") {
-          const name = it.name ?? it.label ?? String(it);
-          const pool = (it.pool || "none").toString();
-          return { name, pool };
-        }
-        return { name: String(it), pool: "none" };
-      });
-    }
-    return out;
-  }
-
-  function dateKey(ts) {
-    const d = new Date(Number(ts));
-    return d.toLocaleDateString();
-  }
-  function dayLabel(ts) {
-    const d = new Date(Number(ts));
-    return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-  }
-
-  function statusBadge(status) {
-    if (status === "active")
-      return <span style={{ padding: "4px 8px", borderRadius: 999, background: "#dcfce7", color: "#064e3b", fontWeight: 600, fontSize: 12 }}>LIVE</span>;
-    if (status === "completed")
-      return <span style={{ padding: "4px 8px", borderRadius: 999, background: "#ecfeff", color: "#065f46", fontWeight: 600, fontSize: 12 }}>Completed</span>;
-    return <span style={{ padding: "4px 8px", borderRadius: 999, background: "#eef2ff", color: "#1e3a8a", fontWeight: 600, fontSize: 12 }}>Upcoming</span>;
-  }
 
   useEffect(() => {
     let alive = true;
-
     (async () => {
-      try {
-        const [fxRes, msRes, plRes] = await Promise.allSettled([ apiFixturesList(), apiMatchesList(), apiPlayersGet() ]);
-        if (!alive) return;
-
-        setFixtures(fxRes.status === "fulfilled" && Array.isArray(fxRes.value) ? fxRes.value : []);
-        setMatches(msRes.status === "fulfilled" && Array.isArray(msRes.value) ? msRes.value : []);
-
-        const pval = plRes.status === "fulfilled" ? plRes.value : {};
-        if (Array.isArray(pval)) {
-          // legacy players array -> put under a default category
-          setPlayersMap({ singles: { Players: pval.map(n => typeof n === "string" ? { name: n } : n) }, doubles: {} });
-        } else if (pval && typeof pval === "object") {
-          const singles = pval.singles && !Array.isArray(pval.singles) ? pval.singles : (Array.isArray(pval.singles) ? { Players: pval.singles } : {});
-          const doubles = pval.doubles && !Array.isArray(pval.doubles) ? pval.doubles : (Array.isArray(pval.doubles) ? { Players: pval.doubles } : {});
-          setPlayersMap({ singles: normalizePlayersMapLocal(singles), doubles: normalizePlayersMapLocal(doubles) });
-        } else {
-          setPlayersMap({ singles: {}, doubles: {} });
-        }
-      } catch (e) {
-        console.error("ResultsAdmin load err", e);
-      } finally {
-        if (alive) setLoading(false);
-      }
+      try { const fx = await apiFixturesList(); const ms = await apiMatchesList(); if (!alive) return; setFixtures(fx || []); setMatches(ms || []); }
+      catch (e) { console.error(e); }
+      finally { if (alive) setLoading(false); }
     })();
-
     const iv = setInterval(async () => {
-      try {
-        const [fx, ms] = await Promise.all([apiFixturesList(), apiMatchesList()]);
-        if (!alive) return;
-        setFixtures(Array.isArray(fx) ? fx : []);
-        setMatches(Array.isArray(ms) ? ms : []);
-      } catch {}
+      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch {}
     }, 8000);
-
     return () => { alive = false; clearInterval(iv); };
   }, []);
 
-  // build simple standings from completed fixtures + matches
-  const standingsByCategory = (() => {
-    const table = {};
-    const ensureEntry = (category, pool, name) => {
-      if (!table[category]) table[category] = {};
-      if (!table[category][pool]) table[category][pool] = {};
-      if (!table[category][pool][name]) table[category][pool][name] = { name, played: 0, wins: 0, points: 0 };
-      return table[category][pool][name];
-    };
-
-    const playerPools = { singles: {}, doubles: {} };
-    ["singles","doubles"].forEach(mode => {
-      const byCat = playersMap[mode] || {};
-      Object.keys(byCat).forEach(cat => {
-        const arr = byCat[cat] || [];
-        if (!playerPools[mode][cat]) playerPools[mode][cat] = {};
-        arr.forEach(p => { if (p && p.name) playerPools[mode][cat][p.name] = p.pool || "No Pool"; });
-      });
-    });
-
-    (fixtures || []).forEach(f => {
-      if (f.status !== "completed") return;
-      const category = f.category || "Uncategorized";
-      const mode = f.mode || "singles";
-      const sides = Array.isArray(f.sides) ? f.sides : [];
-      const poolsByName = (playerPools[mode] && playerPools[mode][category]) || {};
-      if (sides.length < 2) return;
-      sides.forEach(name => {
-        if (!name) return;
-        const pool = poolsByName[name] || "No Pool";
-        const rec = ensureEntry(category, pool, name);
-        rec.played += 1;
-      });
-      if (f.winner) {
-        const pool = poolsByName[f.winner] || "No Pool";
-        const rec = ensureEntry(category, pool, f.winner);
-        rec.wins += 1;
-        rec.points += 2;
-      }
-    });
-
-    const result = {};
-    Object.keys(table).forEach(cat => {
-      result[cat] = {};
-      Object.keys(table[cat]).forEach(pool => {
-        const arr = Object.values(table[cat][pool]);
-        arr.sort((a,b) => {
-          if (b.points !== a.points) return b.points - a.points;
-          if (b.wins !== a.wins) return b.wins - a.wins;
-          return a.name.localeCompare(b.name);
-        });
-        result[cat][pool] = arr;
-      });
-    });
-    return result;
-  })();
-
-  // filtering + grouping
-  const filteredFixtures = fixtures.filter((f) => {
-    if (fixtureFilter === "completed") return f.status === "completed";
-    if (fixtureFilter === "upcoming") return f.status !== "completed";
-    return true;
-  });
-
-  const groupedByDay = filteredFixtures.reduce((acc, f) => {
-    const key = f.start ? dateKey(f.start) : "Unknown";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(f);
-    return acc;
-  }, {});
-
-  const dayKeys = Object.keys(groupedByDay).sort((a,b) => {
-    const da = new Date(a).getTime();
-    const db = new Date(b).getTime();
-    return db - da;
-  });
+  const active = fixtures.filter(f => f.status === "active");
+  const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
+  const completedFixtures = fixtures.filter(f => f.status === "completed");
+  const completed = [...completedFixtures, ...matches.map(m => ({ id: m.id, sides: m.sides, finishedAt: m.finishedAt, scoreline: m.scoreline, winner: m.winner, mode: m.mode || "singles" }))].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ marginBottom: 12 }}>
-        <button onClick={onBack} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e6edf8", background: "white" }}>
-          ← Back
-        </button>
-      </div>
+    <div className="max-w-5xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button><h2 className="text-xl font-bold">Results</h2></div>
+      {loading ? <Card className="p-6 text-center text-zinc-500">Loading…</Card> : (
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <div className="text-lg font-semibold mb-3">Active</div>
+            {active.length ? active.map(f => (<div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No active match.</div>}
 
-      <h2 style={{ marginTop: 0 }}>Results / Fixtures</h2>
+            <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
+            {upcoming.length ? upcoming.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
+          </Card>
 
-      <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
-        {["all","upcoming","completed"].map(key => {
-          const label = key === "all" ? "All" : key === "upcoming" ? "Upcoming" : "Completed";
-          return (
-            <button key={key} onClick={() => setFixtureFilter(key)} style={{
-              padding: "6px 12px",
-              borderRadius: 999,
-              border: "1px solid " + (fixtureFilter === key ? "#0f172a" : "#e5e7eb"),
-              background: fixtureFilter === key ? "#0f172a" : "#ffffff",
-              color: fixtureFilter === key ? "#f9fafb" : "#4b5563",
-              cursor: "pointer",
-            }}>{label}</button>
-          );
-        })}
-      </div>
-
-      {Object.keys(standingsByCategory).length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <h3 style={{ marginBottom: 8 }}>Standings (2 pts / win)</h3>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {Object.keys(standingsByCategory).sort().map(cat => (
-              <div key={cat} style={{ minWidth: 220, background: "#f9fafb", borderRadius: 8, padding: 8, border: "1px solid #e5e7eb" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{cat}</div>
-                {Object.keys(standingsByCategory[cat]).sort().map(pool => (
-                  <div key={pool} style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{pool}</div>
-                    <ol style={{ paddingLeft: 16, margin: 0 }}>
-                      {standingsByCategory[cat][pool].map((r,i) => (
-                        <li key={i} style={{ marginBottom: 6 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <div>{r.name}</div>
-                            <div style={{ fontFamily: "monospace" }}>{r.points} pts</div>
-                          </div>
-                        </li>
-                      ))}
-                    <div style={{ marginTop: 16 }}>
-        {dayKeys.length === 0 ? (
-          <div style={{ color: "#9ca3af" }}>No fixtures found.</div>
-        ) : dayKeys.map(day => (
-          <div key={day} style={{ marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>{day}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {groupedByDay[day].map(f => (
-                <div key={f.id} style={{ background: "white", padding: 12, borderRadius: 10, border: "1px solid #eef2ff" }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <div style={{ fontWeight: 700 }}>{f.sides?.[0]} <span style={{ color: "#6b7280", marginLeft: 6, fontWeight: 500 }}>vs</span> {f.sides?.[1]}</div>
-                    <div style={{ marginLeft: "auto" }}>{statusBadge(f.status)}</div>
-                  </div>
-                  <div style={{ marginTop: 8, color: "#6b7280", fontSize: 13 }}>{f.mode || ""} • {f.location || ""}</div>
-                  <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontFamily: "monospace", fontWeight: 700 }}>{f.scoreline || "—"}</div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>{f.start ? new Date(f.start).toLocaleString() : ""}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      </ol>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
+          <Card className="p-5">
+            <div className="text-lg font-semibold mb-3">Completed</div>
+            {completed.length ? completed.map(m => (<div key={(m.id||'')+String(m.finishedAt||'')} className="py-2 border-b last:border-0"><div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div><div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div><div className="mt-1 text-sm"><span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner||''}</span> <span className="ml-3 font-mono">{m.scoreline||''}</span></div></div>)) : <div className="text-zinc-500">No results yet.</div>}
+          </Card>
         </div>
       )}
     </div>
   );
 }
-
 
 /* ---------------------- App shell ---------------------- */
 export default function App() {
