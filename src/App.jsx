@@ -1680,7 +1680,26 @@ function ResultsAdmin({ onBack }) {
         })}
       </div>
 
-      <div style={{ marginTop: 16 }}>
+      {Object.keys(standingsByCategory).length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h3 style={{ marginBottom: 8 }}>Standings (2 pts / win)</h3>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {Object.keys(standingsByCategory).sort().map(cat => (
+              <div key={cat} style={{ minWidth: 220, background: "#f9fafb", borderRadius: 8, padding: 8, border: "1px solid #e5e7eb" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{cat}</div>
+                {Object.keys(standingsByCategory[cat]).sort().map(pool => (
+                  <div key={pool} style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{pool}</div>
+                    <ol style={{ paddingLeft: 16, margin: 0 }}>
+                      {standingsByCategory[cat][pool].map((r,i) => (
+                        <li key={i} style={{ marginBottom: 6 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <div>{r.name}</div>
+                            <div style={{ fontFamily: "monospace" }}>{r.points} pts</div>
+                          </div>
+                        </li>
+                      ))}
+                    <div style={{ marginTop: 16 }}>
         {dayKeys.length === 0 ? (
           <div style={{ color: "#9ca3af" }}>No fixtures found.</div>
         ) : dayKeys.map(day => (
@@ -1705,26 +1724,7 @@ function ResultsAdmin({ onBack }) {
         ))}
       </div>
 
-      {Object.keys(standingsByCategory).length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <h3 style={{ marginBottom: 8 }}>Standings (2 pts / win)</h3>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {Object.keys(standingsByCategory).sort().map(cat => (
-              <div key={cat} style={{ minWidth: 220, background: "#f9fafb", borderRadius: 8, padding: 8, border: "1px solid #e5e7eb" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{cat}</div>
-                {Object.keys(standingsByCategory[cat]).sort().map(pool => (
-                  <div key={pool} style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{pool}</div>
-                    <ol style={{ paddingLeft: 16, margin: 0 }}>
-                      {standingsByCategory[cat][pool].map((r,i) => (
-                        <li key={i} style={{ marginBottom: 6 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <div>{r.name}</div>
-                            <div style={{ fontFamily: "monospace" }}>{r.points} pts</div>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
+      </ol>
                   </div>
                 ))}
               </div>
