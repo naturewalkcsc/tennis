@@ -1495,43 +1495,356 @@ function Scoring({ config, onAbort, onComplete }) {
 function ResultsAdmin({ onBack }) {
   const [fixtures, setFixtures] = useState([]);
   const [matches, setMatches] = useState([]);
+  const [players, setPlayers] = useState({ singles: {}, doubles: {} });
   const [loading, setLoading] = useState(true);
+  const [fixtureFilter, setFixtureFilter] = useState("all");
+
+  // Helper functions from Viewer.jsx
+  const normalizePlayers = (raw) => {
+    if (!raw) return { singles: {}, doubles: {} };
+    const singles = Array.isArray(raw.singles) ? { "Players": raw.singles } : (raw.singles || {});
+    const doubles = Array.isArray(raw.doubles) ? { "Pairs": raw.doubles } : (raw.doubles || {});
+    return { singles, doubles };
+  };
+
+  const normalizePlayersMap = (playersMap) => {
+    const out = {};
+    for (const cat of Object.keys(playersMap || {})) {
+      const arr = playersMap[cat] || [];
+      out[cat] = arr.map((it) => {
+        if (!it) return { name: "", pool: "none" };
+        if (typeof it === "string") return { name: it, pool: "none" };
+        if (typeof it === "object") {
+          const name = it.name ?? it.label ?? String(it);
+          const pool = (it.pool || "none").toString();
+          return { name, pool };
+        }
+        return { name: String(it), pool: "none" };
+      });
+    }
+    return out;
+  };
+
+  const dateKey = (ts) => {
+    const d = new Date(Number(ts));
+    return d.toLocaleDateString();
+  };
+
+  const dayLabel = (ts) => {
+    const d = new Date(Number(ts));
+    return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  };
+
+  const statusBadge = (status) => {
+    if (status === "active")
+      return <span style={{ padding: "4px 8px", borderRadius: 999, background: "#dcfce7", color: "#064e3b", fontWeight: 600, fontSize: 12 }}>LIVE</span>;
+    if (status === "completed")
+      return <span style={{ padding: "4px 8px", borderRadius: 999, background: "#ecfeff", color: "#065f46", fontWeight: 600, fontSize: 12 }}>Completed</span>;
+    return <span style={{ padding: "4px 8px", borderRadius: 999, background: "#eef2ff", color: "#1e3a8a", fontWeight: 600, fontSize: 12 }}>Upcoming</span>;
+  };
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      try { const fx = await apiFixturesList(); const ms = await apiMatchesList(); if (!alive) return; setFixtures(fx || []); setMatches(ms || []); }
-      catch (e) { console.error(e); }
-      finally { if (alive) setLoading(false); }
+      try {
+        const [fx, ms, pl] = await Promise.allSettled([
+          apiFixturesList(),
+          apiMatchesList(),
+          apiPlayersGet()
+        ]);
+        
+        if (!alive) return;
+
+        if (fx.status === "fulfilled") setFixtures(Array.isArray(fx.value) ? fx.value : []);
+        else setFixtures([]);
+
+        if (ms.status === "fulfilled") setMatches(Array.isArray(ms.value) ? ms.value : []);
+        else setMatches([]);
+
+        if (pl.status === "fulfilled") {
+          const p = pl.value;
+          if (Array.isArray(p)) {
+            setPlayers({ singles: p, doubles: [] });
+          } else if (p && typeof p === "object") {
+            const normalized = normalizePlayers(p);
+            const singlesNorm = normalizePlayersMap(normalized.singles);
+            const doublesNorm = normalizePlayersMap(normalized.doubles);
+            setPlayers({ singles: singlesNorm, doubles: doublesNorm });
+          } else {
+            setPlayers({ singles: {}, doubles: {} });
+          }
+        } else {
+          setPlayers({ singles: {}, doubles: {} });
+        }
+      } catch (e) {
+        console.error("Results load error", e);
+        setFixtures([]);
+        setMatches([]);
+        setPlayers({ singles: {}, doubles: {} });
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
+
+    // Live refresh every 8s
     const iv = setInterval(async () => {
-      try { setFixtures(await apiFixturesList()); setMatches(await apiMatchesList()); } catch {}
+      try {
+        const [fx, ms] = await Promise.all([apiFixturesList(), apiMatchesList()]);
+        setFixtures(Array.isArray(fx) ? fx : []);
+        setMatches(Array.isArray(ms) ? ms : []);
+      } catch (e) {
+        // ignore transient errors
+      }
     }, 8000);
-    return () => { alive = false; clearInterval(iv); };
+
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
   }, []);
 
-  const active = fixtures.filter(f => f.status === "active");
-  const upcoming = fixtures.filter(f => !f.status || f.status === "upcoming");
-  const completedFixtures = fixtures.filter(f => f.status === "completed");
-  const completed = [...completedFixtures, ...matches.map(m => ({ id: m.id, sides: m.sides, finishedAt: m.finishedAt, scoreline: m.scoreline, winner: m.winner, mode: m.mode || "singles" }))].sort((a,b) => (b.finishedAt||0)-(a.finishedAt||0));
+  // Filter fixtures based on selected filter
+  const filteredFixtures = fixtures.filter((f) => {
+    if (fixtureFilter === "completed") return f.status === "completed";
+    if (fixtureFilter === "upcoming") return f.status !== "completed";
+    return true;
+  });
+
+  // Group fixtures by date
+  const groupedByDay = filteredFixtures.reduce((acc, f) => {
+    const key = f.start ? dateKey(f.start) : "Unknown";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(f);
+    return acc;
+  }, {});
+
+  // Sort day keys (most recent day first)
+  const dayKeys = Object.keys(groupedByDay).sort((a, b) => {
+    const da = new Date(a).getTime();
+    const db = new Date(b).getTime();
+    return db - da;
+  });
+
+  // Standings calculation (same as Viewer.jsx)
+  const standingsByCategory = (() => {
+    const table = {};
+
+    const ensureEntry = (category, pool, name) => {
+      if (!table[category]) table[category] = {};
+      if (!table[category][pool]) table[category][pool] = {};
+      if (!table[category][pool][name]) {
+        table[category][pool][name] = { name, played: 0, wins: 0, points: 0 };
+      }
+      return table[category][pool][name];
+    };
+
+    // Build quick lookup from players map to know pools
+    const playerPools = { singles: {}, doubles: {} };
+    ["singles", "doubles"].forEach((mode) => {
+      const byCat = players[mode] || {};
+      Object.keys(byCat).forEach((cat) => {
+        const arr = byCat[cat] || [];
+        if (!playerPools[mode][cat]) playerPools[mode][cat] = {};
+        arr.forEach((p) => {
+          if (!p || !p.name) return;
+          playerPools[mode][cat][p.name] = (p.pool || "No Pool");
+        });
+      });
+    });
+
+    // Walk through completed fixtures
+    (fixtures || []).forEach((f) => {
+      if (f.status !== "completed") return;
+      const category = f.category || "Uncategorized";
+      const mode = f.mode || "singles";
+      const sides = Array.isArray(f.sides) ? f.sides : [];
+      const poolsByName = (playerPools[mode] && playerPools[mode][category]) || {};
+
+      if (sides.length < 2) return;
+
+      // Ensure entries for both sides
+      sides.forEach((name) => {
+        if (!name) return;
+        const pool = poolsByName[name] || "No Pool";
+        const rec = ensureEntry(category, pool, name);
+        rec.played += 1;
+      });
+
+      // Apply win
+      if (f.winner) {
+        const pool = poolsByName[f.winner] || "No Pool";
+        const rec = ensureEntry(category, pool, f.winner);
+        rec.wins += 1;
+        rec.points += 2; // 2 points per win
+      }
+    });
+
+    // Convert inner maps to sorted arrays
+    const result = {};
+    Object.keys(table).forEach((cat) => {
+      result[cat] = {};
+      Object.keys(table[cat]).forEach((pool) => {
+        const arr = Object.values(table[cat][pool]);
+        arr.sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          if (b.wins !== a.wins) return b.wins - a.wins;
+          return a.name.localeCompare(b.name);
+        });
+        result[cat][pool] = arr;
+      });
+    });
+
+    return result;
+  })();
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6"><Button variant="ghost" onClick={onBack}><ChevronLeft className="w-5 h-5" /> Back</Button><h2 className="text-xl font-bold">Results</h2></div>
-      {loading ? <Card className="p-6 text-center text-zinc-500">Loading…</Card> : (
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <div className="text-lg font-semibold mb-3">Active</div>
-            {active.length ? active.map(f => (<div key={f.id} className="py-2 border-b last:border-0 flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]}</div><div className="ml-auto text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No active match.</div>}
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" onClick={onBack}>
+          <ChevronLeft className="w-5 h-5" /> Back
+        </Button>
+        <h2 className="text-xl font-bold">Fixtures & Scores</h2>
+      </div>
 
-            <div className="text-lg font-semibold mt-5 mb-2">Upcoming</div>
-            {upcoming.length ? upcoming.map(f => (<div key={f.id} className="py-2 border-b last:border-0"><div className="font-medium">{f.sides?.[0]} vs {f.sides?.[1]} <span className="ml-2 text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">{f.mode}</span></div><div className="text-sm text-zinc-500">{new Date(f.start).toLocaleString()}</div></div>)) : <div className="text-zinc-500">No upcoming fixtures.</div>}
-          </Card>
+      {loading ? (
+        <Card className="p-6 text-center text-zinc-500">Loading…</Card>
+      ) : (
+        <div>
+          {/* Filter buttons */}
+          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", fontSize: 13, marginBottom: 16 }}>
+            {["all", "upcoming", "completed"].map((key) => {
+              const label = key === "all" ? "All" : key === "upcoming" ? "Upcoming" : "Completed";
+              return (
+                <button
+                  key={key}
+                  onClick={() => setFixtureFilter(key)}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    border: "1px solid " + (fixtureFilter === key ? "#0f172a" : "#e5e7eb"),
+                    background: fixtureFilter === key ? "#0f172a" : "#ffffff",
+                    color: fixtureFilter === key ? "#f9fafb" : "#4b5563",
+                    cursor: "pointer",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
 
-          <Card className="p-5">
-            <div className="text-lg font-semibold mb-3">Completed</div>
-            {completed.length ? completed.map(m => (<div key={(m.id||'')+String(m.finishedAt||'')} className="py-2 border-b last:border-0"><div className="font-medium">{m.sides?.[0]} vs {m.sides?.[1]}</div><div className="text-sm text-zinc-500">{m.finishedAt ? new Date(m.finishedAt).toLocaleString() : ""}</div><div className="mt-1 text-sm"><span className="uppercase text-zinc-400 text-xs">Winner</span> <span className="font-semibold">{m.winner||''}</span> <span className="ml-3 font-mono">{m.scoreline||''}</span></div></div>)) : <div className="text-zinc-500">No results yet.</div>}
-          </Card>
+          {/* Standings table */}
+          {Object.keys(standingsByCategory).length > 0 && (
+            <Card className="p-5 mb-6">
+              <h3 style={{ margin: 0, marginBottom: 12, fontSize: 16, fontWeight: 600 }}>Standings (2 points per win)</h3>
+              {Object.keys(standingsByCategory).sort().map((cat) => (
+                <div key={cat} style={{ marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 15 }}>{cat}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                    {Object.keys(standingsByCategory[cat]).sort().map((pool) => (
+                      <div key={pool} style={{ minWidth: 220, background: "#f9fafb", borderRadius: 8, padding: 12, border: "1px solid #e5e7eb" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                          {pool === "No Pool" ? "Overall" : `Pool ${pool}`}
+                        </div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+                              <th style={{ textAlign: "left", padding: "4px 6px", fontWeight: 600 }}>Player / Team</th>
+                              <th style={{ textAlign: "right", padding: "4px 6px", fontWeight: 600 }}>P</th>
+                              <th style={{ textAlign: "right", padding: "4px 6px", fontWeight: 600 }}>W</th>
+                              <th style={{ textAlign: "right", padding: "4px 6px", fontWeight: 600 }}>Pts</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {standingsByCategory[cat][pool].map((row, idx) => (
+                              <tr key={row.name} style={{ borderBottom: idx < standingsByCategory[cat][pool].length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                                <td style={{ padding: "4px 6px" }}>{row.name}</td>
+                                <td style={{ textAlign: "right", padding: "4px 6px" }}>{row.played}</td>
+                                <td style={{ textAlign: "right", padding: "4px 6px" }}>{row.wins}</td>
+                                <td style={{ textAlign: "right", padding: "4px 6px", fontWeight: 600 }}>{row.points}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )}
+
+          {/* Fixtures by day */}
+          {dayKeys.length === 0 ? (
+            <Card className="p-5">
+              <div style={{ color: "#9ca3af", textAlign: "center" }}>No fixtures</div>
+            </Card>
+          ) : (
+            dayKeys.map((dk) => {
+              const dayMatches = groupedByDay[dk].sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+              return (
+                <div key={dk} style={{ marginBottom: 24 }}>
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 12, marginBottom: 12,
+                    background: "#0f172a10", padding: "12px 16px", borderRadius: 12, border: "1px solid rgba(15,23,42,0.04)"
+                  }}>
+                    <div style={{ padding: "6px 12px", borderRadius: 8, background: "#eef2ff", color: "#1e3a8a", fontWeight: 700, fontSize: 14 }}>
+                      {dayLabel(dayMatches[0].start || dk)}
+                    </div>
+                    <div style={{ color: "#64748b", fontSize: 14 }}>{dayMatches.length} match{dayMatches.length > 1 ? "es" : ""} scheduled</div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {dayMatches.map((f) => (
+                      <Card key={f.id} className="p-4" style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 16,
+                        boxShadow: f.status === "active" ? "0 8px 30px rgba(16,185,129,0.06)" : "0 6px 18px rgba(12, 18, 36, 0.04)"
+                      }}>
+                        <div style={{ width: 8, height: 48, borderRadius: 8, background: f.status === "active" ? "#dcfce7" : f.status === "completed" ? "#ecfeff" : "#eef2ff" }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                            <div style={{ fontWeight: 700, fontSize: 16 }}>{(f.sides || []).join(" vs ")}</div>
+                            <div>{statusBadge(f.status)}</div>
+                            {f.status === "active" && (
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 999, background: "#16a34a", animation: "pulse 2s infinite" }} />
+                                <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>LIVE</span>
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13 }}>
+                            <div style={{ color: "#6b7280" }}>
+                              {f.start ? new Date(f.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                            </div>
+                            <div style={{ color: "#475569" }}>
+                              {f.mode ? f.mode.toUpperCase() : ""}
+                              {f.category && ` • ${f.category}`}
+                            </div>
+                            <div style={{ color: "#475569" }}>
+                              {f.matchType || "Qualifier"}
+                            </div>
+                            {f.status === "completed" && (
+                              <div style={{ marginLeft: "auto", color: "#065f46", fontWeight: 600 }}>
+                                {f.winner ? `Winner: ${f.winner}` : ""} {f.scoreline ? ` • ${f.scoreline}` : ""}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ minWidth: 120, textAlign: "right", color: "#475569", fontSize: 13 }}>
+                          {f.venue ? <div style={{ fontWeight: 500 }}>{f.venue}</div> : null}
+                          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
+                            {f.status === "upcoming" ? "Scheduled" : (f.status === "active" ? "Live" : "Finished")}
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       )}
     </div>
