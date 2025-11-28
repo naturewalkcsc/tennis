@@ -1491,8 +1491,7 @@ function Scoring({ config, onAbort, onComplete }) {
   );
 }
 
-/* ---------------------- Results admin ---------------------- */
-/* ---------------------- Results admin (cloned from Viewer.jsx fixtures) ---------------------- */
+/* ---------------------- Results admin (robust clone of Viewer fixtures) ---------------------- */
 function ResultsAdmin({ onBack }) {
   const [fixtures, setFixtures] = useState([]);
   const [fixtureFilter, setFixtureFilter] = useState("all");
@@ -1501,8 +1500,8 @@ function ResultsAdmin({ onBack }) {
   const [loadingPlayers, setLoadingPlayers] = useState(true);
   const [error, setError] = useState("");
 
-  // Helpers copied from Viewer.jsx
-  function normalizePlayersMap(playersMap) {
+  // Use your existing helpers if present (fall back to local versions)
+  const normalizePlayersMapLocal = (playersMap) => {
     const out = {};
     for (const cat of Object.keys(playersMap || {})) {
       const arr = playersMap[cat] || [];
@@ -1518,13 +1517,12 @@ function ResultsAdmin({ onBack }) {
       });
     }
     return out;
-  }
+  };
 
   function dateKey(ts) {
     const d = new Date(Number(ts));
     return d.toLocaleDateString();
   }
-
   function dayLabel(ts) {
     const d = new Date(Number(ts));
     return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
@@ -1538,74 +1536,73 @@ function ResultsAdmin({ onBack }) {
     return <span style={{ padding: "4px 8px", borderRadius: 999, background: "#eef2ff", color: "#1e3a8a", fontWeight: 600, fontSize: 12 }}>Upcoming</span>;
   }
 
-  // load players + fixtures (same polling cadence as Viewer)
   useEffect(() => {
     let alive = true;
 
-    (async () => {
+    const loadAll = async () => {
       setLoadingPlayers(true);
       setLoadingFixtures(true);
       try {
-        const pData = await fetchJson("/api/players");
-        if (!alive) return;
-        const s = normalizePlayersMap((pData && pData.singles) || {});
-        const d = normalizePlayersMap((pData && pData.doubles) || {});
-        setPlayers({ singles: s, doubles: d });
+        // Use the same API helpers Viewer uses — prefer these to raw fetch
+        let pData = null;
+        let fx = null;
+
+        try {
+          if (typeof apiPlayersGet === "function") {
+            pData = await apiPlayersGet();
+          } else {
+            pData = await fetchJson("/api/players");
+          }
+        } catch (e) {
+          console.warn("players load error (ResultsAdmin):", e);
+        }
+
+        try {
+          if (typeof apiFixturesList === "function") {
+            fx = await apiFixturesList();
+          } else {
+            fx = await fetchJson("/api/fixtures");
+          }
+        } catch (e) {
+          console.warn("fixtures load error (ResultsAdmin):", e);
+        }
+
+        // === Normalise player map (handles array or object)
+        if (pData == null) {
+          console.warn("ResultsAdmin: players API returned null/undefined");
+          setPlayers({ singles: {}, doubles: {} });
+        } else if (Array.isArray(pData)) {
+          // legacy array -> put under a default category
+          setPlayers({ singles: { Players: pData.map(n => typeof n === "string" ? { name: n } : n) }, doubles: {} });
+        } else {
+          const singles = pData.singles && !Array.isArray(pData.singles) ? pData.singles : (Array.isArray(pData.singles) ? { Players: pData.singles } : {});
+          const doubles = pData.doubles && !Array.isArray(pData.doubles) ? pData.doubles : (Array.isArray(pData.doubles) ? { Players: pData.doubles } : {});
+          setPlayers({ singles: normalizePlayersMapLocal(singles), doubles: normalizePlayersMapLocal(doubles) });
+        }
+
+        // === Normalise fixtures (ensure array)
+        let arr = Array.isArray(fx) ? fx : (fx && fx.items ? fx.items : []);
+        if (!Array.isArray(arr)) arr = [];
+        // debug: log counts so you can see why viewer has data but admin doesn't
+        console.debug("ResultsAdmin loaded fixtures count:", arr.length, "raw fx:", fx);
+        setFixtures(arr.sort((a, b) => Number(a.start || 0) - Number(b.start || 0)));
       } catch (e) {
-        console.warn("Failed loading players", e);
-        setError((p) => (p ? p + " • players" : "Failed loading players"));
+        console.error("ResultsAdmin loadAll error:", e);
+        setError(String(e));
       } finally {
-        if (alive) setLoadingPlayers(false);
+        if (alive) {
+          setLoadingPlayers(false);
+          setLoadingFixtures(false);
+        }
       }
-    })();
+    };
 
-    (async () => {
-      try {
-        const fx = await fetchJson("/api/fixtures");
-        if (!alive) return;
-        const arr = Array.isArray(fx) ? fx : [];
-        arr.sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
-        setFixtures(arr);
-      } catch (e) {
-        console.warn("Failed loading fixtures", e);
-        setError((p) => (p ? p + " • fixtures" : "Failed loading fixtures"));
-      } finally {
-        if (alive) setLoadingFixtures(false);
-      }
-    })();
-
-    const iv = setInterval(async () => {
-      try {
-        const [pData, fx] = await Promise.all([fetchJson("/api/players"), fetchJson("/api/fixtures")]);
-        if (!alive) return;
-        setPlayers({ singles: normalizePlayersMap((pData && pData.singles) || {}), doubles: normalizePlayersMap((pData && pData.doubles) || {}) });
-        const arr = Array.isArray(fx) ? fx : [];
-        arr.sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
-        setFixtures(arr);
-      } catch {
-        // ignore periodic refresh errors
-      }
-    }, 12000);
-
+    loadAll();
+    const iv = setInterval(loadAll, 12000);
     return () => { alive = false; clearInterval(iv); };
   }, []);
 
-  // Category color helper (from Viewer)
-  const categoryColors = [
-    "#FDE68A", // yellow
-    "#BFDBFE", // blue
-    "#FBCFE8", // pink
-    "#BBF7D0", // green
-    "#E9D5FF", // purple
-    "#FEF3C7", // soft
-  ];
-  function catColorFor(name) {
-    let s = 0;
-    for (let i = 0; i < name.length; i++) s = (s * 31 + name.charCodeAt(i)) >>> 0;
-    return categoryColors[s % categoryColors.length];
-  }
-
-  // Filtered & grouped fixtures
+  // Filters & grouping
   const filteredFixtures = fixtures.filter((f) => {
     if (fixtureFilter === "completed") return f.status === "completed";
     if (fixtureFilter === "upcoming") return f.status !== "completed";
@@ -1618,14 +1615,13 @@ function ResultsAdmin({ onBack }) {
     acc[key].push(f);
     return acc;
   }, {});
-
   const dayKeys = Object.keys(groupedByDay).sort((a, b) => {
     const da = new Date(a).getTime();
     const db = new Date(b).getTime();
     return db - da;
   });
 
-  // Standings computation (same method as Viewer)
+  // Build standings identical to Viewer logic
   const standingsByCategory = (() => {
     const table = {};
     const ensureEntry = (category, pool, name) => {
@@ -1682,7 +1678,7 @@ function ResultsAdmin({ onBack }) {
     return result;
   })();
 
-  // Render — this JSX is identical to Viewer.jsx fixtures UI (includes Standings before match results)
+  // Render (identical to Viewer fixtures UI)
   return (
     <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 12 }}>
@@ -1709,7 +1705,7 @@ function ResultsAdmin({ onBack }) {
         })}
       </div>
 
-      {/* Standings (moved above match results as requested) */}
+      {/* Standings */}
       {Object.keys(standingsByCategory).length > 0 && (
         <div style={{ marginTop: 24 }}>
           <h3 style={{ marginBottom: 8 }}>Standings (2 pts / win)</h3>
@@ -1763,7 +1759,6 @@ function ResultsAdmin({ onBack }) {
           </div>
         ))}
       </div>
-
     </div>
   );
 }
