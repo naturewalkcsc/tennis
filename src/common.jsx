@@ -69,7 +69,7 @@ export function FixturesAndResults({
     return db - da;
   });
 
-  // Standings calculation
+  // Standings calculation with qualification logic
   const standingsByCategory = (() => {
     const table = {};
 
@@ -123,7 +123,34 @@ export function FixturesAndResults({
       }
     });
 
-    // Convert inner maps to sorted arrays
+    // Helper function to determine qualification status
+    const getQualificationStatus = (category, pool, position, totalInPool) => {
+      const catLower = category.toLowerCase().replace(/\s+/g, " ").trim();
+      
+      // Categories with semifinals (top 2 from each pool qualify for semifinals)
+      if ((catLower.includes("women") || catLower.includes("woman")) && catLower.includes("single")) {
+        return position <= 2 ? "Semifinals" : "";
+      }
+      if (catLower.includes("nw a") && catLower.includes("single")) {
+        return position <= 2 ? "Semifinals" : "";
+      }
+      if (catLower.includes("champions a") && catLower.includes("single")) {
+        return position <= 2 ? "Semifinals" : "";
+      }
+      if (catLower.includes("combination") && catLower.includes("double")) {
+        return position <= 2 ? "Semifinals" : "";
+      }
+      
+      // NW B Singles / Champions B Singles - single pool, top 4 qualify for semifinals
+      if ((catLower.includes("nw b") || catLower.includes("champions b")) && catLower.includes("single")) {
+        return position <= 4 ? "Semifinals" : "";
+      }
+      
+      // All other categories - top 2 qualify for finals directly
+      return position <= 2 ? "Finals" : "";
+    };
+
+    // Convert inner maps to sorted arrays and add qualification status
     const result = {};
     Object.keys(table).forEach((cat) => {
       result[cat] = {};
@@ -134,6 +161,12 @@ export function FixturesAndResults({
           if (b.wins !== a.wins) return b.wins - a.wins;
           return a.name.localeCompare(b.name);
         });
+        
+        // Add qualification status to each player
+        arr.forEach((player, index) => {
+          player.qualification = getQualificationStatus(cat, pool, index + 1, arr.length);
+        });
+        
         result[cat][pool] = arr;
       });
     });
@@ -200,7 +233,7 @@ export function FixturesAndResults({
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{cat}</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                     {Object.keys(standingsByCategory[cat]).sort().map((pool) => (
-                      <div key={pool} style={{ minWidth: 220, background: "#f9fafb", borderRadius: 8, padding: 8, border: "1px solid #e5e7eb" }}>
+                      <div key={pool} style={{ minWidth: 280, background: "#f9fafb", borderRadius: 8, padding: 8, border: "1px solid #e5e7eb" }}>
                         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
                           {pool === "No Pool" ? "Overall" : `Pool ${pool}`}
                         </div>
@@ -211,6 +244,7 @@ export function FixturesAndResults({
                               <th style={{ textAlign: "right", padding: "2px 4px" }}>P</th>
                               <th style={{ textAlign: "right", padding: "2px 4px" }}>W</th>
                               <th style={{ textAlign: "right", padding: "2px 4px" }}>Pts</th>
+                              <th style={{ textAlign: "center", padding: "2px 4px" }}>Status</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -220,6 +254,20 @@ export function FixturesAndResults({
                                 <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.played}</td>
                                 <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.wins}</td>
                                 <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.points}</td>
+                                <td style={{ textAlign: "center", padding: "2px 4px" }}>
+                                  {row.qualification && (
+                                    <span style={{
+                                      padding: "2px 6px",
+                                      borderRadius: 12,
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      background: row.qualification === "Finals" ? "#fef3c7" : "#ecfeff",
+                                      color: row.qualification === "Finals" ? "#92400e" : "#0f766e"
+                                    }}>
+                                      {row.qualification}
+                                    </span>
+                                  )}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
