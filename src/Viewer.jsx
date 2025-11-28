@@ -456,62 +456,93 @@ if (page === "rules") {
 }
 
   // LIVE STREAM PAGE
-  if (page === "live") {
-    return (
-      <div style={{ padding: 24 }}>
-        <div style={{ marginBottom: 12 }}>
-          <button
-            onClick={() => setPage("menu")}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "1px solid #e6edf8",
-              background: "white",
-            }}
-          >
-            ← Back
-          </button>
-        </div>
+if (page === "live") {
+  const [ytUrl, setYtUrl] = useState(
+    localStorage.getItem("ytLiveUrl") ||
+      "https://www.youtube.com/embed/live_stream?channel=XXXX"
+  );
 
-        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Live Stream</h2>
-        <p style={{ marginTop: 0, marginBottom: 16, color: "#6b7280", fontSize: 14 }}>
-          YouTube live streaming of the current court. Replace the video ID in Viewer.jsx with your actual stream link.
-        </p>
+  const [tempUrl, setTempUrl] = useState(ytUrl);
 
-        <div
+  const applyUrl = () => {
+    // Convert normal YouTube URL into embed format if needed
+    let finalUrl = tempUrl.trim();
+
+    if (finalUrl.includes("youtube.com/watch?v=")) {
+      const videoId = finalUrl.split("v=")[1].split("&")[0];
+      finalUrl = `https://www.youtube.com/embed/${videoId}`;
+    }
+
+    if (finalUrl.includes("youtu.be/")) {
+      const videoId = finalUrl.split("youtu.be/")[1].split("?")[0];
+      finalUrl = `https://www.youtube.com/embed/${videoId}`;
+    }
+
+    setYtUrl(finalUrl);
+    localStorage.setItem("ytLiveUrl", finalUrl);
+  };
+
+  return (
+    <div style={{ padding: 16 }}>
+      <button onClick={() => setPage("menu")} style={{ marginBottom: 12 }}>
+        ← Back
+      </button>
+
+      <h2 style={{ marginBottom: 12 }}>Live Streaming</h2>
+
+      {/* URL Input Box */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 20,
+          alignItems: "center",
+        }}
+      >
+        <input
+          type="text"
+          placeholder="Paste YouTube Live URL here"
+          value={tempUrl}
+          onChange={(e) => setTempUrl(e.target.value)}
           style={{
-            position: "relative",
-            paddingBottom: "56.25%",
-            height: 0,
-            overflow: "hidden",
-            borderRadius: 12,
-            boxShadow: "0 12px 30px rgba(15,23,42,0.35)",
-            maxWidth: 960,
-            margin: "0 auto",
+            flex: 1,
+            padding: 8,
+            border: "1px solid #ccc",
+            borderRadius: 6,
+            fontSize: 14,
+          }}
+        />
+        <button
+          onClick={applyUrl}
+          style={{
+            padding: "8px 16px",
+            background: "#2563eb",
+            color: "white",
+            borderRadius: 6,
+            cursor: "pointer",
+            border: "none",
+            fontWeight: 600,
           }}
         >
-          <iframe
-            title="YouTube live stream"
-            src="https://www.youtube.com/embed/QNPpdtUsC60?autoplay=1&rel=0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              border: 0,
-            }}
-          />
-        </div>
-
-        <div style={{ marginTop: 16, textAlign: "center", fontSize: 12, color: "#9ca3af" }}>
-          Tip: replace <code>VIDEO_ID</code> in Viewer.jsx with the ID of your tournament&apos;s YouTube live stream.
-        </div>
+          Go
+        </button>
       </div>
-    );
-  }
+
+      {/* Live Video */}
+      <div style={{ marginTop: 8 }}>
+        <iframe
+          width="100%"
+          height="500"
+          src={ytUrl}
+          title="YouTube live stream"
+          frameBorder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    </div>
+  );
+}
 
   // TEAMS PAGE
   if (page === "teams") {
