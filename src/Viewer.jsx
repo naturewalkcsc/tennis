@@ -533,6 +533,8 @@ if (page === "rules") {
             {/* Live Score Overlay - Top Right Corner */}
             {(() => {
               const activeMatches = fixtures.filter(f => f.status === 'active');
+              console.log('DEBUG: All fixtures:', fixtures);
+              console.log('DEBUG: Active matches:', activeMatches);
               return activeMatches.length > 0 ? (
                 <div style={{
                   position: 'fixed',
@@ -660,6 +662,8 @@ if (page === "rules") {
                             };
                             
                             const scoreParts = match.scoreline.split(' ');
+                            console.log('DEBUG: Processing scoreline:', match.scoreline);
+                            console.log('DEBUG: Score parts:', scoreParts);
                             
                             // Look for the last part which should be the current game points
                             // Format should now be like: "4-3 15-30" or "4-3 Ad-40"
@@ -668,24 +672,29 @@ if (page === "rules") {
                             // Check if we have multiple parts and the last one looks like game points
                             if (scoreParts.length >= 2) {
                               const lastPart = scoreParts[scoreParts.length - 1];
+                              console.log('DEBUG: Checking last part for game score:', lastPart);
                               // Check if it's tennis formatted (contains 15,30,40,Ad) or looks like game points
                               if (['15', '30', '40', 'Ad', 'DEUCE'].some(point => lastPart.includes(point)) ||
                                   (lastPart.includes('-') && lastPart.split('-').every(s => 
                                     ['0', '15', '30', '40', 'Ad'].includes(s) || !isNaN(parseInt(s, 10))
                                   ))) {
                                 gameScore = lastPart;
+                                console.log('DEBUG: Found game score from last part:', gameScore);
                               }
                             }
                             
                             // If still no game score found, try to convert any numeric score
                             if (!gameScore) {
+                              console.log('DEBUG: No tennis format found, looking for numeric scores');
                               const numericGame = scoreParts.find(part => 
                                 part.includes('-') && 
                                 part.split('-').every(s => !isNaN(parseInt(s, 10))) &&
                                 part.split('-').every(s => parseInt(s, 10) <= 10) // reasonable game score limit
                               );
+                              console.log('DEBUG: Found numeric game score:', numericGame);
                               if (numericGame) {
                                 gameScore = convertToTennisScore(numericGame);
+                                console.log('DEBUG: Converted to tennis score:', gameScore);
                               }
                             }
                             

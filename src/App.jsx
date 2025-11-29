@@ -1273,7 +1273,9 @@ function Scoring({ config, onAbort, onComplete }) {
         displayPB = current.tieB;
       }
       
-      console.log('Points updated - Live score:', `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`);
+      const scoreString = `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`;
+      console.log('Points updated - Live score:', scoreString);
+      console.log('DEBUG: Sending to pushLiveScore - Set:', current, 'GamePoints:', displayPA, displayPB);
       pushLiveScore(current, displayPA, displayPB);
     }
   }, [points, deuceCount, matchStarted, current?.gamesA, current?.gamesB, current?.tie, current?.tieA, current?.tieB]);
@@ -1365,6 +1367,7 @@ function Scoring({ config, onAbort, onComplete }) {
         live = main;
       }
       console.log('Pushing live score:', live);
+      console.log('DEBUG: Fixture ID:', fixtureId);
       await apiFixturesUpdate(fixtureId, { scoreline: live });
     } catch (e) {
       console.error('pushLiveScore error:', e);
