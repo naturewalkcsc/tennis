@@ -82,13 +82,43 @@ export default function Viewer() {
         result = await fetchJson('/api/config');
       }
       
-      setYoutubeUrl(result.url || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
+      let finalUrl = result.url || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0';
+      
+      // Ensure the URL is in embed format
+      finalUrl = convertToEmbedUrl(finalUrl);
+      
+      setYoutubeUrl(finalUrl);
     } catch (error) {
       console.warn('Failed to load YouTube config', error);
       setYoutubeUrl('https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
     } finally {
       setLoadingVideo(false);
     }
+  };
+
+  // Convert any YouTube URL to embed format
+  const convertToEmbedUrl = (url) => {
+    if (!url) return 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0';
+    
+    let videoId = null;
+    
+    // Extract video ID from different YouTube URL formats
+    if (url.includes('youtube.com/watch?v=')) {
+      videoId = url.split('v=')[1].split('&')[0];
+    } else if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1].split('?')[0];
+    } else if (url.includes('youtube.com/embed/')) {
+      // Already in embed format
+      return url;
+    }
+    
+    // If we found a video ID, create embed URL
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+    }
+    
+    // If no valid format found, return default
+    return 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0';
   };
 
   useEffect(() => {
@@ -395,10 +425,23 @@ if (page === "rules") {
             fontSize: 13, 
             color: '#6b7280', 
             fontFamily: 'monospace',
-            wordBreak: 'break-all'
+            wordBreak: 'break-all',
+            marginBottom: 8
           }}>
             {youtubeUrl || 'Loading...'}
           </div>
+          {youtubeUrl && !youtubeUrl.includes('/embed/') && (
+            <div style={{ 
+              fontSize: 12, 
+              color: '#dc2626', 
+              background: '#fef2f2',
+              padding: '4px 8px',
+              borderRadius: 4,
+              border: '1px solid #fecaca'
+            }}>
+              ⚠️ URL is not in embed format - this may cause connection issues
+            </div>
+          )}
         </div>
         
         {loadingVideo ? (
@@ -415,28 +458,58 @@ if (page === "rules") {
             <p style={{ marginTop: 12, color: '#6b7280' }}>Loading stream...</p>
           </div>
         ) : (
-          <div
-            style={{
-              position: "fixed",
-              top: 80,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 1000
-            }}
-          >
-            <iframe
-              title="YouTube live stream"
-              src={youtubeUrl}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
+          <>
+            <div
               style={{
-                width: "100%",
-                height: "100%",
-                border: 0,
+                position: "fixed",
+                top: 140,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1000
               }}
-            />
-          </div>
+            >
+              <iframe
+                title="YouTube live stream"
+                src={youtubeUrl}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  border: 0,
+                }}
+                onError={(e) => {
+                  console.error('YouTube iframe failed to load:', e);
+                }}
+                onLoad={() => {
+                  console.log('YouTube iframe loaded successfully');
+                }}
+              />
+            </div>
+            
+            {/* Fallback link if iframe fails */}
+            <div style={{ 
+              position: 'fixed', 
+              bottom: 20, 
+              right: 20, 
+              zIndex: 1001,
+              background: 'rgba(0,0,0,0.8)',
+              color: 'white',
+              padding: '8px 12px',
+              borderRadius: 8,
+              fontSize: 12
+            }}>
+              <a 
+                href={youtubeUrl?.replace('/embed/', '/watch?v=')} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ color: '#60a5fa', textDecoration: 'none' }}
+              >
+                Open in YouTube →
+              </a>
+            </div>
+          </>
         )}
       </div>
     );
