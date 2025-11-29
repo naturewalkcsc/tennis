@@ -64,6 +64,38 @@ export default function Viewer() {
   const [loadingPlayers, setLoadingPlayers] = useState(true);
   const [loadingFixtures, setLoadingFixtures] = useState(true);
   const [error, setError] = useState("");
+  
+  const [youtubeUrl, setYoutubeUrl] = useState("https://www.youtube.com/embed/QNPpdtUsC60?autoplay=1&rel=0");
+  const [inputUrl, setInputUrl] = useState("");
+
+  // Function to convert YouTube URL to embed format
+  const convertToEmbedUrl = (url) => {
+    if (!url) return "";
+    
+    // Extract video ID from various YouTube URL formats
+    let videoId = "";
+    
+    if (url.includes("youtube.com/watch?v=")) {
+      videoId = url.split("v=")[1].split("&")[0];
+    } else if (url.includes("youtu.be/")) {
+      videoId = url.split("youtu.be/")[1].split("?")[0];
+    } else if (url.includes("youtube.com/embed/")) {
+      return url; // Already in embed format
+    }
+    
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+    }
+    
+    return url; // Return as-is if we can't parse it
+  };
+
+  const handleGoClick = () => {
+    if (inputUrl) {
+      const embedUrl = convertToEmbedUrl(inputUrl);
+      setYoutubeUrl(embedUrl);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -345,8 +377,60 @@ if (page === "rules") {
 
         <h2 style={{ marginTop: 0, marginBottom: 8 }}>Live Stream</h2>
         <p style={{ marginTop: 0, marginBottom: 16, color: "#6b7280", fontSize: 14 }}>
-          YouTube live streaming of the current court. Replace the video ID in Viewer.jsx with your actual stream link.
+          YouTube live streaming of the current court. Enter a YouTube URL below to change the stream.
         </p>
+
+        {/* YouTube URL Input */}
+        <div style={{ 
+          maxWidth: 960, 
+          margin: "0 auto 24px auto", 
+          display: "flex", 
+          gap: 12, 
+          alignItems: "center",
+          background: "white",
+          padding: 16,
+          borderRadius: 12,
+          border: "1px solid #e5e7eb"
+        }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
+              YouTube URL:
+            </label>
+            <input
+              type="text"
+              value={inputUrl}
+              onChange={(e) => setInputUrl(e.target.value)}
+              placeholder="Paste YouTube URL here (e.g., https://www.youtube.com/watch?v=VIDEO_ID)"
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "1px solid #d1d5db",
+                borderRadius: 8,
+                fontSize: 14,
+                outline: "none"
+              }}
+              onFocus={(e) => e.target.style.borderColor = "#3b82f6"}
+              onBlur={(e) => e.target.style.borderColor = "#d1d5db"}
+            />
+          </div>
+          <button
+            onClick={handleGoClick}
+            disabled={!inputUrl}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: inputUrl ? "#3b82f6" : "#9ca3af",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              fontWeight: 600,
+              cursor: inputUrl ? "pointer" : "not-allowed",
+              fontSize: 14,
+              marginTop: 24
+            }}
+          >
+            Go
+          </button>
+        </div>
 
         <div
           style={{
@@ -362,7 +446,7 @@ if (page === "rules") {
         >
           <iframe
             title="YouTube live stream"
-            src="https://www.youtube.com/embed/QNPpdtUsC60?autoplay=1&rel=0"
+            src={youtubeUrl}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
             style={{
@@ -377,7 +461,7 @@ if (page === "rules") {
         </div>
 
         <div style={{ marginTop: 16, textAlign: "center", fontSize: 12, color: "#9ca3af" }}>
-          Tip: replace <code>VIDEO_ID</code> in Viewer.jsx with the ID of your tournament&apos;s YouTube live stream.
+          Tip: You can use any YouTube URL format - watch URLs, short URLs (youtu.be), or embed URLs will work.
         </div>
       </div>
     );
