@@ -1296,6 +1296,7 @@ function Scoring({ config, onAbort, onComplete }) {
 
     const isFinal = matchType === "final";
     const isQualifier = (cfgMatchType || "").toLowerCase() === "qualifier";
+    const isSemifinal = (cfgMatchType || "").toLowerCase() === "semifinal";
 
     // ----- Tie-break mode -----
     if (current.tie) {
@@ -1362,7 +1363,7 @@ function Scoring({ config, onAbort, onComplete }) {
     }
 
     // ----- Normal game mode -----
-    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use golden point from 2nd deuce
+    const limitDeuces = (isQualifier || isSemifinal) ? 1 : 9999; // qualifiers and semifinals use golden point from 2nd deuce
 
     let [pA, pB] = points;
     if (who === 0) pA += 1;
@@ -1443,10 +1444,11 @@ function Scoring({ config, onAbort, onComplete }) {
   const pB = points[1];
   const isFinalView = matchType === "final";
   const isQualifierView = (cfgMatchType || "").toLowerCase() === "qualifier";
+  const isSemifinalView = (cfgMatchType || "").toLowerCase() === "semifinal";
 
   const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
-  // For qualifiers: 1st deuce = normal advantage, 2nd deuce onward = golden point
-  const isGoldenDeuce = isQualifierView && atDeuce && deuceCount >= 2;
+  // For qualifiers and semifinals: 1st deuce = normal advantage, 2nd deuce onward = golden point
+  const isGoldenDeuce = (isQualifierView || isSemifinalView) && atDeuce && deuceCount >= 2;
 
   let displayPointsA = mapPointToTennis(pA);
   let displayPointsB = mapPointToTennis(pB);
@@ -1464,7 +1466,7 @@ function Scoring({ config, onAbort, onComplete }) {
       pA >= 3 &&
       pB >= 3 &&
       Math.abs(pA - pB) === 1 &&
-      !isGoldenDeuce
+      !(isQualifierView || isSemifinalView ? isGoldenDeuce : false)
     ) {
       // First deuce / traditional advantage view
       if (pA > pB) {
@@ -1488,9 +1490,11 @@ function Scoring({ config, onAbort, onComplete }) {
 
   const description = isQualifierView
     ? "Qualifier: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
+    : isSemifinalView
+    ? "Semifinal: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
     : isFinalView
     ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Traditional advantage, no golden point."
-    : "Semifinal/Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
+    : "Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
 
   // Show match type selection screen first
   if (!matchStarted) {
