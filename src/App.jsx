@@ -71,12 +71,40 @@ const apiMatchesAdd = async (payload) => {
   const res = await fetch("/api/matches" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "add", payload }) });
   if (!res.ok) throw new Error("matches-add-failed");
 };
+// Development mode detection
+const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
 const apiConfigGet = async () => {
+  if (isDev) {
+    // Mock implementation for development
+    const storedUrl = localStorage.getItem('dev_youtube_url');
+    return { url: storedUrl || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0' };
+  }
   const res = await fetch("/api/config" + buster(), { cache: "no-store" });
   if (!res.ok) throw new Error("config-get-failed");
   return await res.json();
 };
 const apiConfigSet = async (url) => {
+  if (isDev) {
+    // Mock implementation for development
+    let embedUrl = url;
+    let videoId = null;
+    
+    if (url.includes('youtube.com/watch?v=')) {
+      videoId = url.split('v=')[1].split('&')[0];
+    } else if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1].split('?')[0];
+    } else if (url.includes('youtube.com/embed/')) {
+      embedUrl = url;
+    }
+    
+    if (videoId) {
+      embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+    }
+    
+    localStorage.setItem('dev_youtube_url', embedUrl);
+    return { success: true, url: embedUrl };
+  }
   const res = await fetch("/api/config" + buster(), {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url })
   });

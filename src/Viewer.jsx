@@ -71,8 +71,18 @@ export default function Viewer() {
   // Fetch YouTube URL from config
   const fetchYouTubeConfig = async () => {
     try {
-      const res = await fetchJson('/api/config');
-      setYoutubeUrl(res.url || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
+      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      let result;
+      
+      if (isDev) {
+        // Mock implementation for development
+        const storedUrl = localStorage.getItem('dev_youtube_url');
+        result = { url: storedUrl || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0' };
+      } else {
+        result = await fetchJson('/api/config');
+      }
+      
+      setYoutubeUrl(result.url || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
     } catch (error) {
       console.warn('Failed to load YouTube config', error);
       setYoutubeUrl('https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
