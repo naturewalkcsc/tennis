@@ -610,12 +610,47 @@ if (page === "rules") {
                           
                           {/* Current Game Points */}
                           {(() => {
+                            // Helper function to convert numeric game scores to tennis format
+                            const convertToTennisScore = (numericScore) => {
+                              if (!numericScore || !numericScore.includes('-')) return numericScore;
+                              
+                              const [left, right] = numericScore.split('-');
+                              const leftNum = parseInt(left, 10);
+                              const rightNum = parseInt(right, 10);
+                              
+                              // Check for deuce situations (both at 40 or higher)
+                              if (leftNum >= 3 && rightNum >= 3) {
+                                if (leftNum === rightNum) return 'DEUCE';
+                                if (leftNum > rightNum) return 'AD ' + (match.sides?.[0] || 'Player 1');
+                                if (rightNum > leftNum) return 'AD ' + (match.sides?.[1] || 'Player 2');
+                              }
+                              
+                              // Convert numeric scores to tennis scores
+                              const tennisPoints = ['0', '15', '30', '40'];
+                              const leftTennis = leftNum <= 3 ? tennisPoints[leftNum] : '40';
+                              const rightTennis = rightNum <= 3 ? tennisPoints[rightNum] : '40';
+                              
+                              return `${leftTennis}-${rightTennis}`;
+                            };
+                            
                             const scoreParts = match.scoreline.split(' ');
-                            const gameScore = scoreParts.find(part => 
+                            let gameScore = scoreParts.find(part => 
                               ['15', '30', '40', 'AD', 'DEUCE'].some(point => part.includes(point)) ||
                               (part.includes('-') && (part.includes('/') || part.split('-').some(s => 
                                 ['0', '15', '30', '40'].includes(s))))
                             );
+                            
+                            // If we didn't find tennis-formatted score, look for numeric game scores
+                            if (!gameScore) {
+                              const numericGame = scoreParts.find(part => 
+                                part.includes('-') && 
+                                part.split('-').every(s => !isNaN(parseInt(s, 10))) &&
+                                part.split('-').every(s => parseInt(s, 10) <= 10) // reasonable game score limit
+                              );
+                              if (numericGame) {
+                                gameScore = convertToTennisScore(numericGame);
+                              }
+                            }
                             
                             if (gameScore) {
                               return (
