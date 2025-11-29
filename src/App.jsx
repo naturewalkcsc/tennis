@@ -1310,7 +1310,24 @@ function Scoring({ config, onAbort, onComplete }) {
       const b = s.tieB;
       let finished = false;
 
-      if (!isFinal) {
+      if (matchType === "final") {
+        // FINAL TIE-BREAK:
+        // To 7 points, win by 2; continues indefinitely until 2-point margin
+        if ((a >= 7 || b >= 7) && Math.abs(a - b) >= 2) {
+          finished = true;
+        }
+
+        if (finished) {
+          s.finished = true;
+          if (a > b) {
+            s.gamesA = 7;
+            s.gamesB = 6;
+          } else {
+            s.gamesA = 6;
+            s.gamesB = 7;
+          }
+        }
+      } else {
         // QUALIFIER/SEMI TIE-BREAK:
         // To 5 points, win by 2; if 5–5, next point wins (max 6–5).
         if ((a >= 5 || b >= 5) && Math.abs(a - b) >= 2) {
@@ -1328,23 +1345,6 @@ function Scoring({ config, onAbort, onComplete }) {
           } else {
             s.gamesA = 3;
             s.gamesB = 4;
-          }
-        }
-      } else {
-        // FINAL TIE-BREAK:
-        // To 7 points, win by 2; continues indefinitely until 2-point margin
-        if ((a >= 7 || b >= 7) && Math.abs(a - b) >= 2) {
-          finished = true;
-        }
-
-        if (finished) {
-          s.finished = true;
-          if (a > b) {
-            s.gamesA = 7;
-            s.gamesB = 6;
-          } else {
-            s.gamesA = 6;
-            s.gamesB = 7;
           }
         }
       }
@@ -1403,7 +1403,18 @@ function Scoring({ config, onAbort, onComplete }) {
 
     // Decide if we enter tie-break or finish the set
     if (!s.tie) {
-      if (!isFinal) {
+      if (matchType === "final") {
+        // FINAL (full set to 6 games)
+        if ((s.gamesA >= 6 || s.gamesB >= 6) && Math.abs(s.gamesA - s.gamesB) >= 2) {
+          // Normal 6+ games, win by 2 (e.g. 6–4, 7–5, 8–6)
+          s.finished = true;
+        } else if (s.gamesA === 6 && s.gamesB === 6) {
+          // Tie-break at 6–6
+          s.tie = true;
+          s.tieA = 0;
+          s.tieB = 0;
+        }
+      } else {
         // QUALIFIERS / SEMIS (Fast4)
         if (s.gamesA === 3 && s.gamesB === 3) {
           // Tie-break at 3–3
@@ -1413,17 +1424,6 @@ function Scoring({ config, onAbort, onComplete }) {
         } else if (s.gamesA >= 4 || s.gamesB >= 4) {
           // First to 4 games wins (no win-by-2 once not at 3–3)
           s.finished = true;
-        }
-      } else {
-        // FINAL (full set)
-        if ((s.gamesA >= 6 || s.gamesB >= 6) && Math.abs(s.gamesA - s.gamesB) >= 2) {
-          // Normal 6+ games, win by 2 (e.g. 6–4, 7–5, 8–6)
-          s.finished = true;
-        } else if (s.gamesA === 6 && s.gamesB === 6) {
-          // Tie-break at 6–6
-          s.tie = true;
-          s.tieA = 0;
-          s.tieB = 0;
         }
       }
     }
