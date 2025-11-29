@@ -1,7 +1,7 @@
 // src/App.jsx
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
+import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X, Settings } from "lucide-react";
 
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
@@ -71,6 +71,18 @@ const apiMatchesAdd = async (payload) => {
   const res = await fetch("/api/matches" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "add", payload }) });
   if (!res.ok) throw new Error("matches-add-failed");
 };
+const apiConfigGet = async () => {
+  const res = await fetch("/api/config" + buster(), { cache: "no-store" });
+  if (!res.ok) throw new Error("config-get-failed");
+  return await res.json();
+};
+const apiConfigSet = async (url) => {
+  const res = await fetch("/api/config" + buster(), {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url })
+  });
+  if (!res.ok) throw new Error("config-set-failed");
+  return await res.json();
+};
 
 /* ---------------------- Data normalization utils ---------------------- */
 /* We standardize to the new canonical shape:
@@ -126,7 +138,7 @@ function AdminLogin({ onOk }) {
 }
 
 /* ---------------------- Landing ---------------------- */
-const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
+const Landing = ({ onStart, onResults, onSettings, onFixtures, onConfig }) => {
   const Tile = ({ title, subtitle, src, action }) => (
     <motion.button onClick={action} whileHover={{ y: -3 }} className="w-full md:w-80 rounded-2xl overflow-hidden border shadow bg-white text-left">
       <div className="h-40 relative">
@@ -149,7 +161,10 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
         <Tile title="Results" subtitle="Active • Upcoming • Completed" src={imgScore} action={onResults} />
         <Tile title="Manage Players" subtitle="Singles & Doubles" src={imgSettings} action={onSettings} />
       </div>
-      <div className="mt-6"><Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4" /> Fixtures</Button></div>
+      <div className="mt-6 flex gap-3">
+        <Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4" /> Fixtures</Button>
+        <Button variant="secondary" onClick={onConfig}><Settings className="w-4 h-4" /> Config</Button>
+      </div>
     </div>
   );
 };
@@ -1676,6 +1691,115 @@ function ResultsAdmin({ onBack }) {
   );
 }
 
+/* ---------------------- Config admin ---------------------- */
+function ConfigAdmin({ onBack }) {
+  const [url, setUrl] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const config = await apiConfigGet();
+        setUrl(config.url || '');
+      } catch (error) {
+        console.error('Failed to load config:', error);
+        setMessage('Failed to load current configuration');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleSave = async () => {
+    if (!url.trim()) {
+      setMessage('Please enter a YouTube URL');
+      return;
+    }
+
+    setSaving(true);
+    setMessage('');
+
+    try {
+      await apiConfigSet(url.trim());
+      setMessage('YouTube URL saved successfully!');
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      setMessage('Failed to save configuration');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="animate-spin w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full mx-auto" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-2xl font-bold">YouTube Stream Configuration</h1>
+      </div>
+
+      <div className="bg-white rounded-xl border p-6 shadow-sm">
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            YouTube URL
+          </label>
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+          <p className="text-sm text-gray-600 mt-1">
+            Enter any YouTube URL format (watch URLs, short URLs, or embed URLs)
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            onClick={handleSave}
+            disabled={saving || !url.trim()}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            {saving ? 'Saving...' : 'Save Configuration'}
+          </Button>
+        </div>
+
+        {message && (
+          <div className={`mt-4 p-3 rounded-lg text-sm ${
+            message.includes('successfully') 
+              ? 'bg-green-50 text-green-800 border border-green-200' 
+              : 'bg-red-50 text-red-800 border border-red-200'
+          }`}>
+            {message}
+          </div>
+        )}
+
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-medium text-gray-900 mb-2">Instructions:</h3>
+          <ul className="text-sm text-gray-600 space-y-1">
+            <li>• Copy any YouTube video URL and paste it above</li>
+            <li>• The system will automatically convert it to the correct format</li>
+            <li>• The configured video will be displayed in the viewer's Live Stream page</li>
+            <li>• Video will play fullscreen below the Back button</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------------- App shell ---------------------- */
 export default function App() {
   const path = typeof window !== "undefined" ? window.location.pathname : "/";
@@ -1696,7 +1820,7 @@ export default function App() {
         <AnimatePresence mode="wait">
           {view === "landing" && (
             <motion.div key="landing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Landing onStart={() => setView("start")} onResults={() => setView("results")} onSettings={() => setView("settings")} onFixtures={() => setView("fixtures")} />
+              <Landing onStart={() => setView("start")} onResults={() => setView("results")} onSettings={() => setView("settings")} onFixtures={() => setView("fixtures")} onConfig={() => setView("config")} />
             </motion.div>
           )}
           {view === "settings" && <motion.div key="settings" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><ManagePlayers onBack={() => setView("landing")} /></motion.div>}
@@ -1704,6 +1828,7 @@ export default function App() {
           {view === "start" && <motion.div key="start" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><StartFromFixtures onBack={() => setView("landing")} onStartScoring={(c) => { setCfg(c); setView("scoring"); }} /></motion.div>}
           {view === "scoring" && cfg && <motion.div key="scoring" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><Scoring config={cfg} onAbort={() => setView("landing")} onComplete={() => setView("results")} /></motion.div>}
           {view === "results" && <motion.div key="results" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><ResultsAdmin onBack={() => setView("landing")} /></motion.div>}
+          {view === "config" && <motion.div key="config" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><ConfigAdmin onBack={() => setView("landing")} /></motion.div>}
         </AnimatePresence>
       </div>
       <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW NPL</footer>

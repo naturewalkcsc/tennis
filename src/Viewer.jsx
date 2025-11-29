@@ -65,35 +65,19 @@ export default function Viewer() {
   const [loadingFixtures, setLoadingFixtures] = useState(true);
   const [error, setError] = useState("");
   
-  const [youtubeUrl, setYoutubeUrl] = useState("https://www.youtube.com/embed/QNPpdtUsC60?autoplay=1&rel=0");
-  const [inputUrl, setInputUrl] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [loadingVideo, setLoadingVideo] = useState(true);
 
-  // Function to convert YouTube URL to embed format
-  const convertToEmbedUrl = (url) => {
-    if (!url) return "";
-    
-    // Extract video ID from various YouTube URL formats
-    let videoId = "";
-    
-    if (url.includes("youtube.com/watch?v=")) {
-      videoId = url.split("v=")[1].split("&")[0];
-    } else if (url.includes("youtu.be/")) {
-      videoId = url.split("youtu.be/")[1].split("?")[0];
-    } else if (url.includes("youtube.com/embed/")) {
-      return url; // Already in embed format
-    }
-    
-    if (videoId) {
-      return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
-    }
-    
-    return url; // Return as-is if we can't parse it
-  };
-
-  const handleGoClick = () => {
-    if (inputUrl) {
-      const embedUrl = convertToEmbedUrl(inputUrl);
-      setYoutubeUrl(embedUrl);
+  // Fetch YouTube URL from config
+  const fetchYouTubeConfig = async () => {
+    try {
+      const res = await fetchJson('/api/config');
+      setYoutubeUrl(res.url || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
+    } catch (error) {
+      console.warn('Failed to load YouTube config', error);
+      setYoutubeUrl('https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
+    } finally {
+      setLoadingVideo(false);
     }
   };
 
@@ -134,6 +118,12 @@ export default function Viewer() {
       }
     })();
 
+    // Load YouTube config
+    fetchYouTubeConfig();
+
+    // Load YouTube config
+    fetchYouTubeConfig();
+
     // refresh every 12 seconds
     const iv = setInterval(async () => {
       try {
@@ -143,6 +133,9 @@ export default function Viewer() {
         const arr = Array.isArray(fx) ? fx : [];
         arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
         setFixtures(arr);
+        
+        // Also refresh YouTube config
+        fetchYouTubeConfig();
       } catch {
         // ignore periodic refresh errors
       }
@@ -375,94 +368,45 @@ if (page === "rules") {
           </button>
         </div>
 
-        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Live Stream</h2>
-        <p style={{ marginTop: 0, marginBottom: 16, color: "#6b7280", fontSize: 14 }}>
-          YouTube live streaming of the current court. Enter a YouTube URL below to change the stream.
-        </p>
-
-        {/* YouTube URL Input */}
-        <div style={{ 
-          maxWidth: 960, 
-          margin: "0 auto 24px auto", 
-          display: "flex", 
-          gap: 12, 
-          alignItems: "center",
-          background: "white",
-          padding: 16,
-          borderRadius: 12,
-          border: "1px solid #e5e7eb"
-        }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
-              YouTube URL:
-            </label>
-            <input
-              type="text"
-              value={inputUrl}
-              onChange={(e) => setInputUrl(e.target.value)}
-              placeholder="Paste YouTube URL here (e.g., https://www.youtube.com/watch?v=VIDEO_ID)"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                border: "1px solid #d1d5db",
-                borderRadius: 8,
-                fontSize: 14,
-                outline: "none"
-              }}
-              onFocus={(e) => e.target.style.borderColor = "#3b82f6"}
-              onBlur={(e) => e.target.style.borderColor = "#d1d5db"}
-            />
+        <h2 style={{ marginTop: 0, marginBottom: 16 }}>Live Stream</h2>
+        
+        {loadingVideo ? (
+          <div style={{ textAlign: 'center', padding: 60 }}>
+            <div style={{ 
+              display: 'inline-block', 
+              width: 24, 
+              height: 24, 
+              border: '3px solid #e5e7eb', 
+              borderTop: '3px solid #3b82f6',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <p style={{ marginTop: 12, color: '#6b7280' }}>Loading stream...</p>
           </div>
-          <button
-            onClick={handleGoClick}
-            disabled={!inputUrl}
+        ) : (
+          <div
             style={{
-              padding: "10px 20px",
-              backgroundColor: inputUrl ? "#3b82f6" : "#9ca3af",
-              color: "white",
-              border: "none",
-              borderRadius: 8,
-              fontWeight: 600,
-              cursor: inputUrl ? "pointer" : "not-allowed",
-              fontSize: 14,
-              marginTop: 24
+              position: "fixed",
+              top: 80,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 1000
             }}
           >
-            Go
-          </button>
-        </div>
-
-        <div
-          style={{
-            position: "relative",
-            paddingBottom: "56.25%",
-            height: 0,
-            overflow: "hidden",
-            borderRadius: 12,
-            boxShadow: "0 12px 30px rgba(15,23,42,0.35)",
-            maxWidth: 960,
-            margin: "0 auto",
-          }}
-        >
-          <iframe
-            title="YouTube live stream"
-            src={youtubeUrl}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              border: 0,
-            }}
-          />
-        </div>
-
-        <div style={{ marginTop: 16, textAlign: "center", fontSize: 12, color: "#9ca3af" }}>
-          Tip: You can use any YouTube URL format - watch URLs, short URLs (youtu.be), or embed URLs will work.
-        </div>
+            <iframe
+              title="YouTube live stream"
+              src={youtubeUrl}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              style={{
+                width: "100%",
+                height: "100%",
+                border: 0,
+              }}
+            />
+          </div>
+        )}
       </div>
     );
   }
