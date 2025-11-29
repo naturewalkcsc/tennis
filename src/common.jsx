@@ -377,7 +377,20 @@ export function FixturesAndResults({
                             </div>
                             {f.status === "completed" && (
                               <div style={{ marginLeft: "auto", color: "#065f46", fontWeight: 700 }}>
-                                {f.winner ? `Winner: ${f.winner}` : ""} {f.scoreline ? ` • ${f.scoreline}` : ""}
+                                {f.winner ? `Winner: ${f.winner}` : ""} 
+                                {f.statusType === "walkover" ? (
+                                  <span style={{ 
+                                    marginLeft: 8, 
+                                    padding: "2px 6px", 
+                                    borderRadius: 12, 
+                                    fontSize: 10, 
+                                    fontWeight: 600, 
+                                    background: "#fef3c7", 
+                                    color: "#92400e" 
+                                  }}>
+                                    WALKOVER
+                                  </span>
+                                ) : f.scoreline ? ` • ${f.scoreline}` : ""}
                               </div>
                             )}
                           </div>
@@ -385,7 +398,7 @@ export function FixturesAndResults({
                         <div style={{ minWidth: 110, textAlign: "right", color: "#475569", fontSize: 13 }}>
                           {f.venue ? <div>{f.venue}</div> : null}
                           <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                            {f.status === "upcoming" ? "Scheduled" : (f.status === "active" ? "Live" : "Finished")}
+                            {f.status === "upcoming" ? "Scheduled" : (f.status === "active" ? "Live" : (f.statusType === "walkover" ? "Walkover" : "Finished"))}
                           </div>
                         </div>
                       </div>
