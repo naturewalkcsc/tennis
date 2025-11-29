@@ -111,6 +111,9 @@ export default function Viewer() {
       videoId = url.split('v=')[1].split('&')[0];
     } else if (url.includes('youtu.be/')) {
       videoId = url.split('youtu.be/')[1].split('?')[0];
+    } else if (url.includes('youtube.com/live/')) {
+      // Handle YouTube Live URLs: https://www.youtube.com/live/VIDEO_ID
+      videoId = url.split('/live/')[1].split('?')[0];
     } else if (url.includes('youtube.com/embed/')) {
       // Already in embed format
       return url;
@@ -122,6 +125,7 @@ export default function Viewer() {
     }
     
     // If no valid format found, return default
+    console.warn('Could not parse YouTube URL:', url);
     return 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0';
   };
 

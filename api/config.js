@@ -37,6 +37,8 @@ export default async function handler(req, res) {
         videoId = url.split('v=')[1].split('&')[0];
       } else if (url.includes('youtu.be/')) {
         videoId = url.split('youtu.be/')[1].split('?')[0];
+      } else if (url.includes('youtube.com/live/')) {
+        videoId = url.split('/live/')[1].split('?')[0];
       } else if (url.includes('youtube.com/embed/')) {
         embedUrl = url;
       }
