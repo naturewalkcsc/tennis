@@ -269,6 +269,207 @@ export function FixturesAndResults({
         </div>
       ) : (
         <div style={{ marginTop: 12 }}>
+          {/* Semifinals & Finals Tables - Show First */}
+          {(() => {
+            const knockoutMatches = fixtures.filter(f => 
+              f.matchType && (f.matchType.toLowerCase() === 'semifinal' || f.matchType.toLowerCase() === 'final')
+            );
+            
+            if (knockoutMatches.length === 0) return null;
+
+            const categoriesWithKnockout = [...new Set(knockoutMatches.map(f => f.category || 'Uncategorized'))];
+
+            return (
+              <div style={{ marginBottom: 24 }}>
+                <h3 style={{ margin: 0, marginBottom: 16, fontSize: 18, fontWeight: 700, color: '#1f2937' }}>
+                  Knockout Rounds
+                </h3>
+                {categoriesWithKnockout.map(category => {
+                  const categoryMatches = knockoutMatches.filter(f => (f.category || 'Uncategorized') === category);
+                  const semifinals = categoryMatches.filter(f => f.matchType && f.matchType.toLowerCase() === 'semifinal');
+                  const finals = categoryMatches.filter(f => f.matchType && f.matchType.toLowerCase() === 'final');
+
+                  return (
+                    <div key={category} style={{ 
+                      marginBottom: 20, 
+                      background: 'white', 
+                      border: '1px solid #e5e7eb', 
+                      borderRadius: 12, 
+                      padding: 16,
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                    }}>
+                      <h4 style={{ 
+                        fontWeight: 700, 
+                        marginBottom: 16, 
+                        color: '#1f2937',
+                        fontSize: 16,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        borderBottom: '2px solid #f3f4f6',
+                        paddingBottom: 8
+                      }}>{category}</h4>
+                      
+                      {/* Semifinals Section */}
+                      {semifinals.length > 0 && (
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ 
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            marginBottom: 12
+                          }}>
+                            <span style={{ 
+                              background: '#dbeafe', 
+                              color: '#1e40af', 
+                              padding: '4px 8px', 
+                              borderRadius: 6, 
+                              fontSize: 12,
+                              fontWeight: 700,
+                              textTransform: 'uppercase'
+                            }}>
+                              Semifinals
+                            </span>
+                          </div>
+                          <div style={{ display: 'grid', gap: 8 }}>
+                            {semifinals.map(match => (
+                              <div key={match.id} style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 8,
+                                padding: 12,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                transition: 'all 0.2s'
+                              }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>
+                                    {(match.sides || []).join(' vs ')}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                    {match.start ? new Date(match.start).toLocaleString() : 'TBD'}
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  {statusBadge(match.status)}
+                                  {match.status === 'completed' && match.winner && (
+                                    <div style={{ marginTop: 4 }}>
+                                      <div style={{ color: '#059669', fontWeight: 600, fontSize: 12 }}>
+                                        Winner: {match.winner}
+                                      </div>
+                                      {match.scoreline && (
+                                        <div style={{ color: '#6b7280', fontSize: 11 }}>
+                                          {match.scoreline}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Finals Section - Highlighted */}
+                      {finals.length > 0 && (
+                        <div>
+                          <div style={{ 
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            marginBottom: 12
+                          }}>
+                            <span style={{ 
+                              background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', 
+                              color: 'white', 
+                              padding: '4px 8px', 
+                              borderRadius: 6, 
+                              fontSize: 12,
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              boxShadow: '0 2px 4px rgba(251, 191, 36, 0.3)'
+                            }}>
+                              🏆 Finals
+                            </span>
+                          </div>
+                          <div style={{ display: 'grid', gap: 8 }}>
+                            {finals.map(match => (
+                              <div key={match.id} style={{
+                                background: match.status === 'completed' 
+                                  ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)' 
+                                  : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                                border: match.status === 'completed' 
+                                  ? '2px solid #fbbf24' 
+                                  : '2px solid #cbd5e1',
+                                borderRadius: 10,
+                                padding: 16,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                boxShadow: match.status === 'completed' 
+                                  ? '0 4px 12px rgba(251, 191, 36, 0.2)' 
+                                  : '0 2px 8px rgba(0, 0, 0, 0.1)',
+                                position: 'relative',
+                                overflow: 'hidden'
+                              }}>
+                                {match.status === 'completed' && (
+                                  <div style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    height: 3,
+                                    background: 'linear-gradient(90deg, #fbbf24, #f59e0b, #fbbf24)'
+                                  }} />
+                                )}
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ 
+                                    fontWeight: 700, 
+                                    marginBottom: 4, 
+                                    fontSize: 16,
+                                    color: match.status === 'completed' ? '#92400e' : '#374151'
+                                  }}>
+                                    {(match.sides || []).join(' vs ')}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                    {match.start ? new Date(match.start).toLocaleString() : 'TBD'}
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  {statusBadge(match.status)}
+                                  {match.status === 'completed' && match.winner && (
+                                    <div style={{ marginTop: 6 }}>
+                                      <div style={{ 
+                                        color: '#059669', 
+                                        fontWeight: 700, 
+                                        fontSize: 14,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6
+                                      }}>
+                                        🏆 Champion: {match.winner}
+                                      </div>
+                                      {match.scoreline && (
+                                        <div style={{ color: '#6b7280', fontSize: 12, marginTop: 2 }}>
+                                          {match.scoreline}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {/* Standings table */}
           {Object.keys(standingsByCategory).length > 0 && (
             <div style={{ marginBottom: 20 }}>
