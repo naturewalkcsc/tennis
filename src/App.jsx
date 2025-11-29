@@ -1332,11 +1332,8 @@ function Scoring({ config, onAbort, onComplete }) {
         }
       } else {
         // FINAL TIE-BREAK:
-        // To 7 points, win by 2; if 10–10, next point wins (max 11–10).
+        // To 7 points, win by 2; continues indefinitely until 2-point margin
         if ((a >= 7 || b >= 7) && Math.abs(a - b) >= 2) {
-          finished = true;
-        } else if ((a >= 11 || b >= 11) && Math.abs(a - b) >= 1) {
-          // After 10–10, 11–10 or 10–11 wins
           finished = true;
         }
 
@@ -1493,7 +1490,7 @@ function Scoring({ config, onAbort, onComplete }) {
     : isSemifinalView
     ? "Semifinal: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
     : isFinalView
-    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Traditional advantage, no golden point."
+    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; continues indefinitely until 2-point margin). Traditional advantage, no golden point."
     : "Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
 
   // Show match type selection screen first
