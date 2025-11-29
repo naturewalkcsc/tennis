@@ -281,6 +281,20 @@ export function FixturesAndResults({
 
             return (
               <div style={{ marginBottom: 24 }}>
+                <style>{`
+                  @keyframes shimmer {
+                    0% { background-position: 200% 0; }
+                    100% { background-position: -200% 0; }
+                  }
+                  @keyframes bounce {
+                    0%, 100% { transform: translateY(0) scale(1); }
+                    50% { transform: translateY(-4px) scale(1.1); }
+                  }
+                  @keyframes pulse {
+                    0%, 100% { box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4); }
+                    50% { box-shadow: 0 8px 20px rgba(251, 191, 36, 0.6); }
+                  }
+                `}</style>
                 <h3 style={{ margin: 0, marginBottom: 16, fontSize: 18, fontWeight: 700, color: '#1f2937' }}>
                   Knockout Rounds
                 </h3>
@@ -353,12 +367,20 @@ export function FixturesAndResults({
                                 <div style={{ textAlign: 'right' }}>
                                   {statusBadge(match.status)}
                                   {match.status === 'completed' && match.winner && (
-                                    <div style={{ marginTop: 4 }}>
-                                      <div style={{ color: '#059669', fontWeight: 600, fontSize: 12 }}>
-                                        Winner: {match.winner}
+                                    <div style={{ marginTop: 6 }}>
+                                      <div style={{ 
+                                        color: '#059669', 
+                                        fontWeight: 700, 
+                                        fontSize: 13,
+                                        background: '#dcfce7',
+                                        padding: '4px 8px',
+                                        borderRadius: 6,
+                                        border: '1px solid #16a34a'
+                                      }}>
+                                        🎯 Winner: {match.winner}
                                       </div>
                                       {match.scoreline && (
-                                        <div style={{ color: '#6b7280', fontSize: 11 }}>
+                                        <div style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>
                                           {match.scoreline}
                                         </div>
                                       )}
@@ -400,18 +422,21 @@ export function FixturesAndResults({
                                   ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)' 
                                   : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
                                 border: match.status === 'completed' 
-                                  ? '2px solid #fbbf24' 
+                                  ? '3px solid #fbbf24' 
                                   : '2px solid #cbd5e1',
-                                borderRadius: 10,
+                                borderRadius: 12,
                                 padding: 16,
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 alignItems: 'center',
                                 boxShadow: match.status === 'completed' 
-                                  ? '0 4px 12px rgba(251, 191, 36, 0.2)' 
+                                  ? '0 8px 25px rgba(251, 191, 36, 0.3)' 
                                   : '0 2px 8px rgba(0, 0, 0, 0.1)',
                                 position: 'relative',
-                                overflow: 'hidden'
+                                overflow: 'hidden',
+                                animation: match.status === 'completed' && match.winner ? 'pulse 3s ease-in-out infinite' : 'none',
+                                transform: match.status === 'completed' ? 'scale(1.02)' : 'scale(1)',
+                                transition: 'all 0.3s ease'
                               }}>
                                 {match.status === 'completed' && (
                                   <div style={{
@@ -439,20 +464,40 @@ export function FixturesAndResults({
                                 <div style={{ textAlign: 'right' }}>
                                   {statusBadge(match.status)}
                                   {match.status === 'completed' && match.winner && (
-                                    <div style={{ marginTop: 6 }}>
+                                    <div style={{ marginTop: 8 }}>
                                       <div style={{ 
-                                        color: '#059669', 
-                                        fontWeight: 700, 
-                                        fontSize: 14,
+                                        color: '#b45309', 
+                                        fontWeight: 800, 
+                                        fontSize: 16,
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: 6
+                                        gap: 8,
+                                        background: 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #fef3c7 100%)',
+                                        backgroundSize: '200% 200%',
+                                        animation: 'shimmer 2s ease-in-out infinite',
+                                        padding: '8px 12px',
+                                        borderRadius: 8,
+                                        border: '2px solid #f59e0b',
+                                        boxShadow: '0 4px 12px rgba(251, 191, 36, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
                                       }}>
-                                        🏆 Champion: {match.winner}
+                                        <span style={{ 
+                                          fontSize: 18,
+                                          animation: 'bounce 2s ease-in-out infinite',
+                                          display: 'inline-block'
+                                        }}>🏆</span>
+                                        <span style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
+                                          CHAMPION: {match.winner.toUpperCase()}
+                                        </span>
                                       </div>
                                       {match.scoreline && (
-                                        <div style={{ color: '#6b7280', fontSize: 12, marginTop: 2 }}>
-                                          {match.scoreline}
+                                        <div style={{ 
+                                          color: '#92400e', 
+                                          fontSize: 13, 
+                                          marginTop: 4,
+                                          fontWeight: 600,
+                                          textAlign: 'center'
+                                        }}>
+                                          Final Score: {match.scoreline}
                                         </div>
                                       )}
                                     </div>
