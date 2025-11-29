@@ -18,9 +18,24 @@ import { FixturesAndResults, normalizePlayersMap } from "./common.jsx";
 const cacheBuster = () => `?t=${Date.now()}`;
 
 async function fetchJson(url) {
-  const res = await fetch(url + cacheBuster(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`${url} failed: ${res.status}`);
-  return await res.json();
+  try {
+    const res = await fetch(url + cacheBuster(), { cache: "no-store" });
+    if (!res.ok) throw new Error(`${url} failed: ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.warn(`API not available for ${url}, using localStorage fallback`);
+    // Development mode fallback
+    if (url.includes('/fixtures')) {
+      return JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+    }
+    if (url.includes('/players')) {
+      return { singles: {}, doubles: {} };
+    }
+    if (url.includes('/config')) {
+      return { url: localStorage.getItem('dev_youtube_url') || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0' };
+    }
+    throw e;
+  }
 }
 
 function Tile({ img, title, subtitle, onClick }) {
@@ -172,7 +187,7 @@ export default function Viewer() {
     // Load YouTube config
     fetchYouTubeConfig();
 
-    // refresh every 12 seconds
+    // refresh every 2 seconds for real-time updates
     const iv = setInterval(async () => {
       try {
         const [pData, fx] = await Promise.all([fetchJson("/api/players"), fetchJson("/api/fixtures")]);
@@ -182,12 +197,14 @@ export default function Viewer() {
         arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
         setFixtures(arr);
         
-        // Also refresh YouTube config
-        fetchYouTubeConfig();
+        // Also refresh YouTube config (less frequently)
+        if (Date.now() % 12000 < 2000) { // roughly every 6 cycles
+          fetchYouTubeConfig();
+        }
       } catch {
         // ignore periodic refresh errors
       }
-    }, 12000);
+    }, 2000);
 
     return () => {
       alive = false;

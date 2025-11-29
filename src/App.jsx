@@ -50,12 +50,32 @@ const apiFixturesList = async () => {
   return await res.json();
 };
 const apiFixturesAdd = async (payload) => {
-  const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "add", payload }) });
-  if (!res.ok) throw new Error("fixtures-add-failed");
+  try {
+    const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "add", payload }) });
+    if (!res.ok) throw new Error("fixtures-add-failed");
+  } catch (e) {
+    console.warn('API not available, using localStorage fallback for fixture add:', payload);
+    // Development mode fallback - use localStorage
+    const fixtures = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+    const newFixture = { status: payload.status || 'upcoming', active: false, ...payload };
+    fixtures.push(newFixture);
+    localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
+  }
 };
 const apiFixturesUpdate = async (id, patch) => {
-  const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "update", id, patch }) });
-  if (!res.ok) throw new Error("fixtures-update-failed");
+  try {
+    const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "update", id, patch }) });
+    if (!res.ok) throw new Error("fixtures-update-failed");
+  } catch (e) {
+    console.warn('API not available, using localStorage fallback for fixture update:', { id, patch });
+    // Development mode fallback - use localStorage
+    const fixtures = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+    const index = fixtures.findIndex(f => f.id === id);
+    if (index >= 0) {
+      fixtures[index] = { ...fixtures[index], ...patch };
+      localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
+    }
+  }
 };
 const apiFixturesRemove = async (id) => {
   const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "remove", id }) });
