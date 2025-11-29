@@ -1360,7 +1360,7 @@ function Scoring({ config, onAbort, onComplete }) {
     }
 
     // ----- Normal game mode -----
-    const limitDeuces = (isQualifier || isSemifinal) ? 1 : 9999; // qualifiers and semifinals use golden point from 2nd deuce
+    const limitDeuces = 1; // all match types use golden point from 2nd deuce onward
 
     let [pA, pB] = points;
     if (who === 0) pA += 1;
@@ -1444,8 +1444,8 @@ function Scoring({ config, onAbort, onComplete }) {
   const isSemifinalView = (cfgMatchType || "").toLowerCase() === "semifinal";
 
   const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
-  // For qualifiers and semifinals: 1st deuce = normal advantage, 2nd deuce onward = golden point
-  const isGoldenDeuce = (isQualifierView || isSemifinalView) && atDeuce && deuceCount >= 2;
+  // For all match types: 1st deuce = normal advantage, 2nd deuce onward = golden point
+  const isGoldenDeuce = atDeuce && deuceCount >= 2;
 
   let displayPointsA = mapPointToTennis(pA);
   let displayPointsB = mapPointToTennis(pB);
@@ -1463,7 +1463,7 @@ function Scoring({ config, onAbort, onComplete }) {
       pA >= 3 &&
       pB >= 3 &&
       Math.abs(pA - pB) === 1 &&
-      !(isQualifierView || isSemifinalView ? isGoldenDeuce : false)
+      !isGoldenDeuce
     ) {
       // First deuce / traditional advantage view
       if (pA > pB) {
@@ -1490,7 +1490,7 @@ function Scoring({ config, onAbort, onComplete }) {
     : isSemifinalView
     ? "Semifinal: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
     : isFinalView
-    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; continues indefinitely until 2-point margin). Traditional advantage, no golden point."
+    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; continues indefinitely until 2-point margin). First deuce uses advantage; from second deuce onward, golden point."
     : "Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
 
   // Show match type selection screen first
