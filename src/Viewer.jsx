@@ -187,33 +187,55 @@ export default function Viewer() {
     // Load YouTube config
     fetchYouTubeConfig();
 
-    // Listen for localStorage changes for real-time updates
-    const handleStorageChange = () => {
+    // Track last loaded data to prevent unnecessary updates
+    let lastFixturesHash = '';
+    
+    const loadFromLocalStorage = () => {
       try {
-        const fx = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+        const fixturesJson = localStorage.getItem('dev_fixtures') || '[]';
+        
+        // Only update if data actually changed
+        if (fixturesJson === lastFixturesHash) {
+          return;
+        }
+        lastFixturesHash = fixturesJson;
+        
+        const fx = JSON.parse(fixturesJson);
         const arr = Array.isArray(fx) ? fx : [];
         arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
+        console.log('Fixtures updated - new data detected:', arr.length);
         setFixtures(arr);
-        console.log('REAL-TIME: Fixtures updated from localStorage:', arr.length);
+        return arr;
       } catch (e) {
         console.warn('Failed to parse localStorage fixtures:', e);
+        return [];
       }
     };
 
+    // Load immediately on mount
+    loadFromLocalStorage();
+
     // Listen for custom events for immediate real-time updates
     const handleFixturesUpdated = (event) => {
-      const fixtures = event.detail;
-      const arr = Array.isArray(fixtures) ? fixtures : [];
-      arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
-      setFixtures(arr);
-      console.log('INSTANT: Fixtures updated via custom event:', arr.length);
+      console.log('Custom event received:', event.detail?.length || 0, 'fixtures');
+      loadFromLocalStorage();
+    };
+
+    // Listen for storage changes (cross-tab)
+    const handleStorageChange = (e) => {
+      if (e.key === 'dev_fixtures') {
+        console.log('Storage event received from another tab');
+        loadFromLocalStorage();
+      }
     };
 
     window.addEventListener('fixturesUpdated', handleFixturesUpdated);
     window.addEventListener('storage', handleStorageChange);
     
-    // Also poll localStorage directly every 500ms as backup
-    const localStorageInterval = setInterval(handleStorageChange, 500);
+    // Poll localStorage less frequently, only when needed
+    const localStorageInterval = setInterval(() => {
+      loadFromLocalStorage();
+    }, 1000);
     
     // refresh every 5 seconds for API data (less frequent since we have localStorage)
     const iv = setInterval(async () => {
@@ -565,6 +587,33 @@ if (page === "rules") {
           </div>
         ) : (
           <>
+            {/* Debug Info Overlay */}
+            <div style={{
+              position: 'fixed',
+              top: 100,
+              right: 20,
+              zIndex: 99999,
+              background: 'rgba(0, 0, 0, 0.8)',
+              color: 'white',
+              padding: '8px 12px',
+              borderRadius: 4,
+              fontSize: 12,
+              fontFamily: 'monospace',
+              maxWidth: 300
+            }}>
+              <div>Fixtures: {fixtures.length}</div>
+              <div>Active: {fixtures.filter(f => f.status === 'active').length}</div>
+              {fixtures.length > 0 && (
+                <div style={{ fontSize: 10, marginTop: 4 }}>
+                  {fixtures.slice(0, 2).map((f, i) => (
+                    <div key={i}>
+                      {i+1}: {f.sides?.join(' vs ') || 'No sides'} - {f.status} - {f.scoreline || 'No score'}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Live Score Overlay - Top Right Corner */}
             {(() => {
               const activeMatches = fixtures.filter(f => f.status === 'active');
@@ -575,22 +624,25 @@ if (page === "rules") {
                   position: 'fixed',
                   top: 160,
                   right: 20,
-                  zIndex: 1002,
+                  zIndex: 9999,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 8,
                   pointerEvents: 'none',
-                  maxWidth: 320
+                  maxWidth: 320,
+                  isolation: 'isolate'
                 }}>
                   {activeMatches.slice(0, 2).map((match, index) => (
                     <div key={match.id} style={{
-                      background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.9) 0%, rgba(20, 20, 20, 0.85) 100%)',
+                      background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(20, 20, 20, 0.9) 100%)',
                       color: 'white',
                       padding: '10px 14px',
                       borderRadius: 8,
+                      position: 'relative',
+                      zIndex: 10000,
                       backdropFilter: 'blur(12px)',
-                      border: '1px solid rgba(34, 197, 94, 0.6)',
-                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                      border: '2px solid rgba(34, 197, 94, 0.8)',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(34, 197, 94, 0.3)',
                       animation: `liveScore ${2 + index * 0.5}s ease-in-out infinite`,
                       transform: 'translateX(0)',
                       transition: 'all 0.3s ease'
