@@ -187,33 +187,45 @@ export default function Viewer() {
     // Load YouTube config
     fetchYouTubeConfig();
 
-    // Listen for localStorage changes for real-time updates
-    const handleStorageChange = () => {
+    // Always load from localStorage immediately
+    const loadFromLocalStorage = () => {
       try {
         const fx = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
         const arr = Array.isArray(fx) ? fx : [];
         arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
+        console.log('Loading fixtures from localStorage:', arr.length, arr);
         setFixtures(arr);
-        console.log('REAL-TIME: Fixtures updated from localStorage:', arr.length);
+        return arr;
       } catch (e) {
         console.warn('Failed to parse localStorage fixtures:', e);
+        return [];
       }
     };
 
+    // Load immediately on mount
+    loadFromLocalStorage();
+
     // Listen for custom events for immediate real-time updates
     const handleFixturesUpdated = (event) => {
-      const fixtures = event.detail;
-      const arr = Array.isArray(fixtures) ? fixtures : [];
-      arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
-      setFixtures(arr);
-      console.log('INSTANT: Fixtures updated via custom event:', arr.length);
+      console.log('Custom event received:', event.detail);
+      loadFromLocalStorage();
+    };
+
+    // Listen for storage changes (cross-tab)
+    const handleStorageChange = (e) => {
+      if (e.key === 'dev_fixtures') {
+        console.log('Storage event received');
+        loadFromLocalStorage();
+      }
     };
 
     window.addEventListener('fixturesUpdated', handleFixturesUpdated);
     window.addEventListener('storage', handleStorageChange);
     
-    // Also poll localStorage directly every 500ms as backup
-    const localStorageInterval = setInterval(handleStorageChange, 500);
+    // Poll localStorage very frequently for same-tab updates
+    const localStorageInterval = setInterval(() => {
+      loadFromLocalStorage();
+    }, 100);
     
     // refresh every 5 seconds for API data (less frequent since we have localStorage)
     const iv = setInterval(async () => {

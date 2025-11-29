@@ -1237,10 +1237,33 @@ function Scoring({ config, onAbort, onComplete }) {
       const displayPA = mapPointToTennis(points[0]);
       const displayPB = mapPointToTennis(points[1]);
       console.log('Match started - Initial score:', `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`);
+      console.log('DEBUG: fixtureId available:', fixtureId);
       
       if (fixtureId) {
         // Send initial score: "0-0 0-0" (set games and current game points)
         pushLiveScore(current, displayPA, displayPB);
+      } else {
+        console.warn('No fixtureId - creating temporary fixture for live scoring');
+        // Create a temporary fixture for live scoring if none exists
+        const tempFixture = {
+          id: crypto.randomUUID(),
+          sides: sides,
+          status: 'active',
+          scoreline: `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`,
+          matchType: cfgMatchType || 'regular',
+          mode: 'singles',
+          start: Date.now()
+        };
+        
+        try {
+          const fixtures = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+          fixtures.push(tempFixture);
+          localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
+          window.dispatchEvent(new CustomEvent('fixturesUpdated', { detail: fixtures }));
+          console.log('Created temporary fixture for live scoring:', tempFixture);
+        } catch (e) {
+          console.error('Failed to create temporary fixture:', e);
+        }
       }
     }
   }, [matchStarted]);
