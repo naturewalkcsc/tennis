@@ -187,28 +187,63 @@ export default function Viewer() {
     // Load YouTube config
     fetchYouTubeConfig();
 
-    // refresh every 2 seconds for real-time updates
+    // Listen for localStorage changes for real-time updates
+    const handleStorageChange = () => {
+      try {
+        const fx = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+        const arr = Array.isArray(fx) ? fx : [];
+        arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
+        setFixtures(arr);
+        console.log('REAL-TIME: Fixtures updated from localStorage:', arr.length);
+      } catch (e) {
+        console.warn('Failed to parse localStorage fixtures:', e);
+      }
+    };
+
+    // Listen for custom events for immediate real-time updates
+    const handleFixturesUpdated = (event) => {
+      const fixtures = event.detail;
+      const arr = Array.isArray(fixtures) ? fixtures : [];
+      arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
+      setFixtures(arr);
+      console.log('INSTANT: Fixtures updated via custom event:', arr.length);
+    };
+
+    window.addEventListener('fixturesUpdated', handleFixturesUpdated);
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also poll localStorage directly every 500ms as backup
+    const localStorageInterval = setInterval(handleStorageChange, 500);
+    
+    // refresh every 5 seconds for API data (less frequent since we have localStorage)
     const iv = setInterval(async () => {
       try {
         const [pData, fx] = await Promise.all([fetchJson("/api/players"), fetchJson("/api/fixtures")]);
         if (!alive) return;
         setPlayers({ singles: normalizePlayersMap(pData.singles || {}), doubles: normalizePlayersMap(pData.doubles || {}) });
-        const arr = Array.isArray(fx) ? fx : [];
-        arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
-        setFixtures(arr);
+        
+        // Only update fixtures if we didn't get them from localStorage
+        if (!localStorage.getItem('dev_fixtures')) {
+          const arr = Array.isArray(fx) ? fx : [];
+          arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
+          setFixtures(arr);
+        }
         
         // Also refresh YouTube config (less frequently)
-        if (Date.now() % 12000 < 2000) { // roughly every 6 cycles
+        if (Date.now() % 15000 < 5000) { // roughly every 3 cycles
           fetchYouTubeConfig();
         }
       } catch {
         // ignore periodic refresh errors
       }
-    }, 2000);
+    }, 5000);
 
     return () => {
       alive = false;
       clearInterval(iv);
+      clearInterval(localStorageInterval);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('fixturesUpdated', handleFixturesUpdated);
     };
   }, []);
 
