@@ -60,6 +60,8 @@ const apiFixturesAdd = async (payload) => {
     const newFixture = { status: payload.status || 'upcoming', active: false, ...payload };
     fixtures.push(newFixture);
     localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
+    // Trigger immediate update for real-time scoring
+    window.dispatchEvent(new CustomEvent('fixturesUpdated', { detail: fixtures }));
   }
 };
 const apiFixturesUpdate = async (id, patch) => {
@@ -74,6 +76,8 @@ const apiFixturesUpdate = async (id, patch) => {
     if (index >= 0) {
       fixtures[index] = { ...fixtures[index], ...patch };
       localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
+      // Trigger immediate update for real-time scoring
+      window.dispatchEvent(new CustomEvent('fixturesUpdated', { detail: fixtures }));
     }
   }
 };
