@@ -71,15 +71,18 @@ export default function Viewer() {
   // Fetch YouTube URL from config
   const fetchYouTubeConfig = async () => {
     try {
-      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       let result;
       
-      if (isDev) {
-        // Mock implementation for development
+      try {
+        // Always try the API first
+        result = await fetchJson('/api/config');
+        console.log('Loaded YouTube config from API:', result);
+      } catch (apiError) {
+        console.warn('API failed, trying localStorage fallback:', apiError);
+        // Fallback to localStorage in development
         const storedUrl = localStorage.getItem('dev_youtube_url');
         result = { url: storedUrl || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0' };
-      } else {
-        result = await fetchJson('/api/config');
+        console.log('Using localStorage URL:', result.url);
       }
       
       let finalUrl = result.url || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0';
@@ -87,6 +90,7 @@ export default function Viewer() {
       // Ensure the URL is in embed format
       finalUrl = convertToEmbedUrl(finalUrl);
       
+      console.log('Final YouTube URL:', finalUrl);
       setYoutubeUrl(finalUrl);
     } catch (error) {
       console.warn('Failed to load YouTube config', error);
@@ -408,7 +412,25 @@ if (page === "rules") {
           </button>
         </div>
 
-        <h2 style={{ marginTop: 0, marginBottom: 16 }}>Live Stream</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h2 style={{ marginTop: 0, marginBottom: 0 }}>Live Stream</h2>
+          <button
+            onClick={() => {
+              setLoadingVideo(true);
+              fetchYouTubeConfig();
+            }}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 6,
+              border: '1px solid #e5e7eb',
+              background: '#f9fafb',
+              fontSize: 12,
+              cursor: 'pointer'
+            }}
+          >
+            🔄 Refresh Stream
+          </button>
+        </div>
         
         {/* Show current stream URL */}
         <div style={{ 
