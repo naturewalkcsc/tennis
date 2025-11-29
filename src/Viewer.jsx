@@ -585,17 +585,65 @@ if (page === "rules") {
                         {(match.sides || []).join(' vs ')}
                       </div>
                       
-                      {/* Score */}
+                      {/* Score Display */}
                       {match.scoreline && (
-                        <div style={{
-                          fontSize: 16,
-                          fontWeight: 800,
-                          color: '#fbbf24',
-                          textShadow: '0 1px 3px rgba(0,0,0,0.7)',
-                          letterSpacing: '1px',
-                          marginBottom: 2
-                        }}>
-                          {match.scoreline}
+                        <div style={{ marginBottom: 4 }}>
+                          {/* Set Scores */}
+                          <div style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: '#fbbf24',
+                            textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                            letterSpacing: '0.5px',
+                            marginBottom: 3
+                          }}>
+                            {(() => {
+                              // Parse scoreline to separate set scores and current game
+                              const scoreParts = match.scoreline.split(' ');
+                              const setScores = scoreParts.filter(part => 
+                                part.includes('-') && !part.includes('/') && 
+                                !['15', '30', '40', 'AD', 'DEUCE'].some(point => part.includes(point))
+                              );
+                              return setScores.length > 0 ? `Sets: ${setScores.join(', ')}` : match.scoreline;
+                            })()}
+                          </div>
+                          
+                          {/* Current Game Points */}
+                          {(() => {
+                            const scoreParts = match.scoreline.split(' ');
+                            const gameScore = scoreParts.find(part => 
+                              ['15', '30', '40', 'AD', 'DEUCE'].some(point => part.includes(point)) ||
+                              (part.includes('-') && (part.includes('/') || part.split('-').some(s => 
+                                ['0', '15', '30', '40'].includes(s))))
+                            );
+                            
+                            if (gameScore) {
+                              return (
+                                <div style={{
+                                  fontSize: 18,
+                                  fontWeight: 800,
+                                  color: '#22c55e',
+                                  textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                                  letterSpacing: '1px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6
+                                }}>
+                                  <span style={{
+                                    fontSize: 10,
+                                    color: '#94a3b8',
+                                    fontWeight: 500
+                                  }}>
+                                    GAME:
+                                  </span>
+                                  {gameScore.includes('DEUCE') ? 'DEUCE' :
+                                   gameScore.includes('AD') ? gameScore :
+                                   gameScore}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                       )}
                       
