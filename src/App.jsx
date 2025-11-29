@@ -76,9 +76,14 @@ const isDev = window.location.hostname === 'localhost' || window.location.hostna
 
 const apiConfigGet = async () => {
   if (isDev) {
-    // Mock implementation for development
-    const storedUrl = localStorage.getItem('dev_youtube_url');
-    return { url: storedUrl || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0' };
+    // Mock implementation for development - return a Promise
+    return new Promise((resolve) => {
+      const storedUrl = localStorage.getItem('dev_youtube_url');
+      // Simulate async behavior
+      setTimeout(() => {
+        resolve({ url: storedUrl || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0' });
+      }, 50);
+    });
   }
   const res = await fetch("/api/config" + buster(), { cache: "no-store" });
   if (!res.ok) throw new Error("config-get-failed");
@@ -86,24 +91,29 @@ const apiConfigGet = async () => {
 };
 const apiConfigSet = async (url) => {
   if (isDev) {
-    // Mock implementation for development
-    let embedUrl = url;
-    let videoId = null;
-    
-    if (url.includes('youtube.com/watch?v=')) {
-      videoId = url.split('v=')[1].split('&')[0];
-    } else if (url.includes('youtu.be/')) {
-      videoId = url.split('youtu.be/')[1].split('?')[0];
-    } else if (url.includes('youtube.com/embed/')) {
-      embedUrl = url;
-    }
-    
-    if (videoId) {
-      embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
-    }
-    
-    localStorage.setItem('dev_youtube_url', embedUrl);
-    return { success: true, url: embedUrl };
+    // Mock implementation for development - return a Promise
+    return new Promise((resolve) => {
+      let embedUrl = url;
+      let videoId = null;
+      
+      if (url.includes('youtube.com/watch?v=')) {
+        videoId = url.split('v=')[1].split('&')[0];
+      } else if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split('?')[0];
+      } else if (url.includes('youtube.com/embed/')) {
+        embedUrl = url;
+      }
+      
+      if (videoId) {
+        embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+      }
+      
+      localStorage.setItem('dev_youtube_url', embedUrl);
+      // Simulate async behavior
+      setTimeout(() => {
+        resolve({ success: true, url: embedUrl });
+      }, 100);
+    });
   }
   const res = await fetch("/api/config" + buster(), {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url })
