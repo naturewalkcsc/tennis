@@ -1241,6 +1241,43 @@ function Scoring({ config, onAbort, onComplete }) {
     }
   }, [matchStarted]);
 
+  // Update live score whenever points change
+  useEffect(() => {
+    if (matchStarted && current && fixtureId) {
+      const pA = points[0];
+      const pB = points[1];
+      
+      let displayPA = mapPointToTennis(pA);
+      let displayPB = mapPointToTennis(pB);
+      
+      // Handle deuce and advantage situations only if not in tie-break
+      if (!current.tie) {
+        const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
+        const isGoldenDeuce = atDeuce && deuceCount >= 2;
+        
+        if (atDeuce) {
+          displayPA = 40;
+          displayPB = 40;
+        } else if (pA >= 3 && pB >= 3 && Math.abs(pA - pB) === 1 && !isGoldenDeuce) {
+          if (pA > pB) {
+            displayPA = "Ad";
+            displayPB = 40;
+          } else {
+            displayPB = "Ad";
+            displayPA = 40;
+          }
+        }
+      } else {
+        // In tie-break, show tie-break points
+        displayPA = current.tieA;
+        displayPB = current.tieB;
+      }
+      
+      console.log('Points updated - Live score:', `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`);
+      pushLiveScore(current, displayPA, displayPB);
+    }
+  }, [points, deuceCount, matchStarted, current?.gamesA, current?.gamesB, current?.tie, current?.tieA, current?.tieB]);
+
   /** Handle walkover completion */
   const recordWalkover = async () => {
     const winnerName = walkoverPlayer === sides[0] ? sides[1] : sides[0];
@@ -1397,7 +1434,7 @@ function Scoring({ config, onAbort, onComplete }) {
       if (s.finished) {
         recordResult(s);
       } else {
-        pushLiveScore(s, s.tieA, s.tieB); // In tie-break, show TB points
+        // Live score will be updated by useEffect when state changes
       }
       return;
     }
@@ -1476,14 +1513,7 @@ function Scoring({ config, onAbort, onComplete }) {
     if (s.finished) {
       recordResult(s);
     } else {
-      // After a game finishes, points are reset to [0, 0], so use reset values
-      const resetPA = 0;
-      const resetPB = 0;
-      let displayPA = mapPointToTennis(resetPA);
-      let displayPB = mapPointToTennis(resetPB);
-      
-      // New game always starts at 0-0, no deuce situations
-      pushLiveScore(s, displayPA, displayPB);
+      // Live score will be updated by useEffect when points state updates to [0, 0]
     }
   };
 
