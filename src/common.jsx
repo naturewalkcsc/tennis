@@ -146,6 +146,11 @@ export function FixturesAndResults({
         return position <= 4 ? "Semifinals" : "";
       }
       
+      // Kid's Doubles - only 4 players, straight to finals (top 2)
+      if ((catLower.includes("kid") || catLower.includes("child")) && catLower.includes("double")) {
+        return position <= 2 ? "Finals" : "";
+      }
+      
       // All other categories - top 2 qualify for finals directly
       return position <= 2 ? "Finals" : "";
     };
