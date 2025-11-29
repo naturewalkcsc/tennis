@@ -1,6 +1,9 @@
 // api/fixtures.js  (ESM)
 import { Redis } from '@upstash/redis';
 
+// Development mode fallback - store in memory
+let devFixtures = [];
+
 // Works with either KV_REST_* or UPSTASH_REDIS_REST_* env names
 function getRedis() {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -20,7 +23,7 @@ export default async function handler(req, res) {
 
   const redis = getRedis();
   const key = 'tennis:fixtures';
-  if (!redis) return res.status(503).json({ error: 'KV not configured' });
+  const isDev = !redis;
 
   // Be tolerant to how Vercel passes the body (string or object)
   const body = req.method === 'POST'
@@ -29,7 +32,7 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const list = (await redis.get(key)) || [];
+      const list = isDev ? devFixtures : ((await redis.get(key)) || []);
       list.sort((a, b) => (a.start || 0) - (b.start || 0));
       return res.status(200).json(list);
     }
@@ -39,38 +42,61 @@ export default async function handler(req, res) {
 
       if (action === 'add') {
         const f = body.payload || {};
-        const list = (await redis.get(key)) || [];
-        list.push({ status: f.status || 'upcoming', active: false, ...f });
-        await redis.set(key, list);
+        const newFixture = { status: f.status || 'upcoming', active: false, ...f };
+        if (isDev) {
+          devFixtures.push(newFixture);
+        } else {
+          const list = (await redis.get(key)) || [];
+          list.push(newFixture);
+          await redis.set(key, list);
+        }
         return res.status(200).json({ ok: true });
       }
 
       if (action === 'remove') {
         const id = body.id;
-        let list = (await redis.get(key)) || [];
-        list = list.filter((x) => x.id !== id);
-        await redis.set(key, list);
+        if (isDev) {
+          devFixtures = devFixtures.filter(f => f.id !== id);
+        } else {
+          let list = (await redis.get(key)) || [];
+          list = list.filter(f => f.id !== id);
+          await redis.set(key, list);
+        }
         return res.status(200).json({ ok: true });
       }
 
       if (action === 'update') {
         const { id, patch } = body;
-        let list = (await redis.get(key)) || [];
         let changed = false;
-        list = list.map((x) => {
-          if (x.id === id) {
-            changed = true;
-            return { ...x, ...patch };
-          }
-          return x;
-        });
+        if (isDev) {
+          devFixtures = devFixtures.map((x) => {
+            if (x.id === id) {
+              changed = true;
+              return { ...x, ...patch };
+            }
+            return x;
+          });
+        } else {
+          let list = (await redis.get(key)) || [];
+          list = list.map((x) => {
+            if (x.id === id) {
+              changed = true;
+              return { ...x, ...patch };
+            }
+            return x;
+          });
+          await redis.set(key, list);
+        }
         if (!changed) return res.status(404).json({ error: 'fixture not found' });
-        await redis.set(key, list);
         return res.status(200).json({ ok: true });
       }
 
       if (action === 'clear') {
-        await redis.set(key, []);
+        if (isDev) {
+          devFixtures = [];
+        } else {
+          await redis.set(key, []);
+        }
         return res.status(200).json({ ok: true });
       }
 

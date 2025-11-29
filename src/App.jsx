@@ -1207,6 +1207,20 @@ function Scoring({ config, onAbort, onComplete }) {
 
   const current = sets[sets.length - 1];
 
+  // Push initial live score when match starts
+  useEffect(() => {
+    if (matchStarted && current) {
+      const displayPA = mapPointToTennis(points[0]);
+      const displayPB = mapPointToTennis(points[1]);
+      console.log('Match started - Initial score:', `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`);
+      
+      if (fixtureId) {
+        // Send initial score: "0-0 0-0" (set games and current game points)
+        pushLiveScore(current, displayPA, displayPB);
+      }
+    }
+  }, [matchStarted]);
+
   /** Handle walkover completion */
   const recordWalkover = async () => {
     const winnerName = walkoverPlayer === sides[0] ? sides[1] : sides[0];
@@ -1293,9 +1307,10 @@ function Scoring({ config, onAbort, onComplete }) {
       } else {
         live = main;
       }
+      console.log('Pushing live score:', live);
       await apiFixturesUpdate(fixtureId, { scoreline: live });
     } catch (e) {
-      console.error(e);
+      console.error('pushLiveScore error:', e);
     }
   };
 
