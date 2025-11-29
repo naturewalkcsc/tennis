@@ -187,13 +187,23 @@ export default function Viewer() {
     // Load YouTube config
     fetchYouTubeConfig();
 
-    // Always load from localStorage immediately
+    // Track last loaded data to prevent unnecessary updates
+    let lastFixturesHash = '';
+    
     const loadFromLocalStorage = () => {
       try {
-        const fx = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+        const fixturesJson = localStorage.getItem('dev_fixtures') || '[]';
+        
+        // Only update if data actually changed
+        if (fixturesJson === lastFixturesHash) {
+          return;
+        }
+        lastFixturesHash = fixturesJson;
+        
+        const fx = JSON.parse(fixturesJson);
         const arr = Array.isArray(fx) ? fx : [];
         arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
-        console.log('Loading fixtures from localStorage:', arr.length, arr);
+        console.log('Fixtures updated - new data detected:', arr.length);
         setFixtures(arr);
         return arr;
       } catch (e) {
@@ -207,14 +217,14 @@ export default function Viewer() {
 
     // Listen for custom events for immediate real-time updates
     const handleFixturesUpdated = (event) => {
-      console.log('Custom event received:', event.detail);
+      console.log('Custom event received:', event.detail?.length || 0, 'fixtures');
       loadFromLocalStorage();
     };
 
     // Listen for storage changes (cross-tab)
     const handleStorageChange = (e) => {
       if (e.key === 'dev_fixtures') {
-        console.log('Storage event received');
+        console.log('Storage event received from another tab');
         loadFromLocalStorage();
       }
     };
@@ -222,10 +232,10 @@ export default function Viewer() {
     window.addEventListener('fixturesUpdated', handleFixturesUpdated);
     window.addEventListener('storage', handleStorageChange);
     
-    // Poll localStorage very frequently for same-tab updates
+    // Poll localStorage less frequently, only when needed
     const localStorageInterval = setInterval(() => {
       loadFromLocalStorage();
-    }, 100);
+    }, 1000);
     
     // refresh every 5 seconds for API data (less frequent since we have localStorage)
     const iv = setInterval(async () => {

@@ -1243,24 +1243,36 @@ function Scoring({ config, onAbort, onComplete }) {
         // Send initial score: "0-0 0-0" (set games and current game points)
         pushLiveScore(current, displayPA, displayPB);
       } else {
-        console.warn('No fixtureId - creating temporary fixture for live scoring');
-        // Create a temporary fixture for live scoring if none exists
-        const tempFixture = {
-          id: crypto.randomUUID(),
-          sides: sides,
-          status: 'active',
-          scoreline: `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`,
-          matchType: cfgMatchType || 'regular',
-          mode: 'singles',
-          start: Date.now()
-        };
-        
+        console.warn('No fixtureId - checking for existing active fixture');
+        // Check if there's already an active fixture for this match
         try {
           const fixtures = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
-          fixtures.push(tempFixture);
-          localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
-          window.dispatchEvent(new CustomEvent('fixturesUpdated', { detail: fixtures }));
-          console.log('Created temporary fixture for live scoring:', tempFixture);
+          const existingActive = fixtures.find(f => 
+            f.status === 'active' && 
+            f.sides && 
+            f.sides[0] === sides[0] && 
+            f.sides[1] === sides[1]
+          );
+          
+          if (!existingActive) {
+            // Create a temporary fixture for live scoring if none exists
+            const tempFixture = {
+              id: crypto.randomUUID(),
+              sides: sides,
+              status: 'active',
+              scoreline: `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`,
+              matchType: cfgMatchType || 'regular',
+              mode: 'singles',
+              start: Date.now()
+            };
+            
+            fixtures.push(tempFixture);
+            localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
+            window.dispatchEvent(new CustomEvent('fixturesUpdated', { detail: fixtures }));
+            console.log('Created temporary fixture for live scoring:', tempFixture);
+          } else {
+            console.log('Using existing active fixture:', existingActive.id);
+          }
         } catch (e) {
           console.error('Failed to create temporary fixture:', e);
         }
@@ -1270,7 +1282,7 @@ function Scoring({ config, onAbort, onComplete }) {
 
   // Update live score whenever points change
   useEffect(() => {
-    if (matchStarted && current && fixtureId) {
+    if (matchStarted && current && (fixtureId || sides)) {
       const pA = points[0];
       const pB = points[1];
       
@@ -1302,8 +1314,31 @@ function Scoring({ config, onAbort, onComplete }) {
       
       const scoreString = `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`;
       console.log('Points updated - Live score:', scoreString);
-      console.log('DEBUG: Sending to pushLiveScore - Set:', current, 'GamePoints:', displayPA, displayPB);
-      pushLiveScore(current, displayPA, displayPB);
+      
+      if (fixtureId) {
+        console.log('DEBUG: Sending to pushLiveScore - Set:', current, 'GamePoints:', displayPA, displayPB);
+        pushLiveScore(current, displayPA, displayPB);
+      } else {
+        // Update the temporary fixture directly
+        try {
+          const fixtures = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+          const activeFixture = fixtures.find(f => 
+            f.status === 'active' && 
+            f.sides && 
+            f.sides[0] === sides[0] && 
+            f.sides[1] === sides[1]
+          );
+          
+          if (activeFixture) {
+            activeFixture.scoreline = scoreString;
+            localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
+            window.dispatchEvent(new CustomEvent('fixturesUpdated', { detail: fixtures }));
+            console.log('Updated temporary fixture scoreline:', scoreString);
+          }
+        } catch (e) {
+          console.error('Failed to update temporary fixture:', e);
+        }
+      }
     }
   }, [points, deuceCount, matchStarted, current?.gamesA, current?.gamesB, current?.tie, current?.tieA, current?.tieB]);
 
