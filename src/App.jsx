@@ -1762,7 +1762,7 @@ function ConfigAdmin({ onBack }) {
 
     try {
       await apiConfigSet(url.trim());
-      setMessage('YouTube URL saved successfully!');
+      setMessage('YouTube ' + url.trim() + ' saved successfully!');
     } catch (error) {
       console.error('Failed to save config:', error);
       setMessage('Failed to save configuration');
