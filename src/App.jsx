@@ -1476,27 +1476,13 @@ function Scoring({ config, onAbort, onComplete }) {
     if (s.finished) {
       recordResult(s);
     } else {
-      // Calculate display points for current game
-      let displayPA = mapPointToTennis(pA);
-      let displayPB = mapPointToTennis(pB);
+      // After a game finishes, points are reset to [0, 0], so use reset values
+      const resetPA = 0;
+      const resetPB = 0;
+      let displayPA = mapPointToTennis(resetPA);
+      let displayPB = mapPointToTennis(resetPB);
       
-      // Handle deuce and advantage situations
-      const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
-      const isGoldenDeuce = atDeuce && newDeuceCount >= 2;
-      
-      if (atDeuce) {
-        displayPA = 40;
-        displayPB = 40;
-      } else if (pA >= 3 && pB >= 3 && Math.abs(pA - pB) === 1 && !isGoldenDeuce) {
-        if (pA > pB) {
-          displayPA = "Ad";
-          displayPB = 40;
-        } else {
-          displayPB = "Ad";
-          displayPA = 40;
-        }
-      }
-      
+      // New game always starts at 0-0, no deuce situations
       pushLiveScore(s, displayPA, displayPB);
     }
   };
