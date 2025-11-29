@@ -1144,11 +1144,46 @@ function Scoring({ config, onAbort, onComplete }) {
   const { sides = ["A", "B"], fixtureId, matchType: cfgMatchType } = config || {};
   const matchType = cfgMatchType === "final" ? "final" : "regular"; // default: qualifiers/semis
 
+  const [gameType, setGameType] = useState(""); // "normal" or "walkover"
+  const [walkoverPlayer, setWalkoverPlayer] = useState(""); // who is giving the walkover
+  const [matchStarted, setMatchStarted] = useState(false);
+  
   const [points, setPoints] = useState([0, 0]);   // raw integer points in the current game
   const [deuceCount, setDeuceCount] = useState(0); // how many times we've reached deuce (>=3-3)
   const [sets, setSets] = useState(() => [makeEmptySet(matchType)]);
 
   const current = sets[sets.length - 1];
+
+  /** Handle walkover completion */
+  const recordWalkover = async () => {
+    const winnerName = walkoverPlayer === sides[0] ? sides[1] : sides[0];
+    const payload = {
+      id: crypto.randomUUID(),
+      sides,
+      finishedAt: Date.now(),
+      scoreline: "0-0",
+      winner: winnerName,
+      mode: config.mode || "singles",
+      matchType,
+    };
+
+    try {
+      await apiMatchesAdd(payload);
+      if (fixtureId) {
+        await apiFixturesUpdate(fixtureId, {
+          status: "completed",
+          statusType: "walkover",
+          finishedAt: payload.finishedAt,
+          winner: payload.winner,
+          scoreline: payload.scoreline,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    onComplete();
+  };
 
   /** Async result recorder – called when the single set finishes */
   const recordResult = async (setObj) => {
@@ -1403,6 +1438,76 @@ function Scoring({ config, onAbort, onComplete }) {
     : isFinalView
     ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Traditional advantage, no golden point."
     : "Semifinal/Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
+
+  // Show match type selection screen first
+  if (!matchStarted) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Button variant="ghost" onClick={onAbort}>
+            <ChevronLeft className="w-5 h-5" /> Back
+          </Button>
+          <h2 className="text-xl font-bold">
+            Start Match • {sides[0]} vs {sides[1]}
+          </h2>
+        </div>
+        
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Match Type</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Select match type:</label>
+              <select 
+                className="w-full p-2 border border-gray-300 rounded-md"
+                value={gameType}
+                onChange={(e) => setGameType(e.target.value)}
+              >
+                <option value="">Choose match type...</option>
+                <option value="normal">Normal Match</option>
+                <option value="walkover">Walkover</option>
+              </select>
+            </div>
+
+            {gameType === "walkover" && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Who is giving the walkover?</label>
+                <select 
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  value={walkoverPlayer}
+                  onChange={(e) => setWalkoverPlayer(e.target.value)}
+                >
+                  <option value="">Select player/team...</option>
+                  <option value={sides[0]}>{sides[0]}</option>
+                  <option value={sides[1]}>{sides[1]}</option>
+                </select>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              {gameType === "normal" && (
+                <Button 
+                  onClick={() => setMatchStarted(true)}
+                  className="flex-1"
+                >
+                  Start Normal Match
+                </Button>
+              )}
+              
+              {gameType === "walkover" && walkoverPlayer && (
+                <Button 
+                  onClick={recordWalkover}
+                  className="flex-1 bg-red-600 hover:bg-red-700"
+                >
+                  Finish Walkover ({walkoverPlayer === sides[0] ? sides[1] : sides[0]} wins)
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-6">
