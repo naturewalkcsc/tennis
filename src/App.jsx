@@ -50,12 +50,32 @@ const apiFixturesList = async () => {
   return await res.json();
 };
 const apiFixturesAdd = async (payload) => {
-  const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "add", payload }) });
-  if (!res.ok) throw new Error("fixtures-add-failed");
+  try {
+    const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "add", payload }) });
+    if (!res.ok) throw new Error("fixtures-add-failed");
+  } catch (e) {
+    console.warn('API not available, using localStorage fallback for fixture add:', payload);
+    // Development mode fallback - use localStorage
+    const fixtures = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+    const newFixture = { status: payload.status || 'upcoming', active: false, ...payload };
+    fixtures.push(newFixture);
+    localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
+  }
 };
 const apiFixturesUpdate = async (id, patch) => {
-  const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "update", id, patch }) });
-  if (!res.ok) throw new Error("fixtures-update-failed");
+  try {
+    const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "update", id, patch }) });
+    if (!res.ok) throw new Error("fixtures-update-failed");
+  } catch (e) {
+    console.warn('API not available, using localStorage fallback for fixture update:', { id, patch });
+    // Development mode fallback - use localStorage
+    const fixtures = JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+    const index = fixtures.findIndex(f => f.id === id);
+    if (index >= 0) {
+      fixtures[index] = { ...fixtures[index], ...patch };
+      localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
+    }
+  }
 };
 const apiFixturesRemove = async (id) => {
   const res = await fetch("/api/fixtures" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "remove", id }) });
@@ -1207,6 +1227,59 @@ function Scoring({ config, onAbort, onComplete }) {
 
   const current = sets[sets.length - 1];
 
+  // Push initial live score when match starts
+  useEffect(() => {
+    if (matchStarted && current) {
+      const displayPA = mapPointToTennis(points[0]);
+      const displayPB = mapPointToTennis(points[1]);
+      console.log('Match started - Initial score:', `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`);
+      
+      if (fixtureId) {
+        // Send initial score: "0-0 0-0" (set games and current game points)
+        pushLiveScore(current, displayPA, displayPB);
+      }
+    }
+  }, [matchStarted]);
+
+  // Update live score whenever points change
+  useEffect(() => {
+    if (matchStarted && current && fixtureId) {
+      const pA = points[0];
+      const pB = points[1];
+      
+      let displayPA = mapPointToTennis(pA);
+      let displayPB = mapPointToTennis(pB);
+      
+      // Handle deuce and advantage situations only if not in tie-break
+      if (!current.tie) {
+        const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
+        const isGoldenDeuce = atDeuce && deuceCount >= 2;
+        
+        if (atDeuce) {
+          displayPA = 40;
+          displayPB = 40;
+        } else if (pA >= 3 && pB >= 3 && Math.abs(pA - pB) === 1 && !isGoldenDeuce) {
+          if (pA > pB) {
+            displayPA = "Ad";
+            displayPB = 40;
+          } else {
+            displayPB = "Ad";
+            displayPA = 40;
+          }
+        }
+      } else {
+        // In tie-break, show tie-break points
+        displayPA = current.tieA;
+        displayPB = current.tieB;
+      }
+      
+      const scoreString = `${current.gamesA}-${current.gamesB} ${displayPA}-${displayPB}`;
+      console.log('Points updated - Live score:', scoreString);
+      console.log('DEBUG: Sending to pushLiveScore - Set:', current, 'GamePoints:', displayPA, displayPB);
+      pushLiveScore(current, displayPA, displayPB);
+    }
+  }, [points, deuceCount, matchStarted, current?.gamesA, current?.gamesB, current?.tie, current?.tieA, current?.tieB]);
+
   /** Handle walkover completion */
   const recordWalkover = async () => {
     const winnerName = walkoverPlayer === sides[0] ? sides[1] : sides[0];
@@ -1280,14 +1353,24 @@ function Scoring({ config, onAbort, onComplete }) {
   };
 
 
-  const pushLiveScore = async (setObj) => {
+  const pushLiveScore = async (setObj, gamePointsA = null, gamePointsB = null) => {
     if (!fixtureId || !setObj) return;
     try {
       const main = `${setObj.gamesA}-${setObj.gamesB}`;
-      const live = setObj.tie ? `${main} (TB ${setObj.tieA}-${setObj.tieB})` : main;
+      let live;
+      if (setObj.tie) {
+        live = `${main} (TB ${setObj.tieA}-${setObj.tieB})`;
+      } else if (gamePointsA !== null && gamePointsB !== null) {
+        // Include current game points
+        live = `${main} ${gamePointsA}-${gamePointsB}`;
+      } else {
+        live = main;
+      }
+      console.log('Pushing live score:', live);
+      console.log('DEBUG: Fixture ID:', fixtureId);
       await apiFixturesUpdate(fixtureId, { scoreline: live });
     } catch (e) {
-      console.error(e);
+      console.error('pushLiveScore error:', e);
     }
   };
 
@@ -1354,7 +1437,7 @@ function Scoring({ config, onAbort, onComplete }) {
       if (s.finished) {
         recordResult(s);
       } else {
-        pushLiveScore(s);
+        // Live score will be updated by useEffect when state changes
       }
       return;
     }
@@ -1433,7 +1516,7 @@ function Scoring({ config, onAbort, onComplete }) {
     if (s.finished) {
       recordResult(s);
     } else {
-      pushLiveScore(s);
+      // Live score will be updated by useEffect when points state updates to [0, 0]
     }
   };
 

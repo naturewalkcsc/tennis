@@ -18,9 +18,24 @@ import { FixturesAndResults, normalizePlayersMap } from "./common.jsx";
 const cacheBuster = () => `?t=${Date.now()}`;
 
 async function fetchJson(url) {
-  const res = await fetch(url + cacheBuster(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`${url} failed: ${res.status}`);
-  return await res.json();
+  try {
+    const res = await fetch(url + cacheBuster(), { cache: "no-store" });
+    if (!res.ok) throw new Error(`${url} failed: ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.warn(`API not available for ${url}, using localStorage fallback`);
+    // Development mode fallback
+    if (url.includes('/fixtures')) {
+      return JSON.parse(localStorage.getItem('dev_fixtures') || '[]');
+    }
+    if (url.includes('/players')) {
+      return { singles: {}, doubles: {} };
+    }
+    if (url.includes('/config')) {
+      return { url: localStorage.getItem('dev_youtube_url') || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0' };
+    }
+    throw e;
+  }
 }
 
 function Tile({ img, title, subtitle, onClick }) {
@@ -172,7 +187,7 @@ export default function Viewer() {
     // Load YouTube config
     fetchYouTubeConfig();
 
-    // refresh every 12 seconds
+    // refresh every 2 seconds for real-time updates
     const iv = setInterval(async () => {
       try {
         const [pData, fx] = await Promise.all([fetchJson("/api/players"), fetchJson("/api/fixtures")]);
@@ -182,12 +197,14 @@ export default function Viewer() {
         arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
         setFixtures(arr);
         
-        // Also refresh YouTube config
-        fetchYouTubeConfig();
+        // Also refresh YouTube config (less frequently)
+        if (Date.now() % 12000 < 2000) { // roughly every 6 cycles
+          fetchYouTubeConfig();
+        }
       } catch {
         // ignore periodic refresh errors
       }
-    }, 12000);
+    }, 2000);
 
     return () => {
       alive = false;
@@ -402,6 +419,34 @@ if (page === "rules") {
   if (page === "live") {
     return (
       <div style={{ padding: 24 }}>
+        <style>{`
+          @keyframes liveScore {
+            0%, 100% { 
+              transform: translateX(0) scale(1);
+              box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            }
+            50% { 
+              transform: translateX(-2px) scale(1.01);
+              box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            }
+          }
+          
+          @keyframes liveBar {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+          }
+          
+          @keyframes liveDot {
+            0%, 100% { 
+              opacity: 1; 
+              transform: scale(1);
+            }
+            50% { 
+              opacity: 0.5; 
+              transform: scale(1.2);
+            }
+          }
+        `}</style>
         <div style={{ marginBottom: 12 }}>
           <button
             onClick={() => setPage("menu")}
@@ -485,6 +530,223 @@ if (page === "rules") {
           </div>
         ) : (
           <>
+            {/* Live Score Overlay - Top Right Corner */}
+            {(() => {
+              const activeMatches = fixtures.filter(f => f.status === 'active');
+              console.log('DEBUG: All fixtures:', fixtures);
+              console.log('DEBUG: Active matches:', activeMatches);
+              return activeMatches.length > 0 ? (
+                <div style={{
+                  position: 'fixed',
+                  top: 160,
+                  right: 20,
+                  zIndex: 1002,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  pointerEvents: 'none',
+                  maxWidth: 320
+                }}>
+                  {activeMatches.slice(0, 2).map((match, index) => (
+                    <div key={match.id} style={{
+                      background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.9) 0%, rgba(20, 20, 20, 0.85) 100%)',
+                      color: 'white',
+                      padding: '10px 14px',
+                      borderRadius: 8,
+                      backdropFilter: 'blur(12px)',
+                      border: '1px solid rgba(34, 197, 94, 0.6)',
+                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                      animation: `liveScore ${2 + index * 0.5}s ease-in-out infinite`,
+                      transform: 'translateX(0)',
+                      transition: 'all 0.3s ease'
+                    }}>
+                      {/* Live Indicator Bar */}
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 2,
+                        background: 'linear-gradient(90deg, #22c55e, #16a34a, #22c55e)',
+                        backgroundSize: '200% 100%',
+                        animation: 'liveBar 2s linear infinite'
+                      }} />
+                      
+                      {/* Match Header */}
+                      <div style={{ 
+                        fontSize: 9, 
+                        fontWeight: 700, 
+                        color: '#22c55e',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.8px',
+                        marginBottom: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}>
+                        <span style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: '#ef4444',
+                          animation: 'liveDot 1.5s ease-in-out infinite'
+                        }} />
+                        LIVE • {match.category || 'MATCH'}
+                      </div>
+                      
+                      {/* Players */}
+                      <div style={{ 
+                        fontSize: 12, 
+                        fontWeight: 600, 
+                        marginBottom: 6,
+                        lineHeight: 1.2
+                      }}>
+                        {(match.sides || []).join(' vs ')}
+                      </div>
+                      
+                      {/* Score Display */}
+                      {match.scoreline && (
+                        <div style={{ marginBottom: 4 }}>
+                          {/* Set Scores */}
+                          <div style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: '#fbbf24',
+                            textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                            letterSpacing: '0.5px',
+                            marginBottom: 3
+                          }}>
+                            {(() => {
+                              // Parse scoreline to separate set scores and current game
+                              const scoreParts = match.scoreline.split(' ');
+                              const setScores = scoreParts.filter((part, index) => {
+                                // Exclude the last part if it looks like game points
+                                if (index === scoreParts.length - 1 && 
+                                    (['15', '30', '40', 'Ad', 'DEUCE'].some(point => part.includes(point)) ||
+                                     (part.includes('-') && part.split('-').every(s => 
+                                       ['0', '15', '30', '40', 'Ad'].includes(s) || 
+                                       (!isNaN(parseInt(s, 10)) && parseInt(s, 10) <= 10))))) {
+                                  return false;
+                                }
+                                return part.includes('-') && !part.includes('/') && 
+                                       !['15', '30', '40', 'AD', 'DEUCE'].some(point => part.includes(point));
+                              });
+                              return setScores.length > 0 ? `Sets: ${setScores.join(', ')}` : 
+                                     (scoreParts.length === 1 ? match.scoreline : scoreParts[0]);
+                            })()}
+                          </div>
+                          
+                          {/* Current Game Points */}
+                          {(() => {
+                            // Helper function to convert numeric game scores to tennis format
+                            const convertToTennisScore = (numericScore) => {
+                              if (!numericScore || !numericScore.includes('-')) return numericScore;
+                              
+                              const [left, right] = numericScore.split('-');
+                              const leftNum = parseInt(left, 10);
+                              const rightNum = parseInt(right, 10);
+                              
+                              // Check for deuce situations (both at 40 or higher)
+                              if (leftNum >= 3 && rightNum >= 3) {
+                                if (leftNum === rightNum) return 'DEUCE';
+                                if (leftNum > rightNum) return 'AD ' + (match.sides?.[0] || 'Player 1');
+                                if (rightNum > leftNum) return 'AD ' + (match.sides?.[1] || 'Player 2');
+                              }
+                              
+                              // Convert numeric scores to tennis scores
+                              const tennisPoints = ['0', '15', '30', '40'];
+                              const leftTennis = leftNum <= 3 ? tennisPoints[leftNum] : '40';
+                              const rightTennis = rightNum <= 3 ? tennisPoints[rightNum] : '40';
+                              
+                              return `${leftTennis}-${rightTennis}`;
+                            };
+                            
+                            const scoreParts = match.scoreline.split(' ');
+                            console.log('DEBUG: Processing scoreline:', match.scoreline);
+                            console.log('DEBUG: Score parts:', scoreParts);
+                            
+                            // Look for the last part which should be the current game points
+                            // Format should now be like: "4-3 15-30" or "4-3 Ad-40"
+                            let gameScore = null;
+                            
+                            // Check if we have multiple parts and the last one looks like game points
+                            if (scoreParts.length >= 2) {
+                              const lastPart = scoreParts[scoreParts.length - 1];
+                              console.log('DEBUG: Checking last part for game score:', lastPart);
+                              // Check if it's tennis formatted (contains 15,30,40,Ad) or looks like game points
+                              if (['15', '30', '40', 'Ad', 'DEUCE'].some(point => lastPart.includes(point)) ||
+                                  (lastPart.includes('-') && lastPart.split('-').every(s => 
+                                    ['0', '15', '30', '40', 'Ad'].includes(s) || !isNaN(parseInt(s, 10))
+                                  ))) {
+                                gameScore = lastPart;
+                                console.log('DEBUG: Found game score from last part:', gameScore);
+                              }
+                            }
+                            
+                            // If still no game score found, try to convert any numeric score
+                            if (!gameScore) {
+                              console.log('DEBUG: No tennis format found, looking for numeric scores');
+                              const numericGame = scoreParts.find(part => 
+                                part.includes('-') && 
+                                part.split('-').every(s => !isNaN(parseInt(s, 10))) &&
+                                part.split('-').every(s => parseInt(s, 10) <= 10) // reasonable game score limit
+                              );
+                              console.log('DEBUG: Found numeric game score:', numericGame);
+                              if (numericGame) {
+                                gameScore = convertToTennisScore(numericGame);
+                                console.log('DEBUG: Converted to tennis score:', gameScore);
+                              }
+                            }
+                            
+                            if (gameScore) {
+                              return (
+                                <div style={{
+                                  fontSize: 18,
+                                  fontWeight: 800,
+                                  color: '#22c55e',
+                                  textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                                  letterSpacing: '1px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6
+                                }}>
+                                  <span style={{
+                                    fontSize: 10,
+                                    color: '#94a3b8',
+                                    fontWeight: 500
+                                  }}>
+                                    GAME:
+                                  </span>
+                                  {gameScore.includes('DEUCE') ? 'DEUCE' :
+                                   gameScore.includes('AD') ? gameScore :
+                                   gameScore}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      )}
+                      
+                      {/* Match Type */}
+                      {match.matchType && (
+                        <div style={{
+                          fontSize: 8,
+                          color: '#94a3b8',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          fontWeight: 500
+                        }}>
+                          {match.matchType}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : null;
+            })()}
+
+            {/* Video Stream */}
             <div
               style={{
                 position: "fixed",
