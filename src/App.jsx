@@ -1,7 +1,7 @@
 // src/App.jsx
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X } from "lucide-react";
+import { Trophy, Play, ChevronLeft, Plus, Trash2, CalendarPlus, RefreshCw, X, Settings } from "lucide-react";
 
 import imgStart from "./StartMatch.jpg";
 import imgScore from "./Score.jpg";
@@ -71,6 +71,56 @@ const apiMatchesAdd = async (payload) => {
   const res = await fetch("/api/matches" + buster(), { method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ action: "add", payload }) });
   if (!res.ok) throw new Error("matches-add-failed");
 };
+// Development mode detection
+const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+const apiConfigGet = async () => {
+  if (isDev) {
+    // Mock implementation for development - return a Promise
+    return new Promise((resolve) => {
+      const storedUrl = localStorage.getItem('dev_youtube_url');
+      // Simulate async behavior
+      setTimeout(() => {
+        resolve({ url: storedUrl || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0' });
+      }, 50);
+    });
+  }
+  const res = await fetch("/api/config" + buster(), { cache: "no-store" });
+  if (!res.ok) throw new Error("config-get-failed");
+  return await res.json();
+};
+const apiConfigSet = async (url) => {
+  if (isDev) {
+    // Mock implementation for development - return a Promise
+    return new Promise((resolve) => {
+      let embedUrl = url;
+      let videoId = null;
+      
+      if (url.includes('youtube.com/watch?v=')) {
+        videoId = url.split('v=')[1].split('&')[0];
+      } else if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split('?')[0];
+      } else if (url.includes('youtube.com/embed/')) {
+        embedUrl = url;
+      }
+      
+      if (videoId) {
+        embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+      }
+      
+      localStorage.setItem('dev_youtube_url', embedUrl);
+      // Simulate async behavior
+      setTimeout(() => {
+        resolve({ success: true, url: embedUrl });
+      }, 100);
+    });
+  }
+  const res = await fetch("/api/config" + buster(), {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url })
+  });
+  if (!res.ok) throw new Error("config-set-failed");
+  return await res.json();
+};
 
 /* ---------------------- Data normalization utils ---------------------- */
 /* We standardize to the new canonical shape:
@@ -126,7 +176,7 @@ function AdminLogin({ onOk }) {
 }
 
 /* ---------------------- Landing ---------------------- */
-const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
+const Landing = ({ onStart, onResults, onSettings, onFixtures, onConfig }) => {
   const Tile = ({ title, subtitle, src, action }) => (
     <motion.button onClick={action} whileHover={{ y: -3 }} className="w-full md:w-80 rounded-2xl overflow-hidden border shadow bg-white text-left">
       <div className="h-40 relative">
@@ -149,7 +199,10 @@ const Landing = ({ onStart, onResults, onSettings, onFixtures }) => {
         <Tile title="Results" subtitle="Active • Upcoming • Completed" src={imgScore} action={onResults} />
         <Tile title="Manage Players" subtitle="Singles & Doubles" src={imgSettings} action={onSettings} />
       </div>
-      <div className="mt-6"><Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4" /> Fixtures</Button></div>
+      <div className="mt-6 flex gap-3">
+        <Button variant="secondary" onClick={onFixtures}><CalendarPlus className="w-4 h-4" /> Fixtures</Button>
+        <Button variant="secondary" onClick={onConfig}><Settings className="w-4 h-4" /> Config</Button>
+      </div>
     </div>
   );
 };
@@ -1142,7 +1195,7 @@ function makeEmptySet(matchType) {
 
 function Scoring({ config, onAbort, onComplete }) {
   const { sides = ["A", "B"], fixtureId, matchType: cfgMatchType } = config || {};
-  const matchType = cfgMatchType === "final" ? "final" : "regular"; // default: qualifiers/semis
+  const matchType = (cfgMatchType || "").toLowerCase() === "final" ? "final" : "regular"; // default: qualifiers/semis
 
   const [gameType, setGameType] = useState(""); // "normal" or "walkover"
   const [walkoverPlayer, setWalkoverPlayer] = useState(""); // who is giving the walkover
@@ -1243,6 +1296,7 @@ function Scoring({ config, onAbort, onComplete }) {
 
     const isFinal = matchType === "final";
     const isQualifier = (cfgMatchType || "").toLowerCase() === "qualifier";
+    const isSemifinal = (cfgMatchType || "").toLowerCase() === "semifinal";
 
     // ----- Tie-break mode -----
     if (current.tie) {
@@ -1256,7 +1310,24 @@ function Scoring({ config, onAbort, onComplete }) {
       const b = s.tieB;
       let finished = false;
 
-      if (!isFinal) {
+      if (matchType === "final") {
+        // FINAL TIE-BREAK:
+        // To 7 points, win by 2; continues indefinitely until 2-point margin
+        if ((a >= 7 || b >= 7) && Math.abs(a - b) >= 2) {
+          finished = true;
+        }
+
+        if (finished) {
+          s.finished = true;
+          if (a > b) {
+            s.gamesA = 7;
+            s.gamesB = 6;
+          } else {
+            s.gamesA = 6;
+            s.gamesB = 7;
+          }
+        }
+      } else {
         // QUALIFIER/SEMI TIE-BREAK:
         // To 5 points, win by 2; if 5–5, next point wins (max 6–5).
         if ((a >= 5 || b >= 5) && Math.abs(a - b) >= 2) {
@@ -1276,26 +1347,6 @@ function Scoring({ config, onAbort, onComplete }) {
             s.gamesB = 4;
           }
         }
-      } else {
-        // FINAL TIE-BREAK:
-        // To 7 points, win by 2; if 10–10, next point wins (max 11–10).
-        if ((a >= 7 || b >= 7) && Math.abs(a - b) >= 2) {
-          finished = true;
-        } else if ((a >= 11 || b >= 11) && Math.abs(a - b) >= 1) {
-          // After 10–10, 11–10 or 10–11 wins
-          finished = true;
-        }
-
-        if (finished) {
-          s.finished = true;
-          if (a > b) {
-            s.gamesA = 7;
-            s.gamesB = 6;
-          } else {
-            s.gamesA = 6;
-            s.gamesB = 7;
-          }
-        }
       }
 
       ns[ns.length - 1] = s;
@@ -1309,7 +1360,7 @@ function Scoring({ config, onAbort, onComplete }) {
     }
 
     // ----- Normal game mode -----
-    const limitDeuces = isQualifier ? 1 : 9999; // only qualifiers use golden point from 2nd deuce
+    const limitDeuces = 1; // all match types use golden point from 2nd deuce onward
 
     let [pA, pB] = points;
     if (who === 0) pA += 1;
@@ -1352,7 +1403,18 @@ function Scoring({ config, onAbort, onComplete }) {
 
     // Decide if we enter tie-break or finish the set
     if (!s.tie) {
-      if (!isFinal) {
+      if (matchType === "final") {
+        // FINAL (full set to 6 games)
+        if ((s.gamesA >= 6 || s.gamesB >= 6) && Math.abs(s.gamesA - s.gamesB) >= 2) {
+          // Normal 6+ games, win by 2 (e.g. 6–4, 7–5, 8–6)
+          s.finished = true;
+        } else if (s.gamesA === 6 && s.gamesB === 6) {
+          // Tie-break at 6–6
+          s.tie = true;
+          s.tieA = 0;
+          s.tieB = 0;
+        }
+      } else {
         // QUALIFIERS / SEMIS (Fast4)
         if (s.gamesA === 3 && s.gamesB === 3) {
           // Tie-break at 3–3
@@ -1362,17 +1424,6 @@ function Scoring({ config, onAbort, onComplete }) {
         } else if (s.gamesA >= 4 || s.gamesB >= 4) {
           // First to 4 games wins (no win-by-2 once not at 3–3)
           s.finished = true;
-        }
-      } else {
-        // FINAL (full set)
-        if ((s.gamesA >= 6 || s.gamesB >= 6) && Math.abs(s.gamesA - s.gamesB) >= 2) {
-          // Normal 6+ games, win by 2 (e.g. 6–4, 7–5, 8–6)
-          s.finished = true;
-        } else if (s.gamesA === 6 && s.gamesB === 6) {
-          // Tie-break at 6–6
-          s.tie = true;
-          s.tieA = 0;
-          s.tieB = 0;
         }
       }
     }
@@ -1390,10 +1441,11 @@ function Scoring({ config, onAbort, onComplete }) {
   const pB = points[1];
   const isFinalView = matchType === "final";
   const isQualifierView = (cfgMatchType || "").toLowerCase() === "qualifier";
+  const isSemifinalView = (cfgMatchType || "").toLowerCase() === "semifinal";
 
   const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
-  // For qualifiers: 1st deuce = normal advantage, 2nd deuce onward = golden point
-  const isGoldenDeuce = isQualifierView && atDeuce && deuceCount >= 2;
+  // For all match types: 1st deuce = normal advantage, 2nd deuce onward = golden point
+  const isGoldenDeuce = atDeuce && deuceCount >= 2;
 
   let displayPointsA = mapPointToTennis(pA);
   let displayPointsB = mapPointToTennis(pB);
@@ -1435,9 +1487,11 @@ function Scoring({ config, onAbort, onComplete }) {
 
   const description = isQualifierView
     ? "Qualifier: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
+    : isSemifinalView
+    ? "Semifinal: Fast4 to 4 games. Tie-break to 5 at 3–3. First deuce uses advantage; from second deuce onward, golden point."
     : isFinalView
-    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; at 10–10 next point wins). Traditional advantage, no golden point."
-    : "Semifinal/Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
+    ? "Final: one full set to 6 (win by 2). Tie-break to 7 at 6–6 (win by 2; continues indefinitely until 2-point margin). First deuce uses advantage; from second deuce onward, golden point."
+    : "Other: Fast4 to 4 games. Tie-break to 5 at 3–3 (win by 2; at 5–5 next point wins). Traditional advantage, no golden point.";
 
   // Show match type selection screen first
   if (!matchStarted) {
@@ -1676,6 +1730,115 @@ function ResultsAdmin({ onBack }) {
   );
 }
 
+/* ---------------------- Config admin ---------------------- */
+function ConfigAdmin({ onBack }) {
+  const [url, setUrl] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const config = await apiConfigGet();
+        setUrl(config.url || '');
+      } catch (error) {
+        console.error('Failed to load config:', error);
+        setMessage('Failed to load current configuration');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleSave = async () => {
+    if (!url.trim()) {
+      setMessage('Please enter a YouTube URL');
+      return;
+    }
+
+    setSaving(true);
+    setMessage('');
+
+    try {
+      await apiConfigSet(url.trim());
+      setMessage('YouTube URL saved successfully!');
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      setMessage('Failed to save configuration');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="animate-spin w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full mx-auto" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-2xl font-bold">YouTube Stream Configuration</h1>
+      </div>
+
+      <div className="bg-white rounded-xl border p-6 shadow-sm">
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            YouTube URL
+          </label>
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+          <p className="text-sm text-gray-600 mt-1">
+            Enter any YouTube URL format (watch URLs, short URLs, or embed URLs)
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            onClick={handleSave}
+            disabled={saving || !url.trim()}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            {saving ? 'Saving...' : 'Save Configuration'}
+          </Button>
+        </div>
+
+        {message && (
+          <div className={`mt-4 p-3 rounded-lg text-sm ${
+            message.includes('successfully') 
+              ? 'bg-green-50 text-green-800 border border-green-200' 
+              : 'bg-red-50 text-red-800 border border-red-200'
+          }`}>
+            {message}
+          </div>
+        )}
+
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-medium text-gray-900 mb-2">Instructions:</h3>
+          <ul className="text-sm text-gray-600 space-y-1">
+            <li>• Copy any YouTube video URL and paste it above</li>
+            <li>• The system will automatically convert it to the correct format</li>
+            <li>• The configured video will be displayed in the viewer's Live Stream page</li>
+            <li>• Video will play fullscreen below the Back button</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------------- App shell ---------------------- */
 export default function App() {
   const path = typeof window !== "undefined" ? window.location.pathname : "/";
@@ -1696,7 +1859,7 @@ export default function App() {
         <AnimatePresence mode="wait">
           {view === "landing" && (
             <motion.div key="landing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Landing onStart={() => setView("start")} onResults={() => setView("results")} onSettings={() => setView("settings")} onFixtures={() => setView("fixtures")} />
+              <Landing onStart={() => setView("start")} onResults={() => setView("results")} onSettings={() => setView("settings")} onFixtures={() => setView("fixtures")} onConfig={() => setView("config")} />
             </motion.div>
           )}
           {view === "settings" && <motion.div key="settings" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><ManagePlayers onBack={() => setView("landing")} /></motion.div>}
@@ -1704,6 +1867,7 @@ export default function App() {
           {view === "start" && <motion.div key="start" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><StartFromFixtures onBack={() => setView("landing")} onStartScoring={(c) => { setCfg(c); setView("scoring"); }} /></motion.div>}
           {view === "scoring" && cfg && <motion.div key="scoring" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><Scoring config={cfg} onAbort={() => setView("landing")} onComplete={() => setView("results")} /></motion.div>}
           {view === "results" && <motion.div key="results" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><ResultsAdmin onBack={() => setView("landing")} /></motion.div>}
+          {view === "config" && <motion.div key="config" initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}><ConfigAdmin onBack={() => setView("landing")} /></motion.div>}
         </AnimatePresence>
       </div>
       <footer className="py-6 text-center text-xs text-zinc-500">© {new Date().getFullYear()} RNW NPL</footer>

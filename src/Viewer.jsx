@@ -64,6 +64,32 @@ export default function Viewer() {
   const [loadingPlayers, setLoadingPlayers] = useState(true);
   const [loadingFixtures, setLoadingFixtures] = useState(true);
   const [error, setError] = useState("");
+  
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [loadingVideo, setLoadingVideo] = useState(true);
+
+  // Fetch YouTube URL from config
+  const fetchYouTubeConfig = async () => {
+    try {
+      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      let result;
+      
+      if (isDev) {
+        // Mock implementation for development
+        const storedUrl = localStorage.getItem('dev_youtube_url');
+        result = { url: storedUrl || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0' };
+      } else {
+        result = await fetchJson('/api/config');
+      }
+      
+      setYoutubeUrl(result.url || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
+    } catch (error) {
+      console.warn('Failed to load YouTube config', error);
+      setYoutubeUrl('https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0');
+    } finally {
+      setLoadingVideo(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -102,6 +128,12 @@ export default function Viewer() {
       }
     })();
 
+    // Load YouTube config
+    fetchYouTubeConfig();
+
+    // Load YouTube config
+    fetchYouTubeConfig();
+
     // refresh every 12 seconds
     const iv = setInterval(async () => {
       try {
@@ -111,6 +143,9 @@ export default function Viewer() {
         const arr = Array.isArray(fx) ? fx : [];
         arr.sort((a, b) => (Number(a.start || 0) - Number(b.start || 0)));
         setFixtures(arr);
+        
+        // Also refresh YouTube config
+        fetchYouTubeConfig();
       } catch {
         // ignore periodic refresh errors
       }
@@ -343,42 +378,45 @@ if (page === "rules") {
           </button>
         </div>
 
-        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Live Stream</h2>
-        <p style={{ marginTop: 0, marginBottom: 16, color: "#6b7280", fontSize: 14 }}>
-          YouTube live streaming of the current court. Replace the video ID in Viewer.jsx with your actual stream link.
-        </p>
-
-        <div
-          style={{
-            position: "relative",
-            paddingBottom: "56.25%",
-            height: 0,
-            overflow: "hidden",
-            borderRadius: 12,
-            boxShadow: "0 12px 30px rgba(15,23,42,0.35)",
-            maxWidth: 960,
-            margin: "0 auto",
-          }}
-        >
-          <iframe
-            title="YouTube live stream"
-            src="https://www.youtube.com/embed/QNPpdtUsC60?autoplay=1&rel=0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
+        <h2 style={{ marginTop: 0, marginBottom: 16 }}>Live Stream</h2>
+        
+        {loadingVideo ? (
+          <div style={{ textAlign: 'center', padding: 60 }}>
+            <div style={{ 
+              display: 'inline-block', 
+              width: 24, 
+              height: 24, 
+              border: '3px solid #e5e7eb', 
+              borderTop: '3px solid #3b82f6',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <p style={{ marginTop: 12, color: '#6b7280' }}>Loading stream...</p>
+          </div>
+        ) : (
+          <div
             style={{
-              position: "absolute",
-              top: 0,
+              position: "fixed",
+              top: 80,
               left: 0,
-              width: "100%",
-              height: "100%",
-              border: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 1000
             }}
-          />
-        </div>
-
-        <div style={{ marginTop: 16, textAlign: "center", fontSize: 12, color: "#9ca3af" }}>
-          Tip: replace <code>VIDEO_ID</code> in Viewer.jsx with the ID of your tournament&apos;s YouTube live stream.
-        </div>
+          >
+            <iframe
+              title="YouTube live stream"
+              src={youtubeUrl}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              style={{
+                width: "100%",
+                height: "100%",
+                border: 0,
+              }}
+            />
+          </div>
+        )}
       </div>
     );
   }
