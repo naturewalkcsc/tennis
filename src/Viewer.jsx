@@ -403,14 +403,30 @@ if (page === "rules") {
     return (
       <div style={{ padding: 24 }}>
         <style>{`
-          @keyframes pulse {
+          @keyframes liveScore {
             0%, 100% { 
-              box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(34, 197, 94, 0.3);
-              border-color: rgba(34, 197, 94, 0.8);
+              transform: translateX(0) scale(1);
+              box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
             }
             50% { 
-              box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(34, 197, 94, 0.6);
-              border-color: rgba(34, 197, 94, 1);
+              transform: translateX(-2px) scale(1.01);
+              box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            }
+          }
+          
+          @keyframes liveBar {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+          }
+          
+          @keyframes liveDot {
+            0%, 100% { 
+              opacity: 1; 
+              transform: scale(1);
+            }
+            50% { 
+              opacity: 0.5; 
+              transform: scale(1.2);
             }
           }
         `}</style>
@@ -497,66 +513,100 @@ if (page === "rules") {
           </div>
         ) : (
           <>
-            {/* Live Score Overlay */}
+            {/* Live Score Overlay - Top Right Corner */}
             {(() => {
               const activeMatches = fixtures.filter(f => f.status === 'active');
               return activeMatches.length > 0 ? (
                 <div style={{
                   position: 'fixed',
-                  top: 140,
-                  left: 20,
+                  top: 160,
                   right: 20,
                   zIndex: 1002,
                   display: 'flex',
-                  gap: 12,
-                  flexWrap: 'wrap',
-                  pointerEvents: 'none'
+                  flexDirection: 'column',
+                  gap: 8,
+                  pointerEvents: 'none',
+                  maxWidth: 320
                 }}>
-                  {activeMatches.slice(0, 2).map(match => (
+                  {activeMatches.slice(0, 2).map((match, index) => (
                     <div key={match.id} style={{
-                      background: 'rgba(0, 0, 0, 0.85)',
+                      background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.9) 0%, rgba(20, 20, 20, 0.85) 100%)',
                       color: 'white',
-                      padding: '12px 16px',
-                      borderRadius: 12,
-                      backdropFilter: 'blur(10px)',
-                      border: '2px solid rgba(34, 197, 94, 0.8)',
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-                      minWidth: 280,
-                      animation: 'pulse 2s ease-in-out infinite'
+                      padding: '10px 14px',
+                      borderRadius: 8,
+                      backdropFilter: 'blur(12px)',
+                      border: '1px solid rgba(34, 197, 94, 0.6)',
+                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                      animation: `liveScore ${2 + index * 0.5}s ease-in-out infinite`,
+                      transform: 'translateX(0)',
+                      transition: 'all 0.3s ease'
                     }}>
+                      {/* Live Indicator Bar */}
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 2,
+                        background: 'linear-gradient(90deg, #22c55e, #16a34a, #22c55e)',
+                        backgroundSize: '200% 100%',
+                        animation: 'liveBar 2s linear infinite'
+                      }} />
+                      
+                      {/* Match Header */}
                       <div style={{ 
-                        fontSize: 10, 
-                        fontWeight: 600, 
+                        fontSize: 9, 
+                        fontWeight: 700, 
                         color: '#22c55e',
                         textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        marginBottom: 6
+                        letterSpacing: '0.8px',
+                        marginBottom: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
                       }}>
-                        🔴 LIVE • {match.category || 'Match'}
+                        <span style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: '#ef4444',
+                          animation: 'liveDot 1.5s ease-in-out infinite'
+                        }} />
+                        LIVE • {match.category || 'MATCH'}
                       </div>
                       
-                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
+                      {/* Players */}
+                      <div style={{ 
+                        fontSize: 12, 
+                        fontWeight: 600, 
+                        marginBottom: 6,
+                        lineHeight: 1.2
+                      }}>
                         {(match.sides || []).join(' vs ')}
                       </div>
                       
+                      {/* Score */}
                       {match.scoreline && (
                         <div style={{
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: 800,
                           color: '#fbbf24',
-                          textShadow: '0 2px 4px rgba(0,0,0,0.5)',
-                          letterSpacing: '1px'
+                          textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                          letterSpacing: '1px',
+                          marginBottom: 2
                         }}>
                           {match.scoreline}
                         </div>
                       )}
                       
+                      {/* Match Type */}
                       {match.matchType && (
                         <div style={{
-                          fontSize: 10,
-                          color: '#a3a3a3',
-                          marginTop: 4,
-                          textTransform: 'capitalize'
+                          fontSize: 8,
+                          color: '#94a3b8',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          fontWeight: 500
                         }}>
                           {match.matchType}
                         </div>
