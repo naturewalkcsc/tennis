@@ -380,6 +380,27 @@ if (page === "rules") {
 
         <h2 style={{ marginTop: 0, marginBottom: 16 }}>Live Stream</h2>
         
+        {/* Show current stream URL */}
+        <div style={{ 
+          marginBottom: 16, 
+          padding: 12, 
+          background: '#f8fafc', 
+          border: '1px solid #e2e8f0', 
+          borderRadius: 8 
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
+            Current Stream URL:
+          </div>
+          <div style={{ 
+            fontSize: 13, 
+            color: '#6b7280', 
+            fontFamily: 'monospace',
+            wordBreak: 'break-all'
+          }}>
+            {youtubeUrl || 'Loading...'}
+          </div>
+        </div>
+        
         {loadingVideo ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <div style={{ 
