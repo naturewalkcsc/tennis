@@ -565,6 +565,22 @@ if (page === "rules") {
           </div>
         ) : (
           <>
+            {/* Test Overlay - Always Visible for Debugging */}
+            <div style={{
+              position: 'fixed',
+              top: 100,
+              right: 20,
+              zIndex: 99999,
+              background: 'rgba(255, 0, 0, 0.8)',
+              color: 'white',
+              padding: '8px 12px',
+              borderRadius: 4,
+              fontSize: 14,
+              fontWeight: 'bold'
+            }}>
+              TEST OVERLAY - Z-INDEX: 99999
+            </div>
+
             {/* Live Score Overlay - Top Right Corner */}
             {(() => {
               const activeMatches = fixtures.filter(f => f.status === 'active');
@@ -575,22 +591,25 @@ if (page === "rules") {
                   position: 'fixed',
                   top: 160,
                   right: 20,
-                  zIndex: 1002,
+                  zIndex: 9999,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 8,
                   pointerEvents: 'none',
-                  maxWidth: 320
+                  maxWidth: 320,
+                  isolation: 'isolate'
                 }}>
                   {activeMatches.slice(0, 2).map((match, index) => (
                     <div key={match.id} style={{
-                      background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.9) 0%, rgba(20, 20, 20, 0.85) 100%)',
+                      background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(20, 20, 20, 0.9) 100%)',
                       color: 'white',
                       padding: '10px 14px',
                       borderRadius: 8,
+                      position: 'relative',
+                      zIndex: 10000,
                       backdropFilter: 'blur(12px)',
-                      border: '1px solid rgba(34, 197, 94, 0.6)',
-                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                      border: '2px solid rgba(34, 197, 94, 0.8)',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(34, 197, 94, 0.3)',
                       animation: `liveScore ${2 + index * 0.5}s ease-in-out infinite`,
                       transform: 'translateX(0)',
                       transition: 'all 0.3s ease'
