@@ -600,11 +600,20 @@ if (page === "rules") {
                             {(() => {
                               // Parse scoreline to separate set scores and current game
                               const scoreParts = match.scoreline.split(' ');
-                              const setScores = scoreParts.filter(part => 
-                                part.includes('-') && !part.includes('/') && 
-                                !['15', '30', '40', 'AD', 'DEUCE'].some(point => part.includes(point))
-                              );
-                              return setScores.length > 0 ? `Sets: ${setScores.join(', ')}` : match.scoreline;
+                              const setScores = scoreParts.filter((part, index) => {
+                                // Exclude the last part if it looks like game points
+                                if (index === scoreParts.length - 1 && 
+                                    (['15', '30', '40', 'Ad', 'DEUCE'].some(point => part.includes(point)) ||
+                                     (part.includes('-') && part.split('-').every(s => 
+                                       ['0', '15', '30', '40', 'Ad'].includes(s) || 
+                                       (!isNaN(parseInt(s, 10)) && parseInt(s, 10) <= 10))))) {
+                                  return false;
+                                }
+                                return part.includes('-') && !part.includes('/') && 
+                                       !['15', '30', '40', 'AD', 'DEUCE'].some(point => part.includes(point));
+                              });
+                              return setScores.length > 0 ? `Sets: ${setScores.join(', ')}` : 
+                                     (scoreParts.length === 1 ? match.scoreline : scoreParts[0]);
                             })()}
                           </div>
                           
@@ -634,13 +643,24 @@ if (page === "rules") {
                             };
                             
                             const scoreParts = match.scoreline.split(' ');
-                            let gameScore = scoreParts.find(part => 
-                              ['15', '30', '40', 'AD', 'DEUCE'].some(point => part.includes(point)) ||
-                              (part.includes('-') && (part.includes('/') || part.split('-').some(s => 
-                                ['0', '15', '30', '40'].includes(s))))
-                            );
                             
-                            // If we didn't find tennis-formatted score, look for numeric game scores
+                            // Look for the last part which should be the current game points
+                            // Format should now be like: "4-3 15-30" or "4-3 Ad-40"
+                            let gameScore = null;
+                            
+                            // Check if we have multiple parts and the last one looks like game points
+                            if (scoreParts.length >= 2) {
+                              const lastPart = scoreParts[scoreParts.length - 1];
+                              // Check if it's tennis formatted (contains 15,30,40,Ad) or looks like game points
+                              if (['15', '30', '40', 'Ad', 'DEUCE'].some(point => lastPart.includes(point)) ||
+                                  (lastPart.includes('-') && lastPart.split('-').every(s => 
+                                    ['0', '15', '30', '40', 'Ad'].includes(s) || !isNaN(parseInt(s, 10))
+                                  ))) {
+                                gameScore = lastPart;
+                              }
+                            }
+                            
+                            // If still no game score found, try to convert any numeric score
                             if (!gameScore) {
                               const numericGame = scoreParts.find(part => 
                                 part.includes('-') && 

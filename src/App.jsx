@@ -1280,11 +1280,19 @@ function Scoring({ config, onAbort, onComplete }) {
   };
 
 
-  const pushLiveScore = async (setObj) => {
+  const pushLiveScore = async (setObj, gamePointsA = null, gamePointsB = null) => {
     if (!fixtureId || !setObj) return;
     try {
       const main = `${setObj.gamesA}-${setObj.gamesB}`;
-      const live = setObj.tie ? `${main} (TB ${setObj.tieA}-${setObj.tieB})` : main;
+      let live;
+      if (setObj.tie) {
+        live = `${main} (TB ${setObj.tieA}-${setObj.tieB})`;
+      } else if (gamePointsA !== null && gamePointsB !== null) {
+        // Include current game points
+        live = `${main} ${gamePointsA}-${gamePointsB}`;
+      } else {
+        live = main;
+      }
       await apiFixturesUpdate(fixtureId, { scoreline: live });
     } catch (e) {
       console.error(e);
@@ -1354,7 +1362,7 @@ function Scoring({ config, onAbort, onComplete }) {
       if (s.finished) {
         recordResult(s);
       } else {
-        pushLiveScore(s);
+        pushLiveScore(s, s.tieA, s.tieB); // In tie-break, show TB points
       }
       return;
     }
@@ -1433,7 +1441,28 @@ function Scoring({ config, onAbort, onComplete }) {
     if (s.finished) {
       recordResult(s);
     } else {
-      pushLiveScore(s);
+      // Calculate display points for current game
+      let displayPA = mapPointToTennis(pA);
+      let displayPB = mapPointToTennis(pB);
+      
+      // Handle deuce and advantage situations
+      const atDeuce = pA >= 3 && pB >= 3 && pA === pB;
+      const isGoldenDeuce = atDeuce && newDeuceCount >= 2;
+      
+      if (atDeuce) {
+        displayPA = 40;
+        displayPB = 40;
+      } else if (pA >= 3 && pB >= 3 && Math.abs(pA - pB) === 1 && !isGoldenDeuce) {
+        if (pA > pB) {
+          displayPA = "Ad";
+          displayPB = 40;
+        } else {
+          displayPB = "Ad";
+          displayPA = 40;
+        }
+      }
+      
+      pushLiveScore(s, displayPA, displayPB);
     }
   };
 
