@@ -402,6 +402,18 @@ if (page === "rules") {
   if (page === "live") {
     return (
       <div style={{ padding: 24 }}>
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { 
+              box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(34, 197, 94, 0.3);
+              border-color: rgba(34, 197, 94, 0.8);
+            }
+            50% { 
+              box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(34, 197, 94, 0.6);
+              border-color: rgba(34, 197, 94, 1);
+            }
+          }
+        `}</style>
         <div style={{ marginBottom: 12 }}>
           <button
             onClick={() => setPage("menu")}
@@ -485,6 +497,77 @@ if (page === "rules") {
           </div>
         ) : (
           <>
+            {/* Live Score Overlay */}
+            {(() => {
+              const activeMatches = fixtures.filter(f => f.status === 'active');
+              return activeMatches.length > 0 ? (
+                <div style={{
+                  position: 'fixed',
+                  top: 140,
+                  left: 20,
+                  right: 20,
+                  zIndex: 1002,
+                  display: 'flex',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  pointerEvents: 'none'
+                }}>
+                  {activeMatches.slice(0, 2).map(match => (
+                    <div key={match.id} style={{
+                      background: 'rgba(0, 0, 0, 0.85)',
+                      color: 'white',
+                      padding: '12px 16px',
+                      borderRadius: 12,
+                      backdropFilter: 'blur(10px)',
+                      border: '2px solid rgba(34, 197, 94, 0.8)',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                      minWidth: 280,
+                      animation: 'pulse 2s ease-in-out infinite'
+                    }}>
+                      <div style={{ 
+                        fontSize: 10, 
+                        fontWeight: 600, 
+                        color: '#22c55e',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        marginBottom: 6
+                      }}>
+                        🔴 LIVE • {match.category || 'Match'}
+                      </div>
+                      
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
+                        {(match.sides || []).join(' vs ')}
+                      </div>
+                      
+                      {match.scoreline && (
+                        <div style={{
+                          fontSize: 18,
+                          fontWeight: 800,
+                          color: '#fbbf24',
+                          textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                          letterSpacing: '1px'
+                        }}>
+                          {match.scoreline}
+                        </div>
+                      )}
+                      
+                      {match.matchType && (
+                        <div style={{
+                          fontSize: 10,
+                          color: '#a3a3a3',
+                          marginTop: 4,
+                          textTransform: 'capitalize'
+                        }}>
+                          {match.matchType}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : null;
+            })()}
+
+            {/* Video Stream */}
             <div
               style={{
                 position: "fixed",
