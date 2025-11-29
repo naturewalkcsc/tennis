@@ -1195,7 +1195,7 @@ function makeEmptySet(matchType) {
 
 function Scoring({ config, onAbort, onComplete }) {
   const { sides = ["A", "B"], fixtureId, matchType: cfgMatchType } = config || {};
-  const matchType = cfgMatchType === "final" ? "final" : "regular"; // default: qualifiers/semis
+  const matchType = (cfgMatchType || "").toLowerCase() === "final" ? "final" : "regular"; // default: qualifiers/semis
 
   const [gameType, setGameType] = useState(""); // "normal" or "walkover"
   const [walkoverPlayer, setWalkoverPlayer] = useState(""); // who is giving the walkover
