@@ -77,9 +77,42 @@ export function FixturesAndResults({
       if (!table[category]) table[category] = {};
       if (!table[category][pool]) table[category][pool] = {};
       if (!table[category][pool][name]) {
-        table[category][pool][name] = { name, played: 0, wins: 0, points: 0 };
+        table[category][pool][name] = { name, played: 0, wins: 0, points: 0, gamesWon: 0, gamesLost: 0 };
       }
       return table[category][pool][name];
+    };
+
+    // Helper function to parse scoreline and extract games won/lost
+    const parseScoreline = (scoreline, playerName, sides, winner) => {
+      if (!scoreline || sides.length !== 2) return { gamesWon: 0, gamesLost: 0 };
+      
+      // Find player's position (0 or 1)
+      const playerIndex = sides.indexOf(playerName);
+      if (playerIndex === -1) return { gamesWon: 0, gamesLost: 0 };
+      
+      // Parse common scoreline formats like "4-1", "3-4", "4-2, 4-3", etc.
+      const scores = scoreline.split(',').map(s => s.trim());
+      let totalGamesWon = 0;
+      let totalGamesLost = 0;
+      
+      for (const score of scores) {
+        const match = score.match(/(\d+)-(\d+)/);
+        if (match) {
+          const [, score1, score2] = match;
+          const games1 = parseInt(score1);
+          const games2 = parseInt(score2);
+          
+          if (playerIndex === 0) {
+            totalGamesWon += games1;
+            totalGamesLost += games2;
+          } else {
+            totalGamesWon += games2;
+            totalGamesLost += games1;
+          }
+        }
+      }
+      
+      return { gamesWon: totalGamesWon, gamesLost: totalGamesLost };
     };
 
     // Build quick lookup from players map to know pools
@@ -106,21 +139,24 @@ export function FixturesAndResults({
 
       if (sides.length < 2) return;
 
-      // Ensure entries for both sides
+      // Process each player/team
       sides.forEach((name) => {
         if (!name) return;
         const pool = poolsByName[name] || "No Pool";
         const rec = ensureEntry(category, pool, name);
         rec.played += 1;
-      });
 
-      // Apply win
-      if (f.winner) {
-        const pool = poolsByName[f.winner] || "No Pool";
-        const rec = ensureEntry(category, pool, f.winner);
-        rec.wins += 1;
-        rec.points += 2; // 2 points per win
-      }
+        // Calculate games won/lost from scoreline
+        const gameStats = parseScoreline(f.scoreline, name, sides, f.winner);
+        rec.gamesWon += gameStats.gamesWon;
+        rec.gamesLost += gameStats.gamesLost;
+
+        // Apply win points
+        if (f.winner === name) {
+          rec.wins += 1;
+          rec.points += 2; // 2 points per win
+        }
+      });
     });
 
     // Helper function to determine qualification status
@@ -164,6 +200,10 @@ export function FixturesAndResults({
         arr.sort((a, b) => {
           if (b.points !== a.points) return b.points - a.points;
           if (b.wins !== a.wins) return b.wins - a.wins;
+          if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
+          const aGamesDiff = a.gamesWon - a.gamesLost;
+          const bGamesDiff = b.gamesWon - b.gamesLost;
+          if (bGamesDiff !== aGamesDiff) return bGamesDiff - aGamesDiff;
           return a.name.localeCompare(b.name);
         });
         
@@ -238,7 +278,7 @@ export function FixturesAndResults({
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{cat}</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                     {Object.keys(standingsByCategory[cat]).sort().map((pool) => (
-                      <div key={pool} style={{ minWidth: 280, background: "#f9fafb", borderRadius: 8, padding: 8, border: "1px solid #e5e7eb" }}>
+                      <div key={pool} style={{ minWidth: 320, background: "#f9fafb", borderRadius: 8, padding: 8, border: "1px solid #e5e7eb" }}>
                         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
                           {pool === "No Pool" ? "Overall" : `Pool ${pool}`}
                         </div>
@@ -249,6 +289,7 @@ export function FixturesAndResults({
                               <th style={{ textAlign: "right", padding: "2px 4px" }}>P</th>
                               <th style={{ textAlign: "right", padding: "2px 4px" }}>W</th>
                               <th style={{ textAlign: "right", padding: "2px 4px" }}>Pts</th>
+                              <th style={{ textAlign: "right", padding: "2px 4px" }}>GW</th>
                               <th style={{ textAlign: "center", padding: "2px 4px" }}>Status</th>
                             </tr>
                           </thead>
@@ -259,6 +300,7 @@ export function FixturesAndResults({
                                 <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.played}</td>
                                 <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.wins}</td>
                                 <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.points}</td>
+                                <td style={{ textAlign: "right", padding: "2px 4px" }}>{row.gamesWon}</td>
                                 <td style={{ textAlign: "center", padding: "2px 4px" }}>
                                   {row.qualification && (
                                     <span style={{
