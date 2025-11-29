@@ -167,7 +167,7 @@ export function FixturesAndResults({
       if ((catLower.includes("women") || catLower.includes("woman")) && catLower.includes("single")) {
         return position <= 2 ? "Semifinals" : "";
       }
-      if (catLower.includes("nw a") && catLower.includes("single")) {
+      if ((catLower.includes("nw a") || catLower.includes("nw team (a)") || catLower.includes("nw team a")) && catLower.includes("single")) {
         return position <= 2 ? "Semifinals" : "";
       }
       if (catLower.includes("champions a") && catLower.includes("single")) {
@@ -178,7 +178,7 @@ export function FixturesAndResults({
       }
       
       // NW B Singles / Champions B Singles - single pool, top 4 qualify for semifinals
-      if ((catLower.includes("nw b") || catLower.includes("champions b")) && catLower.includes("single")) {
+      if ((catLower.includes("nw b") || catLower.includes("nw team (b)") || catLower.includes("nw team b") || catLower.includes("champions b")) && catLower.includes("single")) {
         return position <= 4 ? "Semifinals" : "";
       }
       
