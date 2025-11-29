@@ -565,20 +565,31 @@ if (page === "rules") {
           </div>
         ) : (
           <>
-            {/* Test Overlay - Always Visible for Debugging */}
+            {/* Debug Info Overlay */}
             <div style={{
               position: 'fixed',
               top: 100,
               right: 20,
               zIndex: 99999,
-              background: 'rgba(255, 0, 0, 0.8)',
+              background: 'rgba(0, 0, 0, 0.8)',
               color: 'white',
               padding: '8px 12px',
               borderRadius: 4,
-              fontSize: 14,
-              fontWeight: 'bold'
+              fontSize: 12,
+              fontFamily: 'monospace',
+              maxWidth: 300
             }}>
-              TEST OVERLAY - Z-INDEX: 99999
+              <div>Fixtures: {fixtures.length}</div>
+              <div>Active: {fixtures.filter(f => f.status === 'active').length}</div>
+              {fixtures.length > 0 && (
+                <div style={{ fontSize: 10, marginTop: 4 }}>
+                  {fixtures.slice(0, 2).map((f, i) => (
+                    <div key={i}>
+                      {i+1}: {f.sides?.join(' vs ') || 'No sides'} - {f.status} - {f.scoreline || 'No score'}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Live Score Overlay - Top Right Corner */}
