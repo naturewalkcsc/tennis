@@ -288,10 +288,11 @@ export function FixturesAndResults({
                     const tiebreakMatch = part.match(/^(\d+)-(\d+)(\([\d-]+\))$/);
                     if (tiebreakMatch) {
                       const [, scoreA, scoreB, tiebreakPart] = tiebreakMatch;
-                      // Also flip the tiebreak score
+                      // Also flip the tiebreak score so winner's tiebreak points come first
                       const tbMatch = tiebreakPart.match(/\((\d+)-(\d+)\)/);
                       if (tbMatch) {
                         const [, tbA, tbB] = tbMatch;
+                        // If main set winner is scoreB, then tiebreak winner is also tbB, so show tbB first
                         return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
                       }
                       return `${scoreB}-${scoreA}${tiebreakPart}`;
