@@ -240,6 +240,222 @@ export function FixturesAndResults({
       
       <h2 style={{ marginTop: 0 }}>{title}</h2>
       
+      {/* Tournament Winners & Runners-Up Summary */}
+      {(() => {
+        const completedMatches = fixtures.filter(f => f.status === 'completed' && f.winner);
+        if (completedMatches.length === 0) return null;
+
+        // Group winners by category and match type
+        const tournamentResults = {};
+        
+        completedMatches.forEach(match => {
+          const category = match.category || 'Unknown Category';
+          const matchType = match.matchType || 'Unknown';
+          
+          if (!tournamentResults[category]) {
+            tournamentResults[category] = {};
+          }
+          
+          if (!tournamentResults[category][matchType]) {
+            tournamentResults[category][matchType] = {
+              winner: null,
+              runnerUp: null,
+              finalScore: null
+            };
+          }
+          
+          // Assume Final matches give us winner and runner-up
+          if (matchType.toLowerCase() === 'final') {
+            tournamentResults[category][matchType].winner = match.winner;
+            
+            // Runner-up is the other player in the final
+            let runnerUp = null;
+            if (match.sides && match.sides.length === 2) {
+              runnerUp = match.sides.find(side => side !== match.winner);
+              tournamentResults[category][matchType].runnerUp = runnerUp;
+            }
+            
+            // Format score with winner's score first
+            let formattedScore = match.scoreline;
+            if (match.scoreline && match.sides && match.sides.length === 2) {
+              const winnerIndex = match.sides.indexOf(match.winner);
+              if (winnerIndex !== -1 && winnerIndex !== 0) {
+                // Winner is second player, need to flip the scores
+                const scoreParts = match.scoreline.split(/[\s,]+/);
+                const flippedParts = scoreParts.map(part => {
+                  if (part.includes('-')) {
+                    const [scoreA, scoreB] = part.split('-');
+                    return `${scoreB}-${scoreA}`;
+                  }
+                  return part;
+                });
+                formattedScore = flippedParts.join(', ');
+              }
+            }
+            
+            tournamentResults[category][matchType].finalScore = formattedScore;
+          }
+        });
+
+        const hasResults = Object.keys(tournamentResults).some(cat => 
+          Object.keys(tournamentResults[cat]).some(matchType => 
+            tournamentResults[cat][matchType].winner
+          )
+        );
+
+        if (!hasResults) return null;
+
+        // Define the desired category order
+        const categoryOrder = [
+          "Kid's Singles",
+          "Kid's Doubles", 
+          "Women's Singles",
+          "Women's Doubles",
+          "NW Team (B) Singles",
+          "NW Team (B) Doubles",
+          "NW Team (A) Singles", 
+          "NW Team (A) Doubles",
+          "Combination Doubles"
+        ];
+
+        // Sort categories according to the specified order
+        const sortedCategories = Object.entries(tournamentResults).sort(([categoryA], [categoryB]) => {
+          const indexA = categoryOrder.indexOf(categoryA);
+          const indexB = categoryOrder.indexOf(categoryB);
+          
+          // If both categories are in the order list, sort by their position
+          if (indexA !== -1 && indexB !== -1) {
+            return indexA - indexB;
+          }
+          // If only one is in the order list, prioritize it
+          if (indexA !== -1) return -1;
+          if (indexB !== -1) return 1;
+          // If neither is in the order list, sort alphabetically
+          return categoryA.localeCompare(categoryB);
+        });
+
+        return (
+          <div style={{ 
+            marginBottom: 32, 
+            background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
+            border: '2px solid #374151',
+            borderRadius: 12,
+            padding: 20,
+            boxShadow: '0 8px 25px rgba(0, 0, 0, 0.4)'
+          }}>
+            <h3 style={{ 
+              margin: '0 0 20px 0', 
+              color: '#f9fafb', 
+              fontSize: 20, 
+              fontWeight: 700,
+              textAlign: 'center',
+              textTransform: 'uppercase',
+              letterSpacing: '1px',
+              textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)'
+            }}>
+              🏆 RNW Tennis Tournament 2025 Champions & Runners-Up
+            </h3>
+            
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ 
+                width: '100%', 
+                borderCollapse: 'collapse',
+                backgroundColor: '#374151',
+                borderRadius: 8,
+                overflow: 'hidden',
+                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)'
+              }}>
+                <thead>
+                  <tr style={{ 
+                    background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                    color: '#f9fafb'
+                  }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
+                      Category
+                    </th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
+                      🥇 Champion
+                    </th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
+                      🥈 Runner-Up
+                    </th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
+                      Final Score
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedCategories.map(([category, matchTypes]) => 
+                    Object.entries(matchTypes).map(([matchType, result], index) => {
+                      if (!result.winner) return null;
+                      
+                      return (
+                        <tr key={`${category}-${matchType}`} style={{ 
+                          borderBottom: '1px solid #4b5563',
+                          background: '#374151',
+                          transition: 'all 0.2s ease'
+                        }}>
+                          <td style={{ 
+                            padding: '12px 16px', 
+                            fontWeight: 600, 
+                            color: '#e5e7eb',
+                            fontSize: 14
+                          }}>
+                            {category}
+                          </td>
+                          <td style={{ 
+                            padding: '12px 16px',
+                            fontWeight: 700,
+                            color: '#10b981',
+                            fontSize: 14
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 16 }}>🏆</span>
+                              {result.winner}
+                            </div>
+                          </td>
+                          <td style={{ 
+                            padding: '12px 16px',
+                            fontWeight: 600,
+                            color: '#a78bfa',
+                            fontSize: 14
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 16 }}>🥈</span>
+                              {result.runnerUp || '-'}
+                            </div>
+                          </td>
+                          <td style={{ 
+                            padding: '12px 16px',
+                            fontFamily: 'monospace',
+                            color: '#d1d5db',
+                            fontSize: 13,
+                            fontWeight: 500
+                          }}>
+                            {result.finalScore || '-'}
+                          </td>
+                        </tr>
+                      );
+                    }).filter(Boolean)
+                  ).flat()}
+                </tbody>
+              </table>
+            </div>
+            
+            {Object.keys(tournamentResults).length === 0 && (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: 32, 
+                color: '#9ca3af', 
+                fontSize: 14 
+              }}>
+                No tournament winners yet. Complete some matches to see results!
+              </div>
+            )}
+          </div>
+        );
+      })()}
+      
       {/* Filter buttons */}
       <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
         {["all", "upcoming", "completed"].map((key) => {
