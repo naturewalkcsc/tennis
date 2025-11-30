@@ -392,7 +392,7 @@ export function FixturesAndResults({
                       return (
                         <tr key={`${category}-${matchType}`} style={{ 
                           borderBottom: '1px solid #4b5563',
-                          background: index % 2 === 0 ? '#4b5563' : '#374151',
+                          background: '#374151',
                           transition: 'all 0.2s ease'
                         }}>
                           <td style={{ 
