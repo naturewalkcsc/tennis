@@ -277,76 +277,47 @@ export function FixturesAndResults({
             
             // Format score with winner's score first
             let formattedScore = match.scoreline;
-            console.log('🎾 SCORE PROCESSING START');
-            console.log('Original scoreline:', match.scoreline);
-            console.log('Winner:', match.winner);
-            console.log('Sides:', match.sides);
-            
             if (match.scoreline && match.sides && match.sides.length === 2) {
               const winnerIndex = match.sides.indexOf(match.winner);
-              console.log('Winner index:', winnerIndex);
-              console.log('Should flip scores?', winnerIndex !== -1 && winnerIndex !== 0);
-              
               if (winnerIndex !== -1 && winnerIndex !== 0) {
-                console.log('🔄 FLIPPING SCORES (winner is second player)');
                 // Winner is second player, need to flip the scores
                 const scoreParts = match.scoreline.split(/[\s,]+/);
-                console.log('Score parts:', scoreParts);
-                
                 const flippedParts = scoreParts.map(part => {
-                  console.log(`Processing part: "${part}"`);
                   if (part.includes('-')) {
                     // Clean the part and handle tiebreak scores
                     const cleanPart = part.trim();
                     
                     // Try primary tiebreak pattern: "6-7(5-7)"
                     let tiebreakMatch = cleanPart.match(/^(\d+)-(\d+)\((\d+)-(\d+)\)$/);
-                    console.log('Primary tiebreak match:', !!tiebreakMatch);
                     
                     // Try alternative patterns if primary fails
                     if (!tiebreakMatch) {
                       tiebreakMatch = cleanPart.match(/^(\d+)-(\d+)\s*\(\s*(\d+)-(\d+)\s*\)$/);
-                      console.log('Alternative tiebreak match:', !!tiebreakMatch);
                     }
                     
                     if (tiebreakMatch) {
                       const [, scoreA, scoreB, tbA, tbB] = tiebreakMatch;
-                      const result = `${scoreB}-${scoreA}(${tbB}-${tbA})`;
-                      console.log(`✅ Tiebreak flip: "${part}" → "${result}"`);
-                      return result;
+                      return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
                     } else if (cleanPart.includes('(')) {
-                      console.log('⚠️ Has parentheses but no tiebreak match, trying manual parsing');
                       // Manual parsing for edge cases
                       const mainMatch = cleanPart.match(/^(\d+)-(\d+)/);
                       const tbMatch = cleanPart.match(/\((\d+)-(\d+)\)/);
                       if (mainMatch && tbMatch) {
                         const [, scoreA, scoreB] = mainMatch;
                         const [, tbA, tbB] = tbMatch;
-                        const result = `${scoreB}-${scoreA}(${tbB}-${tbA})`;
-                        console.log(`✅ Manual tiebreak flip: "${part}" → "${result}"`);
-                        return result;
+                        return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
                       }
-                      console.log('❌ Manual parsing also failed');
                     }
                     
                     // Regular score without tiebreak
                     const [scoreA, scoreB] = cleanPart.split('-');
-                    const result = `${scoreB}-${scoreA}`;
-                    console.log(`✅ Regular flip: "${part}" → "${result}"`);
-                    return result;
+                    return `${scoreB}-${scoreA}`;
                   }
-                  console.log(`➡️ No dash, returning unchanged: "${part}"`);
                   return part;
                 });
                 formattedScore = flippedParts.join(', ');
-                console.log('Flipped score:', formattedScore);
-              } else {
-                console.log('⏭️ No score flipping needed');
               }
             }
-            
-            console.log('🏆 FINAL SCORE FOR TABLE:', formattedScore);
-            console.log('🎾 SCORE PROCESSING END\n');
             
             tournamentResults[category][matchType].finalScore = formattedScore;
           }
@@ -389,53 +360,87 @@ export function FixturesAndResults({
           return categoryA.localeCompare(categoryB);
         });
 
+        // Check if we're on mobile
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+        
         return (
           <div style={{ 
             marginBottom: 32, 
             background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
             border: '2px solid #374151',
             borderRadius: 12,
-            padding: 20,
+            padding: isMobile ? 12 : 20,
             boxShadow: '0 8px 25px rgba(0, 0, 0, 0.4)'
           }}>
             <h3 style={{ 
-              margin: '0 0 20px 0', 
+              margin: '0 0 16px 0', 
               color: '#f9fafb', 
-              fontSize: 20, 
+              fontSize: isMobile ? 16 : 20, 
               fontWeight: 700,
               textAlign: 'center',
               textTransform: 'uppercase',
               letterSpacing: '1px',
-              textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)'
+              textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
+              lineHeight: '1.2'
             }}>
               🏆 RNW Tennis Tournament 2025 Champions & Runners-Up
             </h3>
             
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ 
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch' // Smooth scrolling on iOS
+            }}>
               <table style={{ 
                 width: '100%', 
                 borderCollapse: 'collapse',
                 backgroundColor: '#374151',
                 borderRadius: 8,
                 overflow: 'hidden',
-                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)'
+                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)',
+                minWidth: isMobile ? '500px' : 'auto' // Minimum width for horizontal scroll on mobile
               }}>
                 <thead>
                   <tr style={{ 
                     background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
                     color: '#f9fafb'
                   }}>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
+                    <th style={{ 
+                      padding: isMobile ? '6px 4px' : '8px 12px', 
+                      textAlign: 'left', 
+                      fontWeight: 700, 
+                      fontSize: isMobile ? 11 : 14,
+                      width: isMobile ? '28%' : '25%',
+                      wordWrap: 'break-word',
+                      hyphens: 'auto'
+                    }}>
                       Category
                     </th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
+                    <th style={{ 
+                      padding: isMobile ? '6px 4px' : '8px 12px', 
+                      textAlign: 'left', 
+                      fontWeight: 700, 
+                      fontSize: isMobile ? 11 : 14,
+                      width: isMobile ? '32%' : '30%'
+                    }}>
                       🥇 Champion
                     </th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
+                    <th style={{ 
+                      padding: isMobile ? '6px 4px' : '8px 12px', 
+                      textAlign: 'left', 
+                      fontWeight: 700, 
+                      fontSize: isMobile ? 11 : 14,
+                      width: isMobile ? '25%' : '25%'
+                    }}>
                       🥈 Runner-Up
                     </th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
-                      Final Score
+                    <th style={{ 
+                      padding: isMobile ? '6px 4px' : '8px 12px', 
+                      textAlign: 'left', 
+                      fontWeight: 700, 
+                      fontSize: isMobile ? 10 : 14,
+                      width: isMobile ? '15%' : '20%'
+                    }}>
+                      Score
                     </th>
                   </tr>
                 </thead>
@@ -451,43 +456,86 @@ export function FixturesAndResults({
                           transition: 'all 0.2s ease'
                         }}>
                           <td style={{ 
-                            padding: '12px 16px', 
+                            padding: isMobile ? '4px 4px' : '6px 12px', 
                             fontWeight: 600, 
                             color: '#e5e7eb',
-                            fontSize: 14
+                            fontSize: isMobile ? 10 : 13,
+                            verticalAlign: 'top',
+                            lineHeight: isMobile ? '1.1' : '1.3'
                           }}>
-                            {category}
+                            <div style={{ 
+                              wordBreak: 'break-word',
+                              hyphens: 'auto',
+                              maxWidth: isMobile ? '90px' : 'none'
+                            }}>
+                              {category}
+                            </div>
                           </td>
                           <td style={{ 
-                            padding: '12px 16px',
+                            padding: isMobile ? '4px 4px' : '6px 12px',
                             fontWeight: 700,
                             color: '#10b981',
-                            fontSize: 14
+                            fontSize: isMobile ? 10 : 13,
+                            verticalAlign: 'top',
+                            lineHeight: isMobile ? '1.1' : '1.3'
                           }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: 16 }}>🏆</span>
-                              {result.winner}
+                            <div style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: isMobile ? 2 : 6,
+                              wordBreak: 'break-word'
+                            }}>
+                              <span style={{ fontSize: isMobile ? 10 : 14, flexShrink: 0 }}>🏆</span>
+                              <span style={{ 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis',
+                                maxWidth: isMobile ? '80px' : 'none'
+                              }}>
+                                {result.winner}
+                              </span>
                             </div>
                           </td>
                           <td style={{ 
-                            padding: '12px 16px',
+                            padding: isMobile ? '4px 4px' : '6px 12px',
                             fontWeight: 600,
                             color: '#a78bfa',
-                            fontSize: 14
+                            fontSize: isMobile ? 10 : 13,
+                            verticalAlign: 'top',
+                            lineHeight: isMobile ? '1.1' : '1.3'
                           }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: 16 }}>🥈</span>
-                              {result.runnerUp || '-'}
+                            <div style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: isMobile ? 2 : 6,
+                              wordBreak: 'break-word'
+                            }}>
+                              <span style={{ fontSize: isMobile ? 10 : 14, flexShrink: 0 }}>🥈</span>
+                              <span style={{ 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis',
+                                maxWidth: isMobile ? '70px' : 'none'
+                              }}>
+                                {result.runnerUp || '-'}
+                              </span>
                             </div>
                           </td>
                           <td style={{ 
-                            padding: '12px 16px',
+                            padding: isMobile ? '4px 2px' : '6px 12px',
                             fontFamily: 'monospace',
                             color: '#d1d5db',
-                            fontSize: 13,
-                            fontWeight: 500
+                            fontSize: isMobile ? 8 : 12,
+                            fontWeight: 500,
+                            verticalAlign: 'top',
+                            lineHeight: isMobile ? '1.1' : '1.3',
+                            whiteSpace: isMobile ? 'normal' : 'nowrap'
                           }}>
-                            {result.finalScore || '-'}
+                            <div style={{ 
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              wordBreak: isMobile ? 'break-word' : 'normal'
+                            }}>
+                              {result.finalScore || '-'}
+                            </div>
                           </td>
                         </tr>
                       );
