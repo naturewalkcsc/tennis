@@ -330,7 +330,7 @@ export function FixturesAndResults({
               textTransform: 'uppercase',
               letterSpacing: '1px'
             }}>
-              🏆 Tournament Champions & Runners-Up
+              🏆 RNW Tennis Tournament 2025 Champions & Runners-Up
             </h3>
             
             <div style={{ overflowX: 'auto' }}>
