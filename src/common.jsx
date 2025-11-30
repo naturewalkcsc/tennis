@@ -284,21 +284,13 @@ export function FixturesAndResults({
                 const scoreParts = match.scoreline.split(/[\s,]+/);
                 const flippedParts = scoreParts.map(part => {
                   if (part.includes('-')) {
-                    // Handle tiebreak scores like "7-6(7-5)"
-                    const tiebreakMatch = part.match(/^(\d+)-(\d+)(\([\d-]+\))$/);
+                    // Handle tiebreak scores like "6-7(5-7)" -> "7-6(7-5)"
+                    const tiebreakMatch = part.match(/^(\d+)-(\d+)\((\d+)-(\d+)\)$/);
                     if (tiebreakMatch) {
-                      const [, scoreA, scoreB, tiebreakPart] = tiebreakMatch;
-                      // Also flip the tiebreak score so winner's tiebreak points come first
-                      const tbMatch = tiebreakPart.match(/\((\d+)-(\d+)\)/);
-                      if (tbMatch) {
-                        const [, tbA, tbB] = tbMatch;
-                        // The set winner is scoreB (higher score), and they also won the tiebreak
-                        // So we show: setWinner-setLoser(tiebreakWinner-tiebreakLoser)
-                        // Since scoreB > scoreA, scoreB won the set and the tiebreak
-                        // So tiebreak winner is also tbB, show tbB-tbA
-                        return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
-                      }
-                      return `${scoreB}-${scoreA}${tiebreakPart}`;
+                      const [, scoreA, scoreB, tbA, tbB] = tiebreakMatch;
+                      // When flipping scores, we put the winner first in both set score and tiebreak score
+                      // The player who won the set also won the tiebreak
+                      return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
                     } else {
                       // Regular score without tiebreak
                       const [scoreA, scoreB] = part.split('-');
