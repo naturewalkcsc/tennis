@@ -277,47 +277,76 @@ export function FixturesAndResults({
             
             // Format score with winner's score first
             let formattedScore = match.scoreline;
+            console.log('🎾 SCORE PROCESSING START');
+            console.log('Original scoreline:', match.scoreline);
+            console.log('Winner:', match.winner);
+            console.log('Sides:', match.sides);
+            
             if (match.scoreline && match.sides && match.sides.length === 2) {
               const winnerIndex = match.sides.indexOf(match.winner);
+              console.log('Winner index:', winnerIndex);
+              console.log('Should flip scores?', winnerIndex !== -1 && winnerIndex !== 0);
+              
               if (winnerIndex !== -1 && winnerIndex !== 0) {
+                console.log('🔄 FLIPPING SCORES (winner is second player)');
                 // Winner is second player, need to flip the scores
                 const scoreParts = match.scoreline.split(/[\s,]+/);
+                console.log('Score parts:', scoreParts);
+                
                 const flippedParts = scoreParts.map(part => {
+                  console.log(`Processing part: "${part}"`);
                   if (part.includes('-')) {
                     // Clean the part and handle tiebreak scores
                     const cleanPart = part.trim();
                     
                     // Try primary tiebreak pattern: "6-7(5-7)"
                     let tiebreakMatch = cleanPart.match(/^(\d+)-(\d+)\((\d+)-(\d+)\)$/);
+                    console.log('Primary tiebreak match:', !!tiebreakMatch);
                     
                     // Try alternative patterns if primary fails
                     if (!tiebreakMatch) {
                       tiebreakMatch = cleanPart.match(/^(\d+)-(\d+)\s*\(\s*(\d+)-(\d+)\s*\)$/);
+                      console.log('Alternative tiebreak match:', !!tiebreakMatch);
                     }
                     
                     if (tiebreakMatch) {
                       const [, scoreA, scoreB, tbA, tbB] = tiebreakMatch;
-                      return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
+                      const result = `${scoreB}-${scoreA}(${tbB}-${tbA})`;
+                      console.log(`✅ Tiebreak flip: "${part}" → "${result}"`);
+                      return result;
                     } else if (cleanPart.includes('(')) {
+                      console.log('⚠️ Has parentheses but no tiebreak match, trying manual parsing');
                       // Manual parsing for edge cases
                       const mainMatch = cleanPart.match(/^(\d+)-(\d+)/);
                       const tbMatch = cleanPart.match(/\((\d+)-(\d+)\)/);
                       if (mainMatch && tbMatch) {
                         const [, scoreA, scoreB] = mainMatch;
                         const [, tbA, tbB] = tbMatch;
-                        return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
+                        const result = `${scoreB}-${scoreA}(${tbB}-${tbA})`;
+                        console.log(`✅ Manual tiebreak flip: "${part}" → "${result}"`);
+                        return result;
                       }
+                      console.log('❌ Manual parsing also failed');
                     }
                     
                     // Regular score without tiebreak
                     const [scoreA, scoreB] = cleanPart.split('-');
-                    return `${scoreB}-${scoreA}`;
+                    const result = `${scoreB}-${scoreA}`;
+                    console.log(`✅ Regular flip: "${part}" → "${result}"`);
+                    return result;
                   }
+                  console.log(`➡️ No dash, returning unchanged: "${part}"`);
                   return part;
                 });
                 formattedScore = flippedParts.join(', ');
+                console.log('Flipped score:', formattedScore);
+              } else {
+                console.log('⏭️ No score flipping needed');
               }
             }
+            
+            console.log('🏆 FINAL SCORE FOR TABLE:', formattedScore);
+            console.log('🎾 SCORE PROCESSING END\n');
             
             tournamentResults[category][matchType].finalScore = formattedScore;
           }
