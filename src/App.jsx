@@ -1266,6 +1266,45 @@ function Scoring({ config, onAbort, onComplete }) {
               start: Date.now()
             };
             
+            // Add multiple test fixtures with tiebreak scores for debugging
+            const testFixtures = [
+              {
+                id: 'test-tiebreak-1-' + Date.now(),
+                sides: ['Player A', 'Player B'],
+                status: 'completed',
+                scoreline: '6-7(5-7), 6-4, 7-5',
+                matchType: 'Final',
+                mode: 'singles',
+                winner: 'Player B',
+                start: Date.now() - 3600000
+              },
+              {
+                id: 'test-tiebreak-2-' + Date.now(),
+                sides: ['Player C', 'Player D'],  
+                status: 'completed',
+                scoreline: '6-7(5-7)',
+                matchType: 'Final',
+                mode: 'singles', 
+                winner: 'Player D',
+                start: Date.now() - 3500000
+              },
+              {
+                id: 'test-simple-' + Date.now(),
+                sides: ['Player E', 'Player F'],
+                status: 'completed',  
+                scoreline: '4-6, 6-3, 6-4',
+                matchType: 'Final',
+                mode: 'singles',
+                winner: 'Player F', 
+                start: Date.now() - 3400000
+              }
+            ];
+            
+            testFixtures.forEach(fixture => {
+              console.log('Adding test fixture:', fixture);
+              fixtures.push(fixture);
+            });
+            
             fixtures.push(tempFixture);
             localStorage.setItem('dev_fixtures', JSON.stringify(fixtures));
             window.dispatchEvent(new CustomEvent('fixturesUpdated', { detail: fixtures }));

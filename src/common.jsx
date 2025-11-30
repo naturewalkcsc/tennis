@@ -284,18 +284,34 @@ export function FixturesAndResults({
                 const scoreParts = match.scoreline.split(/[\s,]+/);
                 const flippedParts = scoreParts.map(part => {
                   if (part.includes('-')) {
-                    // Handle tiebreak scores like "6-7(5-7)" -> "7-6(7-5)"
-                    const tiebreakMatch = part.match(/^(\d+)-(\d+)\((\d+)-(\d+)\)$/);
+                    // Clean the part and handle tiebreak scores
+                    const cleanPart = part.trim();
+                    
+                    // Try primary tiebreak pattern: "6-7(5-7)"
+                    let tiebreakMatch = cleanPart.match(/^(\d+)-(\d+)\((\d+)-(\d+)\)$/);
+                    
+                    // Try alternative patterns if primary fails
+                    if (!tiebreakMatch) {
+                      tiebreakMatch = cleanPart.match(/^(\d+)-(\d+)\s*\(\s*(\d+)-(\d+)\s*\)$/);
+                    }
+                    
                     if (tiebreakMatch) {
                       const [, scoreA, scoreB, tbA, tbB] = tiebreakMatch;
-                      // When flipping scores, we put the winner first in both set score and tiebreak score
-                      // The player who won the set also won the tiebreak
                       return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
-                    } else {
-                      // Regular score without tiebreak
-                      const [scoreA, scoreB] = part.split('-');
-                      return `${scoreB}-${scoreA}`;
+                    } else if (cleanPart.includes('(')) {
+                      // Manual parsing for edge cases
+                      const mainMatch = cleanPart.match(/^(\d+)-(\d+)/);
+                      const tbMatch = cleanPart.match(/\((\d+)-(\d+)\)/);
+                      if (mainMatch && tbMatch) {
+                        const [, scoreA, scoreB] = mainMatch;
+                        const [, tbA, tbB] = tbMatch;
+                        return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
+                      }
                     }
+                    
+                    // Regular score without tiebreak
+                    const [scoreA, scoreB] = cleanPart.split('-');
+                    return `${scoreB}-${scoreA}`;
                   }
                   return part;
                 });
