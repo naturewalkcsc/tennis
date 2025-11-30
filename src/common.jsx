@@ -284,8 +284,22 @@ export function FixturesAndResults({
                 const scoreParts = match.scoreline.split(/[\s,]+/);
                 const flippedParts = scoreParts.map(part => {
                   if (part.includes('-')) {
-                    const [scoreA, scoreB] = part.split('-');
-                    return `${scoreB}-${scoreA}`;
+                    // Handle tiebreak scores like "7-6(7-5)"
+                    const tiebreakMatch = part.match(/^(\d+)-(\d+)(\([\d-]+\))$/);
+                    if (tiebreakMatch) {
+                      const [, scoreA, scoreB, tiebreakPart] = tiebreakMatch;
+                      // Also flip the tiebreak score
+                      const tbMatch = tiebreakPart.match(/\((\d+)-(\d+)\)/);
+                      if (tbMatch) {
+                        const [, tbA, tbB] = tbMatch;
+                        return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
+                      }
+                      return `${scoreB}-${scoreA}${tiebreakPart}`;
+                    } else {
+                      // Regular score without tiebreak
+                      const [scoreA, scoreB] = part.split('-');
+                      return `${scoreB}-${scoreA}`;
+                    }
                   }
                   return part;
                 });
