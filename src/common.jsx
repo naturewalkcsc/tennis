@@ -283,6 +283,35 @@ export function FixturesAndResults({
 
         if (!hasResults) return null;
 
+        // Define the desired category order
+        const categoryOrder = [
+          "Kid's Singles",
+          "Kid's Doubles", 
+          "Women's Singles",
+          "Women's Doubles",
+          "NW Team (B) Singles",
+          "NW Team (B) Doubles",
+          "NW Team (A) Singles", 
+          "NW Team (A) Doubles",
+          "Combination Doubles"
+        ];
+
+        // Sort categories according to the specified order
+        const sortedCategories = Object.entries(tournamentResults).sort(([categoryA], [categoryB]) => {
+          const indexA = categoryOrder.indexOf(categoryA);
+          const indexB = categoryOrder.indexOf(categoryB);
+          
+          // If both categories are in the order list, sort by their position
+          if (indexA !== -1 && indexB !== -1) {
+            return indexA - indexB;
+          }
+          // If only one is in the order list, prioritize it
+          if (indexA !== -1) return -1;
+          if (indexB !== -1) return 1;
+          // If neither is in the order list, sort alphabetically
+          return categoryA.localeCompare(categoryB);
+        });
+
         return (
           <div style={{ 
             marginBottom: 32, 
@@ -322,9 +351,6 @@ export function FixturesAndResults({
                       Category
                     </th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
-                      Match Type
-                    </th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
                       🥇 Champion
                     </th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
@@ -336,7 +362,7 @@ export function FixturesAndResults({
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(tournamentResults).map(([category, matchTypes]) => 
+                  {sortedCategories.map(([category, matchTypes]) => 
                     Object.entries(matchTypes).map(([matchType, result], index) => {
                       if (!result.winner) return null;
                       
@@ -353,14 +379,6 @@ export function FixturesAndResults({
                             fontSize: 14
                           }}>
                             {category}
-                          </td>
-                          <td style={{ 
-                            padding: '12px 16px', 
-                            color: '#6b7280',
-                            fontSize: 13,
-                            textTransform: 'capitalize'
-                          }}>
-                            {matchType}
                           </td>
                           <td style={{ 
                             padding: '12px 16px',
