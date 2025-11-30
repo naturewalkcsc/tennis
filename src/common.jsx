@@ -267,11 +267,33 @@ export function FixturesAndResults({
           // Assume Final matches give us winner and runner-up
           if (matchType.toLowerCase() === 'final') {
             tournamentResults[category][matchType].winner = match.winner;
-            tournamentResults[category][matchType].finalScore = match.scoreline;
+            
             // Runner-up is the other player in the final
+            let runnerUp = null;
             if (match.sides && match.sides.length === 2) {
-              tournamentResults[category][matchType].runnerUp = match.sides.find(side => side !== match.winner);
+              runnerUp = match.sides.find(side => side !== match.winner);
+              tournamentResults[category][matchType].runnerUp = runnerUp;
             }
+            
+            // Format score with winner's score first
+            let formattedScore = match.scoreline;
+            if (match.scoreline && match.sides && match.sides.length === 2) {
+              const winnerIndex = match.sides.indexOf(match.winner);
+              if (winnerIndex !== -1 && winnerIndex !== 0) {
+                // Winner is second player, need to flip the scores
+                const scoreParts = match.scoreline.split(/[\s,]+/);
+                const flippedParts = scoreParts.map(part => {
+                  if (part.includes('-')) {
+                    const [scoreA, scoreB] = part.split('-');
+                    return `${scoreB}-${scoreA}`;
+                  }
+                  return part;
+                });
+                formattedScore = flippedParts.join(', ');
+              }
+            }
+            
+            tournamentResults[category][matchType].finalScore = formattedScore;
           }
         });
 
