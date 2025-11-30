@@ -292,7 +292,10 @@ export function FixturesAndResults({
                       const tbMatch = tiebreakPart.match(/\((\d+)-(\d+)\)/);
                       if (tbMatch) {
                         const [, tbA, tbB] = tbMatch;
-                        // If main set winner is scoreB, then tiebreak winner is also tbB, so show tbB first
+                        // The set winner is scoreB (higher score), and they also won the tiebreak
+                        // So we show: setWinner-setLoser(tiebreakWinner-tiebreakLoser)
+                        // Since scoreB > scoreA, scoreB won the set and the tiebreak
+                        // So tiebreak winner is also tbB, show tbB-tbA
                         return `${scoreB}-${scoreA}(${tbB}-${tbA})`;
                       }
                       return `${scoreB}-${scoreA}${tiebreakPart}`;
