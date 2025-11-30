@@ -315,20 +315,21 @@ export function FixturesAndResults({
         return (
           <div style={{ 
             marginBottom: 32, 
-            background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
-            border: '2px solid #cbd5e1',
+            background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
+            border: '2px solid #374151',
             borderRadius: 12,
             padding: 20,
-            boxShadow: '0 8px 25px rgba(0, 0, 0, 0.1)'
+            boxShadow: '0 8px 25px rgba(0, 0, 0, 0.4)'
           }}>
             <h3 style={{ 
               margin: '0 0 20px 0', 
-              color: '#1e293b', 
+              color: '#f9fafb', 
               fontSize: 20, 
               fontWeight: 700,
               textAlign: 'center',
               textTransform: 'uppercase',
-              letterSpacing: '1px'
+              letterSpacing: '1px',
+              textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)'
             }}>
               🏆 RNW Tennis Tournament 2025 Champions & Runners-Up
             </h3>
@@ -337,15 +338,15 @@ export function FixturesAndResults({
               <table style={{ 
                 width: '100%', 
                 borderCollapse: 'collapse',
-                backgroundColor: 'white',
+                backgroundColor: '#374151',
                 borderRadius: 8,
                 overflow: 'hidden',
-                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)'
+                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)'
               }}>
                 <thead>
                   <tr style={{ 
-                    background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
-                    color: 'white'
+                    background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                    color: '#f9fafb'
                   }}>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, fontSize: 14 }}>
                       Category
@@ -368,14 +369,14 @@ export function FixturesAndResults({
                       
                       return (
                         <tr key={`${category}-${matchType}`} style={{ 
-                          borderBottom: '1px solid #e2e8f0',
-                          background: index % 2 === 0 ? '#f8fafc' : 'white',
+                          borderBottom: '1px solid #4b5563',
+                          background: index % 2 === 0 ? '#4b5563' : '#374151',
                           transition: 'all 0.2s ease'
                         }}>
                           <td style={{ 
                             padding: '12px 16px', 
                             fontWeight: 600, 
-                            color: '#374151',
+                            color: '#e5e7eb',
                             fontSize: 14
                           }}>
                             {category}
@@ -383,7 +384,7 @@ export function FixturesAndResults({
                           <td style={{ 
                             padding: '12px 16px',
                             fontWeight: 700,
-                            color: '#059669',
+                            color: '#10b981',
                             fontSize: 14
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -394,7 +395,7 @@ export function FixturesAndResults({
                           <td style={{ 
                             padding: '12px 16px',
                             fontWeight: 600,
-                            color: '#7c3aed',
+                            color: '#a78bfa',
                             fontSize: 14
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -405,7 +406,7 @@ export function FixturesAndResults({
                           <td style={{ 
                             padding: '12px 16px',
                             fontFamily: 'monospace',
-                            color: '#374151',
+                            color: '#d1d5db',
                             fontSize: 13,
                             fontWeight: 500
                           }}>
@@ -423,7 +424,7 @@ export function FixturesAndResults({
               <div style={{ 
                 textAlign: 'center', 
                 padding: 32, 
-                color: '#6b7280', 
+                color: '#9ca3af', 
                 fontSize: 14 
               }}>
                 No tournament winners yet. Complete some matches to see results!
